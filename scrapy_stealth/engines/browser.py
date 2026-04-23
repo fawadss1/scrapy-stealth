@@ -12,8 +12,10 @@ from .base import BaseEngine
 from ..constants import DEFAULT_IMPERSONATE, DEFAULT_TIMEOUT
 from ..utils.browsers import resolve_browser
 from ..utils.headers import get_default_headers, merge_headers
+from ..utils.logger import get_logger
+from ..utils.meta import _get_meta_data
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class BrowserEngine(BaseEngine):
@@ -32,8 +34,8 @@ class BrowserEngine(BaseEngine):
 
     def _execute(self, request: Request) -> Response | None:
         try:
-            proxy = request.meta.get("proxy")
-            profile: str = request.meta.get("impersonate") or DEFAULT_IMPERSONATE
+            proxy: str | None = _get_meta_data(request, "proxy")
+            profile: str = _get_meta_data(request, "impersonate", DEFAULT_IMPERSONATE)
             impersonate = resolve_browser(profile)
 
             if impersonate != self.default_impersonate:

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import logging
-
 import rnet
 
 from ..constants import DEFAULT_IMPERSONATE
+from .logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 _BROWSER_MAP: dict[str, rnet.Impersonate] = {
     # Chrome
