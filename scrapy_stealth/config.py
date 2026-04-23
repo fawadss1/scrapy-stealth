@@ -1,7 +1,7 @@
 from .constants import (
     DEFAULT_ENGINE,
     DEFAULT_TIMEOUT,
-    DEFAULT_IMPERSONATE
+    DEFAULT_IMPERSONATE,
 )
 
 
