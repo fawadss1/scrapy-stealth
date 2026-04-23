@@ -1,6 +1,12 @@
-# scrapy-stealth
+<p align="center">
+  <img src="docs/static/logo.png" alt="scrapy-stealth logo" width="925"/>
+</p>
 
-🚀 A pluggable anti-bot and stealth framework for Scrapy.
+<h1 align="center">scrapy-stealth</h1>
+
+<p align="center"><strong>Stealthy Crawling. Maximum Results.</strong></p>
+
+<p align="center">A pluggable anti-bot and stealth framework for Scrapy.</p>
 
 [![PyPI version](https://img.shields.io/pypi/v/scrapy-stealth?color=blue)](https://pypi.org/project/scrapy-stealth/)
 [![Python versions](https://img.shields.io/pypi/pyversions/scrapy-stealth)](https://pypi.org/project/scrapy-stealth/)
@@ -265,18 +271,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a full history of changes, or browse [GitHu
 
 ## 🤝 Contributing
 
-Contributions are welcome! This is an open source project and all help is appreciated.
-
-1. Fork the repository on [GitHub](https://github.com/fawadss1/scrapy-stealth)
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes and add tests if applicable
-4. Open a pull request describing what you changed and why
-
-**Ways to contribute:**
-- Report bugs via [GitHub Issues](https://github.com/fawadss1/scrapy-stealth/issues)
-- Suggest new engines, strategies, or detectors
-- Improve documentation or examples
-- Add support for new browser fingerprints
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute.
 
 ---
 
