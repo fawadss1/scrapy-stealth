@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/static/logo.png" alt="scrapy-stealth logo" width="925"/>
+  <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/logo.png" alt="scrapy-stealth logo" width="925"/>
 </p>
 
 <h1 align="center">scrapy-stealth</h1>
