@@ -6,7 +6,7 @@ from scrapy import signals
 from scrapy.http import Request, Response
 from twisted.internet.defer import Deferred
 
-from ..constants import DEFAULT_ENGINE
+from ..config import config
 from ..manager import EngineManager
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
@@ -37,7 +37,7 @@ class StealthDownloaderMiddleware:
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     def process_request(self, request: Request, spider: Any) -> Response | Deferred | None:
-        engine_name = _get_meta_data(request, "engine", DEFAULT_ENGINE)
+        engine_name = _get_meta_data(request, "engine", config.get("DEFAULT_ENGINE"))
 
         if not _stealth_ignored_warn(request, engine_name, logger):
             if _is_meta_enabled(request, "rotate_profile"):

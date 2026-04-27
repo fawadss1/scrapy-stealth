@@ -10,11 +10,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
 
 from .base import BaseEngine
-from ..constants import (
-    DEFAULT_PROFILE,
-    DEFAULT_TIMEOUT,
-    LOGGER_NAME as Flag,
-)
+from ..config import config
 from ..utils.browsers import resolve_browser
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
@@ -26,7 +22,11 @@ logger = get_logger()
 class BrowserEngine(BaseEngine):
     """Stealth HTTP engine with browser profile impersonation."""
 
-    def __init__(self, profile: str = DEFAULT_PROFILE, timeout: int = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        profile: str = config.get("DEFAULT_PROFILE"),
+        timeout: int = config.get("DEFAULT_TIMEOUT"),
+    ):
         self.default_profile = resolve_browser(profile)
         self.timeout = timeout
         self._client = Client()
@@ -37,7 +37,7 @@ class BrowserEngine(BaseEngine):
     def _execute(self, request: Request) -> Response | None:
         try:
             proxy: str | None = _get_meta_data(request, "proxy")
-            profile: str = _get_meta_data(request, "profile", DEFAULT_PROFILE)
+            profile: str = _get_meta_data(request, "profile", config.get("DEFAULT_PROFILE"))
             emulation = resolve_browser(profile)
             timeout_secs: int = _get_meta_data(request, "stealth_timeout", self.timeout)
 
@@ -64,9 +64,9 @@ class BrowserEngine(BaseEngine):
                 status=resp.status.as_int(),
                 headers=resp.headers,
                 body=resp.bytes(),
-                encoding='utf-8',
+                encoding="utf-8",
                 request=request,
-                flags=[Flag],
+                flags=[config.get("LOGGER_NAME")],
             )
 
         except TimeoutError:

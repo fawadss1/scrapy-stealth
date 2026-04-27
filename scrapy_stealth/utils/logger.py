@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 
-from ..constants import LOGGER_NAME
+from ..config import config
 
 
 def get_logger() -> logging.Logger:
-    return logging.getLogger(LOGGER_NAME)
+    return logging.getLogger(config.get("LOGGER_NAME"))
