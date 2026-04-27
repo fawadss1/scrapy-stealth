@@ -82,22 +82,22 @@ class TestStealthDownloaderMiddleware:
     # rotate_profile
     # -------------------------------------------------------------------
 
-    def test_rotate_profile_sets_impersonate(self, middleware, spider):
+    def test_rotate_profile_sets_profile(self, middleware, spider):
         request = Request("https://example.com", meta={"engine": "stealth", "rotate_profile": True})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert "impersonate" in request.meta
+        assert "profile" in request.meta
 
-    def test_rotate_profile_does_not_override_explicit_impersonate(self, middleware, spider):
+    def test_rotate_profile_does_not_override_explicit_profile(self, middleware, spider):
         request = Request(
             "https://example.com",
-            meta={"engine": "stealth", "rotate_profile": True, "impersonate": "chrome_137"},
+            meta={"engine": "stealth", "rotate_profile": True, "profile": "chrome_137"},
         )
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert request.meta["impersonate"] == "chrome_137"
+        assert request.meta["profile"] == "chrome_137"
 
     def test_rotate_profile_sets_valid_fingerprint(self, middleware, spider):
         from scrapy_stealth.strategies.fingerprint import FINGERPRINTS
@@ -105,7 +105,7 @@ class TestStealthDownloaderMiddleware:
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert request.meta["impersonate"] in FINGERPRINTS
+        assert request.meta["profile"] in FINGERPRINTS
 
     # -------------------------------------------------------------------
     # rotate_proxy

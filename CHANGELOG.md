@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic proxy rotation via `request.meta["rotate_proxy"]`
 - Proxy validation at startup — invalid format or unsupported scheme raises `ValueError` immediately
 - Per-spider configuration support via `custom_settings` (middleware and `STEALTH_PROXIES`)
-- Warning log when stealth-only meta keys (`impersonate`, `rotate_profile`, `rotate_proxy`) are used without `engine: stealth`
+- Warning log when stealth-only meta keys (`profile`, `rotate_profile`, `rotate_proxy`) are used without `engine: stealth`
 - Centralised logger via `LOGGER_NAME` constant — all package logs appear under `[scrapy-stealth]`
 
 ### Changed

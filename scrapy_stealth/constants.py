@@ -17,8 +17,8 @@ BLOCK_KEYWORDS: list[str] = [
     "unusual traffic",
 ]
 
-# Default browser profile used when no impersonation is specified.
-DEFAULT_IMPERSONATE: str = "chrome_147"
+# Default browser profile used when no profile is specified.
+DEFAULT_PROFILE: str = "chrome_147"
 
 # Default engine used when no engine is specified in request meta.
 DEFAULT_ENGINE: str = "scrapy"

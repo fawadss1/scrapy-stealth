@@ -26,7 +26,7 @@ Per-request usage via ``request.meta``::
         },
     )
 
-Note: ``rotate_profile``, ``rotate_proxy``, and ``impersonate`` have no effect
+Note: ``rotate_profile``, ``rotate_proxy``, and ``profile`` have no effect
 unless ``engine`` is set to ``"stealth"``. A warning is logged if they are used
 with the default scrapy engine.
 """
@@ -36,7 +36,7 @@ from .constants import (
     BLOCK_CODES,
     BLOCK_KEYWORDS,
     DEFAULT_ENGINE,
-    DEFAULT_IMPERSONATE,
+    DEFAULT_PROFILE,
     DEFAULT_TIMEOUT
 )
 from .detectors.antibot import AntiBotDetector
@@ -75,7 +75,7 @@ __all__ = [
     "BLOCK_CODES",
     "BLOCK_KEYWORDS",
     "DEFAULT_ENGINE",
-    "DEFAULT_IMPERSONATE",
+    "DEFAULT_PROFILE",
     "DEFAULT_TIMEOUT",
     # Exceptions
     "StealthException",

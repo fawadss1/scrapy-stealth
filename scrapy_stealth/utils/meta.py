@@ -5,7 +5,7 @@ from typing import Any
 
 from scrapy.http import Request
 
-_STEALTH_ONLY_KEYS = ("impersonate", "rotate_profile", "rotate_proxy")
+_STEALTH_ONLY_KEYS = ("profile", "rotate_profile", "rotate_proxy")
 
 
 def _is_meta_enabled(request: Request, key: str) -> bool:
