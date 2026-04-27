@@ -10,4 +10,4 @@ def test_default_timeout():
 
 
 def test_default_impersonate():
-    assert StealthConfig.DEFAULT_IMPERSONATE == "chrome_137"
+    assert StealthConfig.DEFAULT_IMPERSONATE == "chrome_147"

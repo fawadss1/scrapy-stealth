@@ -9,7 +9,7 @@ from scrapy_stealth.engines.browser import BrowserEngine
 class TestEngineManager:
     @pytest.fixture
     def manager(self):
-        with patch("scrapy_stealth.engines.browser.rnet.BlockingClient"):
+        with patch("scrapy_stealth.engines.browser.Client"):
             yield EngineManager()
 
     def test_get_scrapy_engine(self, manager):
