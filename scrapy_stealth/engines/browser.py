@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime
+from datetime import timedelta
 from typing import Any
 
 from wreq.blocking import Client
@@ -23,12 +23,13 @@ class BrowserEngine(BaseEngine):
     """Stealth HTTP engine with browser profile impersonation."""
 
     def __init__(
-        self,
-        profile: str = config.get("DEFAULT_PROFILE"),
-        timeout: int = config.get("DEFAULT_TIMEOUT"),
+            self,
+            profile: str | None = None,
+            timeout: int | None = None
     ):
-        self.default_profile = resolve_browser(profile)
-        self.timeout = timeout
+        self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
+        self.default_profile = resolve_browser(self._default_profile)
+        self.timeout = timeout or config.get("DEFAULT_TIMEOUT")
         self._client = Client()
 
     def fetch(self, request: Request, spider: Any) -> Response | Deferred | None:
@@ -37,9 +38,11 @@ class BrowserEngine(BaseEngine):
     def _execute(self, request: Request) -> Response | None:
         try:
             proxy: str | None = _get_meta_data(request, "proxy")
-            profile: str = _get_meta_data(request, "profile", config.get("DEFAULT_PROFILE"))
-            emulation = resolve_browser(profile)
-            timeout_secs: int = _get_meta_data(request, "stealth_timeout", self.timeout)
+            profile: str = _get_meta_data(request, "profile", self._default_profile)
+            emulation = self.default_profile if profile == self._default_profile else resolve_browser(profile)
+            timeout_secs = timedelta(
+                seconds=_get_meta_data(request, "stealth_timeout", self.timeout)
+            )
 
             headers = merge_headers(
                 get_default_headers(profile),
@@ -48,7 +51,7 @@ class BrowserEngine(BaseEngine):
 
             kwargs: dict[str, Any] = {
                 "emulation": emulation,
-                "timeout": datetime.timedelta(seconds=timeout_secs),
+                "timeout": timeout_secs,
                 "headers": headers,
             }
             if request.body:
