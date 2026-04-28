@@ -11,3 +11,7 @@ def test_default_timeout():
 
 def test_default_profile():
     assert config.get("DEFAULT_PROFILE") == "chrome_147"
+
+
+def test_http2_default():
+    assert config.get("HTTP2") is True

@@ -30,7 +30,13 @@ class BrowserEngine(BaseEngine):
         self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
         self.default_profile = resolve_browser(self._default_profile)
         self.timeout = timeout or config.get("DEFAULT_TIMEOUT")
-        self._client = Client()
+        self._clients: dict[bool, Client] = {}
+
+    def _get_client(self, http2: bool) -> Client:
+        if http2 not in self._clients:
+            logger.debug("Initializing stealth HTTP client (protocol=%s)", "HTTP/2" if http2 else "HTTP/1.1")
+            self._clients[http2] = Client(http2_only=http2)
+        return self._clients[http2]
 
     def fetch(self, request: Request, spider: Any) -> Response | Deferred | None:
         return deferToThread(self._execute, request)
@@ -43,6 +49,7 @@ class BrowserEngine(BaseEngine):
             timeout_secs = timedelta(
                 seconds=_get_meta_data(request, "stealth_timeout", self.timeout)
             )
+            http2 = _get_meta_data(request, "http2", config.get("HTTP2"))
 
             headers = merge_headers(
                 get_default_headers(profile),
@@ -59,7 +66,7 @@ class BrowserEngine(BaseEngine):
             if proxy:
                 kwargs["proxy"] = Proxy.all(proxy)
 
-            method_fn = getattr(self._client, request.method.lower())
+            method_fn = getattr(self._get_client(http2), request.method.lower())
             resp = method_fn(request.url, **kwargs)
 
             return HtmlResponse(

@@ -28,3 +28,7 @@ DEFAULT_TIMEOUT: int = 30
 
 # Logger name used across the entire package.
 LOGGER_NAME: str = "scrapy-stealth"
+
+# Whether the stealth engine uses HTTP/2.
+# Disable if targeting servers that only support HTTP/1.1.
+HTTP2: bool = True
