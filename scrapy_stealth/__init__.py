@@ -31,27 +31,25 @@ unless ``engine`` is set to ``"stealth"``. A warning is logged if they are used
 with the default scrapy engine.
 """
 
+from importlib.metadata import PackageNotFoundError, metadata
+
 from .config import StealthConfig, config
-from .constants import (
-    BLOCK_CODES,
-    BLOCK_KEYWORDS,
-    DEFAULT_ENGINE,
-    DEFAULT_PROFILE,
-    DEFAULT_TIMEOUT
-)
 from .detectors.antibot import AntiBotDetector
 from .engines.base import BaseEngine
-from .engines.browser import BrowserEngine
-from .engines.scrapy import ScrapyEngine
 from .exceptions import EngineNotFound, StealthException
-from .manager import EngineManager
 from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
 from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
 
-__version__ = "0.2.1"
-__author__ = "Fawad Ali"
+try:
+    _meta = metadata("scrapy-stealth")
+    __version__ = _meta["Version"]
+    __author__ = _meta["Author-email"].split("<")[0].strip()
+except PackageNotFoundError:
+    __version__ = "unknown"
+    __author__ = "Fawad Ali"
+
 __license__ = "MIT"
 
 __all__ = [
@@ -59,10 +57,6 @@ __all__ = [
     "StealthDownloaderMiddleware",
     # Engines
     "BaseEngine",
-    "ScrapyEngine",
-    "BrowserEngine",
-    # Manager
-    "EngineManager",
     # Strategies
     "ProxyRotator",
     "ProfileRotator",
@@ -71,12 +65,7 @@ __all__ = [
     "AntiBotDetector",
     # Config
     "StealthConfig",
-    # Constants
-    "BLOCK_CODES",
-    "BLOCK_KEYWORDS",
-    "DEFAULT_ENGINE",
-    "DEFAULT_PROFILE",
-    "DEFAULT_TIMEOUT",
+    "config",
     # Exceptions
     "StealthException",
     "EngineNotFound",
