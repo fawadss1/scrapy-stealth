@@ -50,7 +50,7 @@ from .strategies.fingerprint import ProfileRotator
 from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "Fawad Ali"
 __license__ = "MIT"
 

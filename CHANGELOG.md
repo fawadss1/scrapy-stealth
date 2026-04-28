@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-04-27
+
+### Fixed
+
+- `BrowserEngine.__init__` — `profile` and `timeout` parameters now default to `None` (sentinel) and resolve from `config` at call time, fixing the Python mutable-default anti-pattern that caused runtime `config` changes to be ignored
+- `BrowserEngine._execute` — removed duplicate `config.get("DEFAULT_PROFILE")` lookup; now uses `self._default_profile` as the single source of truth; `resolve_browser` is skipped when the per-request profile matches the engine default
+- `resolve_browser` — removed `None` handling from the function signature (`str | Profile | None` → `str | Profile`); callers are now responsible for resolving defaults before calling, eliminating an implicit config dependency inside the utility
+
+### Changed
+
+- `StealthConfig` test coverage extended to include `BLOCK_CODES`, `BLOCK_KEYWORDS`, `LOGGER_NAME`, `get()` method, and the `config` singleton
+- All config-driven values in tests (`DEFAULT_ENGINE`, `DEFAULT_PROFILE`, block codes, etc.) now reference `config.get()` instead of hardcoded strings, so tests stay correct if defaults change
+- README: added **Global Configuration** section documenting the `config` singleton, all `StealthConfig` attributes with types and defaults, and `config.get()` usage
+
+---
+
 ## [0.2.0] - 2026-04-23
 
 ### Added
@@ -41,5 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.2.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.0
 [0.1.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.1.0
