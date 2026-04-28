@@ -9,7 +9,7 @@ description = "Stealthy Crawling. Maximum Results. A pluggable anti-bot and stea
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Fawad", email = "fawadstar6@gmail.com" }
+    { name = "Fawad Ali", email = "fawadstar6@gmail.com" }
 ]
 requires-python = ">=3.10"
 
@@ -19,14 +19,24 @@ dependencies = [
 
 keywords = [
     "scrapy",
+    "scrapy middleware",
     "web scraping",
     "stealth",
+    "stealth crawler",
     "anti-bot",
+    "anti-detection",
     "crawler",
-    "browser impersonation",
+    "spider",
+    "browser fingerprint",
     "proxy rotation",
     "fingerprint",
     "cloudflare bypass",
+    "http2",
+    "tls fingerprint",
+    "headless browser",
+    "bot detection bypass",
+    "rate limit bypass",
+    "scraping framework",
 ]
 
 classifiers = [
