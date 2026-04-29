@@ -3,15 +3,32 @@ scrapy-stealth: A pluggable anti-bot and stealth framework for Scrapy.
 
 Quick start
 -----------
-Add the middleware to your Scrapy settings::
+Add the middleware to your settings.py or spider custom_settings::
 
     DOWNLOADER_MIDDLEWARES = {
         "scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware": 950,
     }
 
-Then enable stealth per-request via ``request.meta``::
+    # Optional: proxy list for automatic rotation
+    STEALTH_PROXIES = [
+        "http://proxy1:8080",
+        "socks5://proxy2:1080",
+    ]
 
-    yield scrapy.Request(url, meta={"engine": "stealth", "impersonate": "chrome_137"})
+Per-request usage via ``request.meta``::
+
+    yield scrapy.Request(
+        url,
+        meta={
+            "engine": "stealth",
+            "rotate_profile": True,   # auto-select a browser fingerprint
+            "rotate_proxy": True,     # auto-select a proxy from STEALTH_PROXIES
+        },
+    )
+
+Note: ``rotate_profile``, ``rotate_proxy``, and ``impersonate`` have no effect
+unless ``engine`` is set to ``"stealth"``. A warning is logged if they are used
+with the default scrapy engine.
 """
 
 from .config import StealthConfig
@@ -33,8 +50,8 @@ from .strategies.fingerprint import ProfileRotator
 from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
 
-__version__ = "0.1.0"
-__author__ = "Fawad"
+__version__ = "0.2.0"
+__author__ = "Fawad Ali"
 __license__ = "MIT"
 
 __all__ = [
