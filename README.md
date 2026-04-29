@@ -43,6 +43,28 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 
 ---
 
+## 📊 Comparison
+
+| Feature                      | scrapy-stealth | scrapy-playwright | scrapy-splash | scrapy-selenium | Scrapy (default) |
+|------------------------------|:--------------:|:-----------------:|:-------------:|:---------------:|:----------------:|
+| TLS fingerprint spoofing     |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
+| HTTP/2 support               |       ✅        |         ✅         |       ❌       |        ❌        |        ❌         |
+| Browser impersonation        |       ✅        |    ⚠️ partial     |       ❌       |        ❌        |        ❌         |
+| Proxy rotation (built-in)    |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
+| Fingerprint rotation         |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
+| Anti-bot detection           |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
+| Smart retry logic            |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
+| Per-request engine switching |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
+| Headless browser required    |       ❌        |         ✅         |       ✅       |        ✅        |        ❌         |
+| JavaScript rendering         |       ❌        |         ✅         |       ✅       |        ✅        |        ❌         |
+| Native Scrapy integration    |       ✅        |         ✅         |       ✅       |   ⚠️ partial    |        ✅         |
+| Memory footprint             |     🟢 Low     |      🔴 High      |    🔴 High    |     🔴 High     |      🟢 Low      |
+
+> ⚠️ `scrapy-playwright` passes real browser TLS but does not spoof fingerprint profiles like `scrapy-stealth` does.
+> `scrapy-stealth` does **not** render JavaScript — use it for APIs and HTML pages that don't require a full browser.
+
+---
+
 ## ✨ Features
 
 * 🔌 Pluggable engine system (`scrapy`, `stealth`)
