@@ -133,7 +133,7 @@ All options are passed via `request.meta`:
 | Key               | Type   | Description                                                  |
 |-------------------|--------|--------------------------------------------------------------|
 | `engine`          | `str`  | `"scrapy"` (default) or `"stealth"`                          |
-| `impersonate`     | `str`  | Browser profile (e.g. `"chrome_137"`, `"safari_ios_18_1_1"`) |
+| `profile`         | `str`  | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`) |
 | `proxy`           | `str`  | Explicit proxy URL                                           |
 | `stealth_timeout` | `int`  | Per-request timeout in seconds (overrides default 30s)       |
 | `rotate_proxy`    | `bool` | Auto-pick a proxy from `STEALTH_PROXIES`                     |
@@ -190,7 +190,7 @@ yield scrapy.Request(
     url,
     meta={
         "engine": "stealth",
-        "impersonate": fp.get(),
+        "profile": fp.get(),
     },
 )
 ```

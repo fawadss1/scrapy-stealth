@@ -11,7 +11,7 @@ from twisted.internet.threads import deferToThread
 
 from .base import BaseEngine
 from ..constants import (
-    DEFAULT_IMPERSONATE,
+    DEFAULT_PROFILE,
     DEFAULT_TIMEOUT,
     LOGGER_NAME as Flag,
 )
@@ -24,10 +24,10 @@ logger = get_logger()
 
 
 class BrowserEngine(BaseEngine):
-    """Stealth HTTP engine with browser impersonation."""
+    """Stealth HTTP engine with browser profile impersonation."""
 
-    def __init__(self, impersonate: str = DEFAULT_IMPERSONATE, timeout: int = DEFAULT_TIMEOUT):
-        self.default_impersonate = resolve_browser(impersonate)
+    def __init__(self, profile: str = DEFAULT_PROFILE, timeout: int = DEFAULT_TIMEOUT):
+        self.default_profile = resolve_browser(profile)
         self.timeout = timeout
         self._client = Client()
 
@@ -37,7 +37,7 @@ class BrowserEngine(BaseEngine):
     def _execute(self, request: Request) -> Response | None:
         try:
             proxy: str | None = _get_meta_data(request, "proxy")
-            profile: str = _get_meta_data(request, "impersonate", DEFAULT_IMPERSONATE)
+            profile: str = _get_meta_data(request, "profile", DEFAULT_PROFILE)
             emulation = resolve_browser(profile)
             timeout_secs: int = _get_meta_data(request, "stealth_timeout", self.timeout)
 

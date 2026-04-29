@@ -41,8 +41,8 @@ class StealthDownloaderMiddleware:
 
         if not _stealth_ignored_warn(request, engine_name, logger):
             if _is_meta_enabled(request, "rotate_profile"):
-                request.meta.setdefault("impersonate", self._profile_rotator.get())
-                logger.debug("Impersonate profile set to: %s", request.meta["impersonate"])
+                request.meta.setdefault("profile", self._profile_rotator.get())
+                logger.debug("Profile set to: %s", request.meta["profile"])
 
             if _is_meta_enabled(request, "rotate_proxy"):
                 if not self._proxy_rotator.proxies:

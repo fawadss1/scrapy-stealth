@@ -143,8 +143,8 @@ class TestBrowserEngine:
     def test_execute_passes_emulation_per_request(self):
         mock_client = _make_mock_client()
         with patch("scrapy_stealth.engines.browser.Client", return_value=mock_client):
-            engine = BrowserEngine(impersonate="chrome_137")
-            request = Request("https://example.com", meta={"impersonate": "firefox_139"})
+            engine = BrowserEngine(profile="chrome_137")
+            request = Request("https://example.com", meta={"profile": "firefox_139"})
             engine._execute(request)
 
         call_kwargs = mock_client.get.call_args.kwargs
@@ -160,7 +160,7 @@ class TestBrowserEngine:
 
         assert result is None
 
-    def test_default_impersonate_is_chrome_147(self):
+    def test_default_profile_is_chrome_147(self):
         with patch("scrapy_stealth.engines.browser.Client"):
             engine = BrowserEngine()
-        assert engine.default_impersonate == Emulation.Chrome147
+        assert engine.default_profile == Emulation.Chrome147
