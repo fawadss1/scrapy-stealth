@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, metadata
+
 # HTTP status codes that indicate an anti-bot block or rate-limit.
 # Used by both the retry logic and the anti-bot detector.
 BLOCK_CODES: frozenset[int] = frozenset({403, 429, 503})
@@ -26,8 +28,11 @@ DEFAULT_ENGINE: str = "scrapy"
 # Default request timeout in seconds.
 DEFAULT_TIMEOUT: int = 30
 
-# Logger name used across the entire package.
-LOGGER_NAME: str = "scrapy-stealth"
+# Logger name used across the entire package — derived from the package name.
+try:
+    LOGGER_NAME: str = metadata("scrapy-stealth")["Name"]
+except PackageNotFoundError:
+    LOGGER_NAME = "scrapy-stealth"
 
 # Whether the stealth engine uses HTTP/2.
 # Disable if targeting servers that only support HTTP/1.1.
