@@ -35,6 +35,34 @@ class TestProxyRotator:
         results = {strategy.get() for _ in range(50)}
         assert len(results) > 1
 
+    def test_valid_https_proxy_accepted(self):
+        strategy = ProxyRotator(proxies=["https://proxy1:8080"])
+        assert strategy.get() == "https://proxy1:8080"
+
+    def test_valid_socks5_proxy_accepted(self):
+        strategy = ProxyRotator(proxies=["socks5://proxy1:1080"])
+        assert strategy.get() == "socks5://proxy1:1080"
+
+    def test_valid_proxy_with_auth_accepted(self):
+        strategy = ProxyRotator(proxies=["http://user:pass@proxy1:8080"])
+        assert strategy.get() == "http://user:pass@proxy1:8080"
+
+    def test_invalid_proxy_no_scheme_raises(self):
+        with pytest.raises(ValueError, match="Invalid proxy"):
+            ProxyRotator(proxies=["proxy1:8080"])
+
+    def test_invalid_proxy_unsupported_scheme_raises(self):
+        with pytest.raises(ValueError, match="unsupported scheme"):
+            ProxyRotator(proxies=["ftp://proxy1:8080"])
+
+    def test_invalid_proxy_no_port_raises(self):
+        with pytest.raises(ValueError, match="missing port"):
+            ProxyRotator(proxies=["http://proxy1"])
+
+    def test_invalid_proxy_in_mixed_list_raises(self):
+        with pytest.raises(ValueError):
+            ProxyRotator(proxies=["http://proxy1:8080", "bad-proxy"])
+
 
 # ---------------------------------------------------------------------------
 # ProfileRotator
