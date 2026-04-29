@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scrapy-stealth"
+version = "0.1.0"
+description = "A pluggable stealth and anti-bot framework for Scrapy"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Fawad", email = "fawadstar6@gmail.com" }
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "rnet>=2.4.2",
+]
+
+keywords = [
+    "scrapy",
+    "web scraping",
+    "stealth",
+    "anti-bot",
+    "crawler",
+    "browser impersonation",
+    "proxy rotation",
+    "fingerprint",
+    "cloudflare bypass",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Scrapy",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Security",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/fawadss1/scrapy-stealth"
+Repository = "https://github.com/fawadss1/scrapy-stealth"
+Issues = "https://github.com/fawadss1/scrapy-stealth/issues"
+Changelog = "https://github.com/fawadss1/scrapy-stealth/releases"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", ".venv*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
