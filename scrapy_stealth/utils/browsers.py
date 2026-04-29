@@ -49,12 +49,11 @@ def _build_browser_map() -> dict[str, Profile]:
 _BROWSER_MAP: dict[str, Profile] = _build_browser_map()
 
 
-def resolve_browser(value: str | Profile | None) -> Profile:
+def resolve_browser(value: str | Profile) -> Profile:
     if isinstance(value, Profile):
         return value
-    name: str = value if isinstance(value, str) else config.get("DEFAULT_PROFILE")
-    resolved = _BROWSER_MAP.get(name)
+    resolved = _BROWSER_MAP.get(value)
     if resolved is None:
-        logger.warning("Unknown browser %r, falling back to default", name)
+        logger.warning("Unknown browser %r, falling back to default", value)
         return _BROWSER_MAP[config.get("DEFAULT_PROFILE")]
     return resolved

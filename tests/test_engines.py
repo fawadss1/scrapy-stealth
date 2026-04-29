@@ -26,8 +26,8 @@ class TestScrapyEngine:
 # ---------------------------------------------------------------------------
 
 class TestResolveBrowser:
-    def test_none_returns_default(self):
-        assert resolve_browser(None) == resolve_browser(config.get("DEFAULT_PROFILE"))
+    def test_default_profile_string_resolves(self):
+        assert resolve_browser(config.get("DEFAULT_PROFILE")) == Emulation.Chrome147
 
     def test_enum_passthrough(self):
         assert resolve_browser(Emulation.Chrome147) == Emulation.Chrome147
