@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] - 2026-04-28
+
+### Added
+
+- HTTP/2 support for the stealth engine — enabled by default (`HTTP2 = True` in `StealthConfig`); disable globally via `config.HTTP2 = False` or per-request via `request.meta["http2"] = False`
+- `BrowserEngine._get_client` — lazy per-protocol client cache; separate `Client` instances are created for HTTP/1.1 and HTTP/2 on first use
+
+### Changed
+
+- `BrowserEngine` — improved stealth client creation log from generic bracket notation to structured `key=value` format: `"Initializing stealth HTTP client (protocol=%s)"`
+- `StealthConfig.LOGGER_NAME` — annotated as `Final[str]` to signal immutability; type checkers will flag any attempt to reassign it
+
+---
+
 ## [0.2.1] - 2026-04-27
 
 ### Fixed
@@ -57,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.2.2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.2
 [0.2.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.1
 [0.2.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.0
 [0.1.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.1.0
