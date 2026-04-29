@@ -83,9 +83,11 @@ class TestProfileRotator:
         assert len(results) > 1
 
     def test_fingerprints_are_latest(self):
-        assert "chrome_136" in FINGERPRINTS or "chrome_137" in FINGERPRINTS
-        assert "firefox_136" in FINGERPRINTS or "firefox_139" in FINGERPRINTS
-        assert any("safari_18" in fp for fp in FINGERPRINTS)
+        assert any(fp in FINGERPRINTS for fp in ("chrome_145", "chrome_146", "chrome_147"))
+        assert any(fp in FINGERPRINTS for fp in ("firefox_147", "firefox_148", "firefox_149"))
+        assert any("safari_26" in fp for fp in FINGERPRINTS)
+        assert any(fp in FINGERPRINTS for fp in ("edge_145", "edge_146", "edge_147"))
+        assert any(fp in FINGERPRINTS for fp in ("opera_128", "opera_129", "opera_130"))
 
     def test_fingerprints_include_mobile(self):
         assert any("ios" in fp or "android" in fp or "ipad" in fp for fp in FINGERPRINTS)

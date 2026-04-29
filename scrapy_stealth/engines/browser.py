@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
-import rnet
+from wreq.blocking import Client
+from wreq.proxy import Proxy
 from scrapy.http import HtmlResponse, Request, Response
 from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
 
 from .base import BaseEngine
-from ..constants import DEFAULT_IMPERSONATE, DEFAULT_TIMEOUT
+from ..constants import (
+    DEFAULT_IMPERSONATE,
+    DEFAULT_TIMEOUT,
+    LOGGER_NAME as Flag,
+)
 from ..utils.browsers import resolve_browser
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
@@ -23,10 +29,7 @@ class BrowserEngine(BaseEngine):
     def __init__(self, impersonate: str = DEFAULT_IMPERSONATE, timeout: int = DEFAULT_TIMEOUT):
         self.default_impersonate = resolve_browser(impersonate)
         self.timeout = timeout
-        self._client = rnet.BlockingClient(
-            impersonate=self.default_impersonate,
-            timeout=timeout,
-        )
+        self._client = Client()
 
     def fetch(self, request: Request, spider: Any) -> Response | Deferred | None:
         return deferToThread(self._execute, request)
@@ -35,10 +38,8 @@ class BrowserEngine(BaseEngine):
         try:
             proxy: str | None = _get_meta_data(request, "proxy")
             profile: str = _get_meta_data(request, "impersonate", DEFAULT_IMPERSONATE)
-            impersonate = resolve_browser(profile)
-
-            if impersonate != self.default_impersonate:
-                self._client.update(impersonate=impersonate)
+            emulation = resolve_browser(profile)
+            timeout_secs: int = _get_meta_data(request, "stealth_timeout", self.timeout)
 
             headers = merge_headers(
                 get_default_headers(profile),
@@ -46,23 +47,26 @@ class BrowserEngine(BaseEngine):
             )
 
             kwargs: dict[str, Any] = {
-                "method": getattr(rnet.Method, request.method.upper()),
-                "url": request.url,
+                "emulation": emulation,
+                "timeout": datetime.timedelta(seconds=timeout_secs),
                 "headers": headers,
             }
             if request.body:
                 kwargs["data"] = request.body
             if proxy:
-                kwargs["proxy"] = proxy
+                kwargs["proxy"] = Proxy.all(proxy)
 
-            resp = self._client.request(**kwargs)
+            method_fn = getattr(self._client, request.method.lower())
+            resp = method_fn(request.url, **kwargs)
 
             return HtmlResponse(
                 url=request.url,
-                status=resp.status_code.as_int(),
+                status=resp.status.as_int(),
+                headers=resp.headers,
                 body=resp.bytes(),
-                encoding=resp.encoding,
+                encoding='utf-8',
                 request=request,
+                flags=[Flag],
             )
 
         except TimeoutError:
