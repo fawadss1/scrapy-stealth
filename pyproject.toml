@@ -11,9 +11,10 @@ license = { file = "LICENSE" }
 authors = [
     { name = "Fawad Ali", email = "fawadstar6@gmail.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
+    "scrapy>=2.15",
     "wreq>=0.11.2",
 ]
 
@@ -50,7 +51,6 @@ classifiers = [
     "Topic :: Security",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",

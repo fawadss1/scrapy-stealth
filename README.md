@@ -83,7 +83,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 pip install scrapy-stealth
 ```
 
-> Requires Python 3.10+ and Scrapy 2.15+
+> Requires Python 3.11+ and Scrapy 2.15+
 
 ---
 
