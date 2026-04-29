@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from scrapy import signals
 from scrapy.http import Request, Response
 from twisted.internet.defer import Deferred
 
@@ -25,7 +26,15 @@ class StealthDownloaderMiddleware:
 
     @classmethod
     def from_crawler(cls, crawler: Any) -> StealthDownloaderMiddleware:
-        return cls()
+        proxies = crawler.settings.getlist("STEALTH_PROXIES", [])
+        mw = cls(proxies=proxies)
+        crawler.signals.connect(mw.spider_opened, signal=signals.spider_opened)
+        return mw
+
+    def spider_opened(self, spider: Any) -> None:
+        proxies = spider.crawler.settings.getlist("STEALTH_PROXIES", [])
+        self._proxy_rotator = ProxyRotator(proxies=proxies)
+        logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     def process_request(self, request: Request, spider: Any) -> Response | Deferred | None:
         if _is_meta_enabled(request, "rotate_profile"):
