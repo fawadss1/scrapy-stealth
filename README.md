@@ -126,6 +126,58 @@ yield scrapy.Request(
 
 ---
 
+## 🔧 Global Configuration
+
+Customise package-wide defaults via the shared `config` instance.
+All settings must be applied **at module level**, before the spider class — the engine client is
+created at middleware initialisation, so changes inside `start_requests` or `parse` will have no effect.
+
+```python
+# myspider.py
+import scrapy
+from scrapy_stealth.config import config
+
+config.DEFAULT_ENGINE  = "stealth"      # "scrapy" (native) or "stealth" (browser impersonation)
+config.DEFAULT_PROFILE = "chrome_147"   # browser profile when meta["profile"] is not set
+config.DEFAULT_TIMEOUT = 30             # stealth request timeout in seconds
+config.HTTP2           = True           # False for servers that only support HTTP/1.1
+config.BLOCK_CODES    |= {407}          # extend blocked status codes (|= keeps defaults)
+config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
+
+
+class MySpider(scrapy.Spider):
+    name = "example"
+    ...
+```
+
+```python
+# ❌ wrong — too late, the engine client is already created
+class MySpider(scrapy.Spider):
+    def start_requests(self):
+        config.HTTP2 = False  # has no effect
+        ...
+```
+
+You can also read any value programmatically:
+
+```python
+config.get("DEFAULT_ENGINE")          # "scrapy"
+config.get("MISSING_KEY", "default")  # "default"
+```
+
+| Attribute         | Type             | Default                           | Description                                                      |
+|-------------------|------------------|-----------------------------------|------------------------------------------------------------------|
+| `DEFAULT_ENGINE`  | `str`            | `"scrapy"`                        | Engine used when `request.meta["engine"]` is absent              |
+| `DEFAULT_PROFILE` | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                      |
+| `DEFAULT_TIMEOUT` | `int`            | `30`                              | Request timeout in seconds                                       |
+| `HTTP2`           | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["http2"]`         |
+| `BLOCK_CODES`     | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                             |
+| `BLOCK_KEYWORDS`  | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                            |
+
+For one-off overrides on a single request, use `request.meta["http2"]` instead (see Per-Request Configuration below).
+
+---
+
 ## ⚙️ Per-Request Configuration
 
 All options are passed via `request.meta`:
@@ -136,6 +188,7 @@ All options are passed via `request.meta`:
 | `profile`         | `str`  | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`) |
 | `proxy`           | `str`  | Explicit proxy URL                                           |
 | `stealth_timeout` | `int`  | Per-request timeout in seconds (overrides default 30s)       |
+| `http2`           | `bool` | `True` to force HTTP/2, `False` to allow HTTP/1.1 for this request |
 | `rotate_proxy`    | `bool` | Auto-pick a proxy from `STEALTH_PROXIES`                     |
 | `rotate_profile`  | `bool` | Auto-pick a random browser profile                           |
 

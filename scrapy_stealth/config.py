@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from .constants import (
     BLOCK_CODES,
@@ -8,6 +8,7 @@ from .constants import (
     DEFAULT_ENGINE,
     DEFAULT_PROFILE,
     DEFAULT_TIMEOUT,
+    HTTP2,
     LOGGER_NAME,
 )
 
@@ -31,7 +32,8 @@ class StealthConfig:
     DEFAULT_TIMEOUT: int = DEFAULT_TIMEOUT
     BLOCK_CODES: frozenset[int] = BLOCK_CODES
     BLOCK_KEYWORDS: list[str] = BLOCK_KEYWORDS
-    LOGGER_NAME: str = LOGGER_NAME
+    LOGGER_NAME: Final[str] = LOGGER_NAME
+    HTTP2: bool = HTTP2
 
     def get(self, key: str, default: Any = None) -> Any:
         """Return a config value by name, with an optional fallback."""
