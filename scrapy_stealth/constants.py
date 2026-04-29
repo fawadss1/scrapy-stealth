@@ -25,3 +25,6 @@ DEFAULT_ENGINE: str = "scrapy"
 
 # Default request timeout in seconds.
 DEFAULT_TIMEOUT: int = 30
+
+# Logger name used across the entire package.
+LOGGER_NAME: str = "scrapy-stealth"
