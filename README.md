@@ -30,7 +30,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 
 `scrapy-stealth` helps by adding:
 
-* 🧬 Browser-level impersonation (TLS + HTTP2 fingerprints)
+* 🧬 Browser-level impersonation (TLS + HTTP/2 fingerprints)
 * 🔁 Smarter retry strategies
 * 🌐 Proxy and fingerprint rotation
 * 🛡️ Anti-bot detection
@@ -49,10 +49,9 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🧠 Per-request engine selection via `request.meta`
 * 🌐 Proxy support and rotation
 * 🧬 Browser fingerprint rotation
-* 🔁 Smart retry logic (manual integration)
-* 🛡️ Anti-bot detection (status + content-based)
+* 🔁 Smart retry logic
+* 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
 * ⚡ Thread-safe async integration
-* Advanced anti-bot detection (Cloudflare, Akamai)
 
 ---
 
@@ -188,7 +187,7 @@ All options are passed via `request.meta`:
 | `profile`         | `str`  | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`) |
 | `proxy`           | `str`  | Explicit proxy URL                                           |
 | `stealth_timeout` | `int`  | Per-request timeout in seconds (overrides default 30s)       |
-| `http2`           | `bool` | `True` to force HTTP/2, `False` to allow HTTP/1.1 for this request |
+| `http2`           | `bool` | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request) |
 | `rotate_proxy`    | `bool` | Auto-pick a proxy from `STEALTH_PROXIES`                     |
 | `rotate_profile`  | `bool` | Auto-pick a random browser profile                           |
 
@@ -314,6 +313,7 @@ Using stealth selectively:
 * ⚡ Faster crawling (Scrapy for simple pages)
 * 💰 Lower proxy cost
 * 🛡️ Better success rate on protected pages
+
 ---
 
 ## 📜 Changelog
