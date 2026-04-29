@@ -1,13 +1,13 @@
-from scrapy_stealth.config import StealthConfig
+from scrapy_stealth.config import config
 
 
 def test_default_engine():
-    assert StealthConfig.DEFAULT_ENGINE == "scrapy"
+    assert config.get("DEFAULT_ENGINE") == "scrapy"
 
 
 def test_default_timeout():
-    assert StealthConfig.DEFAULT_TIMEOUT == 30
+    assert config.get("DEFAULT_TIMEOUT") == 30
 
 
 def test_default_profile():
-    assert StealthConfig.DEFAULT_PROFILE == "chrome_147"
+    assert config.get("DEFAULT_PROFILE") == "chrome_147"

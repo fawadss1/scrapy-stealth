@@ -31,7 +31,7 @@ unless ``engine`` is set to ``"stealth"``. A warning is logged if they are used
 with the default scrapy engine.
 """
 
-from .config import StealthConfig
+from .config import StealthConfig, config
 from .constants import (
     BLOCK_CODES,
     BLOCK_KEYWORDS,

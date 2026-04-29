@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from wreq.emulation import Emulation, Profile
 
-from ..constants import DEFAULT_PROFILE
+from ..config import config
 from .logger import get_logger
 
 logger = get_logger()
@@ -52,9 +52,9 @@ _BROWSER_MAP: dict[str, Profile] = _build_browser_map()
 def resolve_browser(value: str | Profile | None) -> Profile:
     if isinstance(value, Profile):
         return value
-    name: str = value if isinstance(value, str) else DEFAULT_PROFILE
+    name: str = value if isinstance(value, str) else config.get("DEFAULT_PROFILE")
     resolved = _BROWSER_MAP.get(name)
     if resolved is None:
         logger.warning("Unknown browser %r, falling back to default", name)
-        return _BROWSER_MAP[DEFAULT_PROFILE]
+        return _BROWSER_MAP[config.get("DEFAULT_PROFILE")]
     return resolved

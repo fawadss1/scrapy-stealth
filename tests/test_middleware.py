@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from scrapy.http import Request, HtmlResponse
 from twisted.internet.defer import Deferred
 
+from scrapy_stealth.config import config
 from scrapy_stealth.middlewares.stealth import StealthDownloaderMiddleware
 
 
@@ -34,7 +35,7 @@ class TestStealthDownloaderMiddleware:
             mock_engine.fetch.return_value = None
             mock_get.return_value = mock_engine
             middleware.process_request(request, spider)
-            mock_get.assert_called_once_with("scrapy")
+            mock_get.assert_called_once_with(config.get("DEFAULT_ENGINE"))
 
     def test_stealth_engine_selected_via_meta(self, middleware, spider):
         request = Request("https://example.com", meta={"engine": "stealth"})

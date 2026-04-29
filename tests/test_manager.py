@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch
 
+from scrapy_stealth.config import config
 from scrapy_stealth.manager import EngineManager
 from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.browser import BrowserEngine
@@ -11,6 +12,10 @@ class TestEngineManager:
     def manager(self):
         with patch("scrapy_stealth.engines.browser.Client"):
             yield EngineManager()
+
+    def test_get_default_engine(self, manager):
+        engine = manager.get(config.get("DEFAULT_ENGINE"))
+        assert isinstance(engine, ScrapyEngine)
 
     def test_get_scrapy_engine(self, manager):
         engine = manager.get("scrapy")

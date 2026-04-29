@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .constants import DEFAULT_ENGINE
+from .config import config
 from .engines.base import BaseEngine
 from .engines.browser import BrowserEngine
 from .engines.scrapy import ScrapyEngine
@@ -11,9 +11,9 @@ class EngineManager:
 
     def __init__(self) -> None:
         self._engines: dict[str, BaseEngine] = {
-            DEFAULT_ENGINE: ScrapyEngine(),
+            config.get("DEFAULT_ENGINE"): ScrapyEngine(),
             "stealth": BrowserEngine(),
         }
 
     def get(self, name: str) -> BaseEngine:
-        return self._engines.get(name, self._engines[DEFAULT_ENGINE])
+        return self._engines.get(name, self._engines[config.get("DEFAULT_ENGINE")])

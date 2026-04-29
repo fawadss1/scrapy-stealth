@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from scrapy.http import Request
 
-from ..constants import BLOCK_CODES
+from ..config import config
 
 
 def is_blocked(response) -> bool:
-    return response.status in BLOCK_CODES
+    return response.status in config.get("BLOCK_CODES")
 
 
 def build_retry(request: Request) -> Request:

@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from scrapy.http import Request
 
+from scrapy_stealth.config import config
 from scrapy_stealth.strategies.proxy import ProxyRotator
 from scrapy_stealth.strategies.fingerprint import ProfileRotator, FINGERPRINTS
 from scrapy_stealth.strategies.retry import RetryHandler
@@ -128,6 +129,10 @@ class TestRetryHandler:
 
     def test_should_retry_on_503(self, strategy):
         assert strategy.should_retry(make_response(503)) is True
+
+    def test_all_block_codes_trigger_retry(self, strategy):
+        for code in config.get("BLOCK_CODES"):
+            assert strategy.should_retry(make_response(code)) is True, f"Expected {code} to trigger retry"
 
     def test_should_not_retry_on_200(self, strategy):
         assert strategy.should_retry(make_response(200)) is False

@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from scrapy.http import Request, HtmlResponse
 
+from scrapy_stealth.config import config
 from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.browser import BrowserEngine
 from scrapy_stealth.utils.browsers import _BROWSER_MAP, resolve_browser
@@ -26,7 +27,7 @@ class TestScrapyEngine:
 
 class TestResolveBrowser:
     def test_none_returns_default(self):
-        assert resolve_browser(None) == Emulation.Chrome147
+        assert resolve_browser(None) == resolve_browser(config.get("DEFAULT_PROFILE"))
 
     def test_enum_passthrough(self):
         assert resolve_browser(Emulation.Chrome147) == Emulation.Chrome147
@@ -160,7 +161,7 @@ class TestBrowserEngine:
 
         assert result is None
 
-    def test_default_profile_is_chrome_147(self):
+    def test_default_profile_matches_config(self):
         with patch("scrapy_stealth.engines.browser.Client"):
             engine = BrowserEngine()
-        assert engine.default_profile == Emulation.Chrome147
+        assert engine.default_profile == resolve_browser(config.get("DEFAULT_PROFILE"))
