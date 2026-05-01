@@ -26,6 +26,18 @@ _ALIASES: dict[str, str] = {
     "safari_17": "safari_17_5",
 }
 
+# Turbo driver browser targets, ordered most-specific first.
+_TURBO_PREFIXES: list[tuple[str, str]] = [
+    ("safari_ios",  "safari18_0_ios"),
+    ("safari_ipad", "safari18_0_ios"),
+    ("firefox",     "firefox135"),
+    ("safari",      "safari18_0"),
+    ("chrome",      "chrome131"),
+    ("edge",        "chrome131"),
+    ("opera",       "chrome131"),
+    ("okhttp",      "chrome131"),
+]
+
 
 def _build_browser_map() -> dict[str, Profile]:
     result: dict[str, Profile] = {}
@@ -49,11 +61,27 @@ def _build_browser_map() -> dict[str, Profile]:
 _BROWSER_MAP: dict[str, Profile] = _build_browser_map()
 
 
-def resolve_browser(value: str | Profile) -> Profile:
-    if isinstance(value, Profile):
-        return value
-    resolved = _BROWSER_MAP.get(value)
+def _resolve_basic(profile: str | Profile) -> Profile:
+    if isinstance(profile, Profile):
+        return profile
+    resolved = _BROWSER_MAP.get(profile)
     if resolved is None:
-        logger.warning("Unknown browser %r, falling back to default", value)
+        logger.warning("Unknown browser profile %r, falling back to default", profile)
         return _BROWSER_MAP[config.get("DEFAULT_PROFILE")]
     return resolved
+
+
+def _resolve_turbo(profile: str | Profile) -> str:
+    name = profile if isinstance(profile, str) else config.get("DEFAULT_PROFILE")
+    name_lower = name.lower()
+    for prefix, target in _TURBO_PREFIXES:
+        if prefix in name_lower:
+            return target
+    logger.warning("Unknown browser profile %r for turbo driver, using chrome131", name)
+    return "chrome131"
+
+
+def resolve_browser(profile: str | Profile, backend: str = "basic") -> Profile | str:
+    if backend == "turbo":
+        return _resolve_turbo(profile)
+    return _resolve_basic(profile)

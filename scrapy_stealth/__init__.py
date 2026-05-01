@@ -36,6 +36,8 @@ from importlib.metadata import PackageNotFoundError, metadata
 from .config import StealthConfig, config
 from .detectors.antibot import AntiBotDetector
 from .engines.base import BaseEngine
+from .engines.basic import BasicEngine
+from .engines.turbo import TurboEngine
 from .exceptions import EngineNotFound, StealthException
 from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
@@ -57,6 +59,8 @@ __all__ = [
     "StealthDownloaderMiddleware",
     # Engines
     "BaseEngine",
+    "BasicEngine",
+    "TurboEngine",
     # Strategies
     "ProxyRotator",
     "ProfileRotator",

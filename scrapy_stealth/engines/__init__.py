@@ -1,5 +1,6 @@
 from .base import BaseEngine
 from .scrapy import ScrapyEngine
-from .browser import BrowserEngine
+from .basic import BasicEngine
+from .turbo import TurboEngine
 
-__all__ = ["BaseEngine", "ScrapyEngine", "BrowserEngine"]
+__all__ = ["BaseEngine", "ScrapyEngine", "BasicEngine", "TurboEngine"]
