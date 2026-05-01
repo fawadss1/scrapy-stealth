@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from scrapy.http import HtmlResponse, Request
 
 from ..config import config
@@ -12,13 +14,15 @@ class StealthResponse(HtmlResponse):
             status: int,
             headers,
             body: bytes,
+            encoding: str | None = None,
     ) -> None:
+        headers_dict = self._to_dict(headers)
         super().__init__(
             url=request.url,
             status=status,
-            headers=self._to_dict(headers),
+            headers=headers_dict,
             body=body,
-            encoding="utf-8",
+            encoding=encoding,
             request=request,
             flags=[config.get("LOGGER_NAME")],
         )

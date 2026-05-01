@@ -44,7 +44,8 @@ class TurboEngine(BaseEngine):
             )
 
             with Session(impersonate=browser) as session:
-                resp = getattr(session, request.method.lower())(request.url, **kwargs)
+                method_fn = getattr(session, request.method.lower())
+                resp = method_fn(request.url, **kwargs)
 
             resp_headers = {
                 k: v for k, v in resp.headers.items()
@@ -55,6 +56,7 @@ class TurboEngine(BaseEngine):
                 status=resp.status_code,
                 headers=resp_headers,
                 body=resp.content,
+                encoding=resp.encoding,
             )
 
         except TimeoutError:
