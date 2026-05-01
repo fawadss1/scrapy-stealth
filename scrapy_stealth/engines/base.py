@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from scrapy.http import Request, Response
 from twisted.internet.defer import Deferred
@@ -10,6 +11,8 @@ from twisted.internet.threads import deferToThread
 
 from ..config import config
 from ..utils.meta import _get_meta_data
+
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
@@ -64,7 +67,13 @@ class BaseEngine(ABC):
             Response | Deferred | None: The result of processing the request. If deferred,
             the computation will be completed asynchronously.
         """
-        return deferToThread(self._execute, request)
+        return deferToThread(self._execute_timed, request)
+
+    def _execute_timed(self, request: Request) -> Response | None:
+        resp, latency = self._timed(self._execute, request)
+        if resp is not None:
+            resp.meta["download_latency"] = f"{latency:.2f}s"
+        return resp
 
     def _ctx(self, request: Request) -> RequestContext:
         """
@@ -82,6 +91,28 @@ class BaseEngine(ABC):
             timeout=_get_meta_data(request, "stealth_timeout", self.timeout),
             http2=_get_meta_data(request, "http2", config.get("HTTP2")),
         )
+
+    @staticmethod
+    def _timed(
+            fn: Callable[..., _T],
+            *args: Any,
+            **kwargs: Any
+    ) -> tuple[_T, float]:
+        """
+        Executes the provided function and measures the time taken for its execution.
+
+        This static method is used to time the execution of a function. It calculates
+        and returns the result of the function along with the time it takes to execute
+        in seconds.
+
+        Returns:
+        tuple[_T, float]
+            A tuple containing the result of the function execution and the elapsed
+            time in seconds.
+        """
+        start = time.time()
+        result = fn(*args, **kwargs)
+        return result, time.time() - start
 
     @abstractmethod
     def _execute(self, request: Request) -> Response | None:
