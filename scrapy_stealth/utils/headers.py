@@ -56,7 +56,7 @@ _CH_BRAND: dict[str, str] = {
 }
 
 # Headers controlled by browser impersonation — Scrapy defaults must never override these.
-# User-Agent is always stripped: rnet sets the correct browser UA via impersonation.
+# User-Agent is always stripped: the stealth driver sets the correct browser UA via impersonation.
 _FINGERPRINT_KEYS: frozenset[str] = frozenset({
     "user-agent",
     "accept",

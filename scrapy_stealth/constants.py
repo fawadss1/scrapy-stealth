@@ -37,3 +37,6 @@ except PackageNotFoundError:
 # Whether the stealth engine uses HTTP/2.
 # Disable if targeting servers that only support HTTP/1.1.
 HTTP2: bool = True
+
+# Default stealth driver. Options: "basic", "turbo".
+STEALTH_DRIVER: str = "basic"

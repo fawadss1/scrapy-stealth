@@ -10,6 +10,7 @@ from .constants import (
     DEFAULT_TIMEOUT,
     HTTP2,
     LOGGER_NAME,
+    STEALTH_DRIVER,
 )
 
 
@@ -23,6 +24,7 @@ class StealthConfig:
         config.DEFAULT_PROFILE = "chrome_147"
         config.DEFAULT_TIMEOUT = 30
         config.DEFAULT_ENGINE = "stealth"
+        config.STEALTH_DRIVER = "turbo"
         config.BLOCK_CODES |= {403}
         config.BLOCK_KEYWORDS.append("captcha")
     """
@@ -34,6 +36,7 @@ class StealthConfig:
     BLOCK_KEYWORDS: list[str] = BLOCK_KEYWORDS
     LOGGER_NAME: Final[str] = LOGGER_NAME
     HTTP2: bool = HTTP2
+    STEALTH_DRIVER: str = STEALTH_DRIVER
 
     def get(self, key: str, default: Any = None) -> Any:
         """Return a config value by name, with an optional fallback."""
