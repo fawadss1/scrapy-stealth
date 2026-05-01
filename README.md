@@ -161,6 +161,7 @@ from scrapy_stealth.config import config
 config.DEFAULT_ENGINE  = "stealth"      # "scrapy" (native) or "stealth" (browser impersonation)
 config.DEFAULT_PROFILE = "chrome_147"   # browser profile when meta["profile"] is not set
 config.DEFAULT_TIMEOUT = 30             # stealth request timeout in seconds
+config.STEALTH_DRIVER  = "turbo"        # "basic" (default) or "turbo" (deeper TLS fingerprinting)
 config.HTTP2           = True           # False for servers that only support HTTP/1.1
 config.BLOCK_CODES    |= {407}          # extend blocked status codes (|= keeps defaults)
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
@@ -191,11 +192,12 @@ config.get("MISSING_KEY", "default")  # "default"
 | `DEFAULT_ENGINE`  | `str`            | `"scrapy"`                        | Engine used when `request.meta["engine"]` is absent              |
 | `DEFAULT_PROFILE` | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                      |
 | `DEFAULT_TIMEOUT` | `int`            | `30`                              | Request timeout in seconds                                       |
+| `STEALTH_DRIVER`  | `str`            | `"basic"`                         | Default driver for stealth engine: `"basic"` or `"turbo"`        |
 | `HTTP2`           | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["http2"]`         |
 | `BLOCK_CODES`     | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                             |
 | `BLOCK_KEYWORDS`  | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                            |
 
-For one-off overrides on a single request, use `request.meta["http2"]` instead (see Per-Request Configuration below).
+For one-off overrides on a single request, use `request.meta["driver"]` or `meta["http2"]` instead (see Per-Request Configuration below).
 
 ---
 
@@ -203,12 +205,13 @@ For one-off overrides on a single request, use `request.meta["http2"]` instead (
 
 All options are passed via `request.meta`:
 
-| Key               | Type   | Description                                                  |
-|-------------------|--------|--------------------------------------------------------------|
-| `engine`          | `str`  | `"scrapy"` (default) or `"stealth"`                          |
-| `profile`         | `str`  | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`) |
-| `proxy`           | `str`  | Explicit proxy URL                                           |
-| `stealth_timeout` | `int`  | Per-request timeout in seconds (overrides default 30s)       |
+| Key               | Type   | Description                                                                      |
+|-------------------|--------|----------------------------------------------------------------------------------|
+| `engine`          | `str`  | `"scrapy"` (default) or `"stealth"`                                              |
+| `driver`          | `str`  | `"basic"` (default) or `"turbo"` — overrides `config.STEALTH_DRIVER` per-request |
+| `profile`         | `str`  | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`)                    |
+| `proxy`           | `str`  | Explicit proxy URL                                                               |
+| `stealth_timeout` | `int`  | Per-request timeout in seconds (overrides default 30s)                           |
 | `http2`           | `bool` | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request) |
 | `rotate_proxy`    | `bool` | Auto-pick a proxy from `STEALTH_PROXIES`                     |
 | `rotate_profile`  | `bool` | Auto-pick a random browser profile                           |
