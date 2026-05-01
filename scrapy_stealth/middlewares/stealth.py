@@ -56,5 +56,6 @@ class StealthDownloaderMiddleware:
                         request.meta.setdefault("proxy", proxy)
                         logger.debug("Proxy set to: %s", request.meta["proxy"])
 
-        engine = self.manager.get(engine_name)
+        driver = _get_meta_data(request, "driver")
+        engine = self.manager.get(engine_name, driver)
         return engine.fetch(request, spider)
