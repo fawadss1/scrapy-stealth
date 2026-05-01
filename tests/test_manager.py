@@ -4,13 +4,15 @@ from unittest.mock import patch
 from scrapy_stealth.config import config
 from scrapy_stealth.manager import EngineManager
 from scrapy_stealth.engines.scrapy import ScrapyEngine
-from scrapy_stealth.engines.browser import BrowserEngine
+from scrapy_stealth.engines.basic import BasicEngine
+from scrapy_stealth.engines.turbo import TurboEngine
 
 
 class TestEngineManager:
     @pytest.fixture
     def manager(self):
-        with patch("scrapy_stealth.engines.browser.Client"):
+        with patch("scrapy_stealth.engines.basic.Client"), \
+             patch("scrapy_stealth.engines.turbo.Session"):
             yield EngineManager()
 
     def test_get_default_engine(self, manager):
@@ -21,9 +23,17 @@ class TestEngineManager:
         engine = manager.get("scrapy")
         assert isinstance(engine, ScrapyEngine)
 
-    def test_get_stealth_engine(self, manager):
+    def test_get_stealth_engine_basic_driver(self, manager):
+        engine = manager.get("stealth", "basic")
+        assert isinstance(engine, BasicEngine)
+
+    def test_get_stealth_engine_turbo_driver(self, manager):
+        engine = manager.get("stealth", "turbo")
+        assert isinstance(engine, TurboEngine)
+
+    def test_get_stealth_engine_default_driver(self, manager):
         engine = manager.get("stealth")
-        assert isinstance(engine, BrowserEngine)
+        assert isinstance(engine, BasicEngine)
 
     def test_unknown_engine_falls_back_to_scrapy(self, manager):
         engine = manager.get("does_not_exist")
@@ -35,4 +45,5 @@ class TestEngineManager:
 
     def test_engines_are_singletons_within_manager(self, manager):
         assert manager.get("scrapy") is manager.get("scrapy")
-        assert manager.get("stealth") is manager.get("stealth")
+        assert manager.get("stealth", "basic") is manager.get("stealth", "basic")
+        assert manager.get("stealth", "turbo") is manager.get("stealth", "turbo")

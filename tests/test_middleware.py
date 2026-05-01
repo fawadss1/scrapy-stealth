@@ -19,11 +19,11 @@ class TestStealthDownloaderMiddleware:
 
     @pytest.fixture
     def middleware(self):
-        with patch("scrapy_stealth.engines.browser.Client"):
+        with patch("scrapy_stealth.engines.basic.Client"):
             yield StealthDownloaderMiddleware()
 
     def test_from_crawler_returns_instance(self):
-        with patch("scrapy_stealth.engines.browser.Client"):
+        with patch("scrapy_stealth.engines.basic.Client"):
             crawler = MagicMock()
             mw = StealthDownloaderMiddleware.from_crawler(crawler)
         assert isinstance(mw, StealthDownloaderMiddleware)
@@ -35,7 +35,7 @@ class TestStealthDownloaderMiddleware:
             mock_engine.fetch.return_value = None
             mock_get.return_value = mock_engine
             middleware.process_request(request, spider)
-            mock_get.assert_called_once_with(config.get("DEFAULT_ENGINE"))
+            mock_get.assert_called_once_with(config.get("DEFAULT_ENGINE"), None)
 
     def test_stealth_engine_selected_via_meta(self, middleware, spider):
         request = Request("https://example.com", meta={"engine": "stealth"})
@@ -44,7 +44,7 @@ class TestStealthDownloaderMiddleware:
             mock_engine.fetch.return_value = None
             mock_get.return_value = mock_engine
             middleware.process_request(request, spider)
-            mock_get.assert_called_once_with("stealth")
+            mock_get.assert_called_once_with("stealth", None)
 
     def test_returns_none_when_engine_returns_none(self, middleware, spider):
         request = Request("https://example.com")
@@ -114,7 +114,7 @@ class TestStealthDownloaderMiddleware:
 
     def test_rotate_proxy_sets_proxy_from_list(self, spider):
         proxies = ["http://proxy1:8080", "http://proxy2:8080"]
-        with patch("scrapy_stealth.engines.browser.Client"):
+        with patch("scrapy_stealth.engines.basic.Client"):
             mw = StealthDownloaderMiddleware(proxies=proxies)
         request = Request("https://example.com", meta={"engine": "stealth", "rotate_proxy": True})
         with patch.object(mw.manager, "get") as mock_get:
@@ -131,7 +131,7 @@ class TestStealthDownloaderMiddleware:
 
     def test_rotate_proxy_does_not_override_explicit_proxy(self, spider):
         proxies = ["http://proxy1:8080", "http://proxy2:8080"]
-        with patch("scrapy_stealth.engines.browser.Client"):
+        with patch("scrapy_stealth.engines.basic.Client"):
             mw = StealthDownloaderMiddleware(proxies=proxies)
         request = Request(
             "https://example.com",
@@ -145,7 +145,7 @@ class TestStealthDownloaderMiddleware:
     def test_from_crawler_reads_stealth_proxies_setting(self, spider):
         crawler = MagicMock()
         crawler.settings.getlist.return_value = ["http://proxy1:8080"]
-        with patch("scrapy_stealth.engines.browser.Client"):
+        with patch("scrapy_stealth.engines.basic.Client"):
             mw = StealthDownloaderMiddleware.from_crawler(crawler)
         crawler.settings.getlist.assert_called_once_with("STEALTH_PROXIES", [])
         assert mw._proxy_rotator.proxies == ["http://proxy1:8080"]

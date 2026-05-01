@@ -4,8 +4,8 @@ from scrapy.http import Request, HtmlResponse
 
 from scrapy_stealth.config import config
 from scrapy_stealth.engines.scrapy import ScrapyEngine
-from scrapy_stealth.engines.browser import BrowserEngine
-from scrapy_stealth.utils.browsers import _BROWSER_MAP, resolve_browser
+from scrapy_stealth.engines.basic import BasicEngine
+from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
 from wreq.emulation import Emulation, Profile
 
 
@@ -74,7 +74,7 @@ class TestBrowserMap:
 
 
 # ---------------------------------------------------------------------------
-# BrowserEngine
+# BasicEngine
 # ---------------------------------------------------------------------------
 
 def _make_mock_client(status=200, content=b"<html><body>ok</body></html>"):
@@ -92,12 +92,12 @@ def _make_mock_client(status=200, content=b"<html><body>ok</body></html>"):
     return mock_client
 
 
-class TestBrowserEngine:
+class TestBasicEngine:
     @pytest.fixture
     def engine(self):
-        with patch("scrapy_stealth.engines.browser.Client") as mock_cls:
+        with patch("scrapy_stealth.engines.basic.Client") as mock_cls:
             mock_cls.return_value = _make_mock_client()
-            yield BrowserEngine()
+            yield BasicEngine()
 
     @pytest.fixture
     def spider(self):
@@ -111,8 +111,8 @@ class TestBrowserEngine:
 
     def test_execute_returns_html_response(self):
         mock_client = _make_mock_client(200, b"<html>hello</html>")
-        with patch("scrapy_stealth.engines.browser.Client", return_value=mock_client):
-            engine = BrowserEngine()
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
             request = Request("https://example.com")
             response = engine._execute(request)
 
@@ -123,8 +123,8 @@ class TestBrowserEngine:
     def test_execute_passes_proxy(self):
         from wreq.proxy import Proxy
         mock_client = _make_mock_client()
-        with patch("scrapy_stealth.engines.browser.Client", return_value=mock_client):
-            engine = BrowserEngine()
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
             request = Request("https://example.com", meta={"proxy": "http://proxy:8080"})
             engine._execute(request)
 
@@ -133,8 +133,8 @@ class TestBrowserEngine:
 
     def test_execute_no_proxy_when_not_set(self):
         mock_client = _make_mock_client()
-        with patch("scrapy_stealth.engines.browser.Client", return_value=mock_client):
-            engine = BrowserEngine()
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
             request = Request("https://example.com")
             engine._execute(request)
 
@@ -143,8 +143,8 @@ class TestBrowserEngine:
 
     def test_execute_passes_emulation_per_request(self):
         mock_client = _make_mock_client()
-        with patch("scrapy_stealth.engines.browser.Client", return_value=mock_client):
-            engine = BrowserEngine(profile="chrome_137")
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine(profile="chrome_137")
             request = Request("https://example.com", meta={"profile": "firefox_139"})
             engine._execute(request)
 
@@ -154,14 +154,14 @@ class TestBrowserEngine:
     def test_execute_returns_none_on_exception(self):
         mock_client = MagicMock()
         mock_client.get.side_effect = Exception("network error")
-        with patch("scrapy_stealth.engines.browser.Client", return_value=mock_client):
-            engine = BrowserEngine()
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
             request = Request("https://example.com")
             result = engine._execute(request)
 
         assert result is None
 
     def test_default_profile_matches_config(self):
-        with patch("scrapy_stealth.engines.browser.Client"):
-            engine = BrowserEngine()
+        with patch("scrapy_stealth.engines.basic.Client"):
+            engine = BasicEngine()
         assert engine.default_profile == resolve_browser(config.get("DEFAULT_PROFILE"))

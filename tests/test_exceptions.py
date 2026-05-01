@@ -17,7 +17,7 @@ def test_stealth_exception_can_be_raised():
 
 def test_engine_not_found_can_be_raised():
     with pytest.raises(EngineNotFound):
-        raise EngineNotFound("rnet not found")
+        raise EngineNotFound("engine not found")
 
 
 def test_engine_not_found_message():
