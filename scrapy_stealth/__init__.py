@@ -22,20 +22,20 @@ Add the middleware to your settings.py or spider custom_settings::
         "socks5://proxy2:1080",
     ]
 
-Per-request usage via ``request.meta``::
+Per-request usage via ``request.meta["stealth"]``::
 
     yield scrapy.Request(
         url,
         meta={
-            "engine": "stealth",
-            "rotate_profile": True,   # auto-select a browser fingerprint
-            "rotate_proxy": True,     # auto-select a proxy from STEALTH_PROXIES
+            "stealth": {
+                "rotate_profile": True,   # auto-select a browser fingerprint
+                "rotate_proxy": True,     # auto-select a proxy from STEALTH_PROXIES
+            }
         },
     )
 
-Note: ``rotate_profile``, ``rotate_proxy``, and ``profile`` have no effect
-unless ``engine`` is set to ``"stealth"``. A warning is logged if they are used
-with the default scrapy engine.
+The presence of the ``stealth`` key activates the stealth engine.
+Omit it entirely to use the default Scrapy engine.
 """
 
 from importlib.metadata import PackageNotFoundError, metadata

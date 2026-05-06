@@ -11,7 +11,12 @@ from ..manager import EngineManager
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
 from ..utils.logger import get_logger
-from ..utils.meta import _get_meta_data, _is_meta_enabled, _stealth_ignored_warn
+from ..utils.meta import (
+    STEALTH_KEY,
+    _get_meta_data,
+    _is_meta_enabled,
+    _resolve_engine,
+)
 
 logger = get_logger()
 
@@ -37,12 +42,14 @@ class StealthDownloaderMiddleware:
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     def process_request(self, request: Request, spider: Any) -> Response | Deferred | None:
-        engine_name = _get_meta_data(request, "engine", config.get("DEFAULT_ENGINE"))
+        engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
 
-        if not _stealth_ignored_warn(request, engine_name, logger):
+        if engine_name == "stealth":
+            stealth_meta = request.meta.setdefault(STEALTH_KEY, {})
+
             if _is_meta_enabled(request, "rotate_profile"):
-                request.meta.setdefault("profile", self._profile_rotator.get())
-                logger.debug("Profile set to: %s", request.meta["profile"])
+                stealth_meta.setdefault("profile", self._profile_rotator.get())
+                logger.debug("Profile set to: %s", stealth_meta["profile"])
 
             if _is_meta_enabled(request, "rotate_proxy"):
                 if not self._proxy_rotator.proxies:
@@ -53,8 +60,8 @@ class StealthDownloaderMiddleware:
                 else:
                     proxy = self._proxy_rotator.get()
                     if proxy:
-                        request.meta.setdefault("proxy", proxy)
-                        logger.debug("Proxy set to: %s", request.meta["proxy"])
+                        stealth_meta.setdefault("proxy", proxy)
+                        logger.debug("Proxy set to: %s", stealth_meta["proxy"])
 
         driver = _get_meta_data(request, "driver")
         engine = self.manager.get(engine_name, driver)

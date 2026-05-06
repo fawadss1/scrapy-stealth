@@ -12,5 +12,5 @@ def is_blocked(response) -> bool:
 def build_retry(request: Request) -> Request:
     meta = request.meta.copy()
     meta["retry_times"] = meta.get("retry_times", 0) + 1
-    meta["engine"] = "stealth"
+    meta.setdefault("stealth", {})
     return request.replace(meta=meta, dont_filter=True)
