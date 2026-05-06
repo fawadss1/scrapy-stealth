@@ -38,7 +38,7 @@ class TestStealthDownloaderMiddleware:
             mock_get.assert_called_once_with(config.get("DEFAULT_ENGINE"), None)
 
     def test_stealth_engine_selected_via_meta(self, middleware, spider):
-        request = Request("https://example.com", meta={"engine": "stealth"})
+        request = Request("https://example.com", meta={"stealth": {}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_engine = MagicMock()
             mock_engine.fetch.return_value = None
@@ -57,7 +57,7 @@ class TestStealthDownloaderMiddleware:
 
     def test_returns_response_when_engine_returns_response(self, middleware, spider):
         response = _make_html_response()
-        request = Request("https://example.com", meta={"engine": "stealth"})
+        request = Request("https://example.com", meta={"stealth": {}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_engine = MagicMock()
             mock_engine.fetch.return_value = response
@@ -67,7 +67,7 @@ class TestStealthDownloaderMiddleware:
 
     def test_returns_deferred_when_engine_returns_deferred(self, middleware, spider):
         deferred = Deferred()
-        request = Request("https://example.com", meta={"engine": "stealth"})
+        request = Request("https://example.com", meta={"stealth": {}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_engine = MagicMock()
             mock_engine.fetch.return_value = deferred
@@ -84,29 +84,29 @@ class TestStealthDownloaderMiddleware:
     # -------------------------------------------------------------------
 
     def test_rotate_profile_sets_profile(self, middleware, spider):
-        request = Request("https://example.com", meta={"engine": "stealth", "rotate_profile": True})
+        request = Request("https://example.com", meta={"stealth": {"rotate_profile": True}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert "profile" in request.meta
+        assert "profile" in request.meta["stealth"]
 
     def test_rotate_profile_does_not_override_explicit_profile(self, middleware, spider):
         request = Request(
             "https://example.com",
-            meta={"engine": "stealth", "rotate_profile": True, "profile": "chrome_137"},
+            meta={"stealth": {"rotate_profile": True, "profile": "chrome_137"}},
         )
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert request.meta["profile"] == "chrome_137"
+        assert request.meta["stealth"]["profile"] == "chrome_137"
 
     def test_rotate_profile_sets_valid_fingerprint(self, middleware, spider):
         from scrapy_stealth.strategies.fingerprint import FINGERPRINTS
-        request = Request("https://example.com", meta={"engine": "stealth", "rotate_profile": True})
+        request = Request("https://example.com", meta={"stealth": {"rotate_profile": True}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert request.meta["profile"] in FINGERPRINTS
+        assert request.meta["stealth"]["profile"] in FINGERPRINTS
 
     # -------------------------------------------------------------------
     # rotate_proxy
@@ -116,18 +116,18 @@ class TestStealthDownloaderMiddleware:
         proxies = ["http://proxy1:8080", "http://proxy2:8080"]
         with patch("scrapy_stealth.engines.basic.Client"):
             mw = StealthDownloaderMiddleware(proxies=proxies)
-        request = Request("https://example.com", meta={"engine": "stealth", "rotate_proxy": True})
+        request = Request("https://example.com", meta={"stealth": {"rotate_proxy": True}})
         with patch.object(mw.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             mw.process_request(request, spider)
-        assert request.meta.get("proxy") in proxies
+        assert request.meta["stealth"].get("proxy") in proxies
 
     def test_rotate_proxy_no_op_when_no_proxies(self, middleware, spider):
-        request = Request("https://example.com", meta={"engine": "stealth", "rotate_proxy": True})
+        request = Request("https://example.com", meta={"stealth": {"rotate_proxy": True}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             middleware.process_request(request, spider)
-        assert "proxy" not in request.meta
+        assert "proxy" not in request.meta["stealth"]
 
     def test_rotate_proxy_does_not_override_explicit_proxy(self, spider):
         proxies = ["http://proxy1:8080", "http://proxy2:8080"]
@@ -135,12 +135,12 @@ class TestStealthDownloaderMiddleware:
             mw = StealthDownloaderMiddleware(proxies=proxies)
         request = Request(
             "https://example.com",
-            meta={"engine": "stealth", "rotate_proxy": True, "proxy": "http://explicit:9999"},
+            meta={"stealth": {"rotate_proxy": True, "proxy": "http://explicit:9999"}},
         )
         with patch.object(mw.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=MagicMock(return_value=None))
             mw.process_request(request, spider)
-        assert request.meta["proxy"] == "http://explicit:9999"
+        assert request.meta["stealth"]["proxy"] == "http://explicit:9999"
 
     def test_from_crawler_reads_stealth_proxies_setting(self, spider):
         crawler = MagicMock()

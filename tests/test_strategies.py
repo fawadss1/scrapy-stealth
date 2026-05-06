@@ -154,7 +154,7 @@ class TestRetryHandler:
 
     def test_build_switches_to_stealth(self, strategy, base_request):
         retry = strategy.build(base_request)
-        assert retry.meta["engine"] == "stealth"
+        assert "stealth" in retry.meta
 
     def test_build_sets_dont_filter(self, strategy, base_request):
         retry = strategy.build(base_request)

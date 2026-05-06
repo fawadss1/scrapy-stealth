@@ -130,7 +130,7 @@ class TestBasicEngine:
         mock_client = _make_mock_client()
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine()
-            request = Request("https://example.com", meta={"proxy": "http://proxy:8080"})
+            request = Request("https://example.com", meta={"stealth": {"proxy": "http://proxy:8080"}})
             engine._execute(request)
 
         call_kwargs = mock_client.get.call_args.kwargs
@@ -150,7 +150,7 @@ class TestBasicEngine:
         mock_client = _make_mock_client()
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine(profile="chrome_137")
-            request = Request("https://example.com", meta={"profile": "firefox_139"})
+            request = Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}})
             engine._execute(request)
 
         call_kwargs = mock_client.get.call_args.kwargs
@@ -224,14 +224,14 @@ class TestTurboEngine:
     def test_execute_uses_http2_version(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"http2": True}))
+        engine._execute(Request("https://example.com", meta={"stealth": {"http2": True}}))
         call_kwargs = mock_session.get.call_args.kwargs
         assert call_kwargs["http_version"] == CurlHttpVersion.V2_0
 
     def test_execute_uses_http1_version_by_default(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"http2": False}))
+        engine._execute(Request("https://example.com", meta={"stealth": {"http2": False}}))
         call_kwargs = mock_session.get.call_args.kwargs
         assert call_kwargs["http_version"] == CurlHttpVersion.V1_1
 
@@ -253,7 +253,7 @@ class TestTurboEngine:
     def test_execute_passes_proxy(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"proxy": "http://proxy:8080"}))
+        engine._execute(Request("https://example.com", meta={"stealth": {"proxy": "http://proxy:8080"}}))
         call_kwargs = mock_session.get.call_args.kwargs
         assert call_kwargs["proxies"] == {"http": "http://proxy:8080", "https": "http://proxy:8080"}
 
@@ -281,7 +281,7 @@ class TestTurboEngine:
     def test_execute_resolves_turbo_profile(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"profile": "firefox_139"}))
+        engine._execute(Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}}))
         impersonate_arg = mock_cls.call_args.kwargs.get("impersonate") or mock_cls.call_args.args[0]
         assert impersonate_arg == "firefox135"
 
