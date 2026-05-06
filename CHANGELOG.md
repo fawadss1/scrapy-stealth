@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-05-06
+
+### Changed
+
+- **Breaking:** All per-request stealth options are now namespaced under `request.meta["stealth"]` instead of flat `request.meta` keys.
+  This mirrors the pattern used by other scrapy-contributors and prevents key collisions with other middleware.
+  The presence of the `stealth` key activates the stealth engine — no `"engine"` key needed.
+
+  ```python
+  # Before
+  meta={"engine": "stealth", "rotate_profile": True, "proxy": "http://..."}
+
+  # After
+  meta={"stealth": {"rotate_profile": True, "proxy": "http://..."}}
+  ```
+
+  Affected keys: `driver`, `profile`, `proxy`, `stealth_timeout`, `http2`, `rotate_proxy`, `rotate_profile`.
+  The `engine` per-request key has been removed — engine selection is now implicit from the presence of `meta["stealth"]`.
+
+- `RetryHandler.build` — retry request now sets `meta["stealth"]` (empty dict if not already present) to activate the stealth engine
+- `utils/meta.py` — `_get_meta_data` and `_is_meta_enabled` read from `request.meta.get("stealth", {})`;
+  `_stealth_ignored_warn` and `_STEALTH_ONLY_KEYS` removed (no longer needed);
+  `STEALTH_KEY = "stealth"` exported as the canonical namespace key
+
+---
+
 ## [0.3.0] - 2026-05-01
 
 ### Added
@@ -108,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.4.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.4.0
 [0.3.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.3.0
 [0.2.2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.2
 [0.2.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.1
