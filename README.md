@@ -98,7 +98,7 @@ DOWNLOADER_MIDDLEWARES = {
 }
 
 # 2. (Optional) Proxy list for automatic rotation
-#    Used when request.meta["rotate_proxy"] = True
+#    Used when request.meta["stealth"]["rotate_proxy"] = True
 #    Supported schemes: http, https, socks4, socks5
 #    Each entry must include a scheme and port
 STEALTH_PROXIES = [
@@ -139,9 +139,7 @@ class MySpider(scrapy.Spider):
 ```python
 yield scrapy.Request(
     url="https://example.com",
-    meta={
-        "engine": "stealth",
-    },
+    meta={"stealth": {}},
 )
 ```
 
@@ -159,7 +157,7 @@ import scrapy
 from scrapy_stealth.config import config
 
 config.DEFAULT_ENGINE  = "stealth"      # "scrapy" (native) or "stealth" (browser impersonation)
-config.DEFAULT_PROFILE = "chrome_147"   # browser profile when meta["profile"] is not set
+config.DEFAULT_PROFILE = "chrome_147"   # browser profile when meta["stealth"]["profile"] is not set
 config.DEFAULT_TIMEOUT = 30             # stealth request timeout in seconds
 config.STEALTH_DRIVER  = "turbo"        # "basic" (default) or "turbo" (deeper TLS fingerprinting)
 config.HTTP2           = True           # False for servers that only support HTTP/1.1
@@ -187,34 +185,52 @@ config.get("DEFAULT_ENGINE")          # "scrapy"
 config.get("MISSING_KEY", "default")  # "default"
 ```
 
-| Attribute         | Type             | Default                           | Description                                                      |
-|-------------------|------------------|-----------------------------------|------------------------------------------------------------------|
-| `DEFAULT_ENGINE`  | `str`            | `"scrapy"`                        | Engine used when `request.meta["engine"]` is absent              |
-| `DEFAULT_PROFILE` | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                      |
-| `DEFAULT_TIMEOUT` | `int`            | `30`                              | Request timeout in seconds                                       |
-| `STEALTH_DRIVER`  | `str`            | `"basic"`                         | Default driver for stealth engine: `"basic"` or `"turbo"`        |
-| `HTTP2`           | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["http2"]`         |
-| `BLOCK_CODES`     | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                             |
-| `BLOCK_KEYWORDS`  | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                            |
+| Attribute         | Type             | Default                           | Description                                                                    |
+|-------------------|------------------|-----------------------------------|--------------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`  | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                       |
+| `DEFAULT_PROFILE` | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                    |
+| `DEFAULT_TIMEOUT` | `int`            | `30`                              | Request timeout in seconds                                                     |
+| `STEALTH_DRIVER`  | `str`            | `"basic"`                         | Default driver for stealth engine: `"basic"` or `"turbo"`                      |
+| `HTTP2`           | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`            |
+| `BLOCK_CODES`     | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                           |
+| `BLOCK_KEYWORDS`  | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                          |
 
-For one-off overrides on a single request, use `request.meta["driver"]` or `meta["http2"]` instead (see Per-Request Configuration below).
+For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
 ---
 
 ## ⚙️ Per-Request Configuration
 
-All options are passed via `request.meta`:
+All options are passed via `request.meta["stealth"]`:
+
+The presence of `meta["stealth"]` activates the stealth engine. Omit the key entirely to use the default Scrapy engine.
+
+```python
+yield scrapy.Request(
+    url,
+    meta={
+        "stealth": {
+            "driver": "turbo",
+            "profile": "chrome_147",
+            "proxy": "http://user:pass@proxy:8080",
+            "stealth_timeout": 60,
+            "http2": True,
+            "rotate_proxy": True,
+            "rotate_profile": True,
+        }
+    },
+)
+```
 
 | Key               | Type   | Description                                                                      |
 |-------------------|--------|----------------------------------------------------------------------------------|
-| `engine`          | `str`  | `"scrapy"` (default) or `"stealth"`                                              |
 | `driver`          | `str`  | `"basic"` (default) or `"turbo"` — overrides `config.STEALTH_DRIVER` per-request |
 | `profile`         | `str`  | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`)                    |
 | `proxy`           | `str`  | Explicit proxy URL                                                               |
 | `stealth_timeout` | `int`  | Per-request timeout in seconds (overrides default 30s)                           |
 | `http2`           | `bool` | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request) |
-| `rotate_proxy`    | `bool` | Auto-pick a proxy from `STEALTH_PROXIES`                     |
-| `rotate_profile`  | `bool` | Auto-pick a random browser profile                           |
+| `rotate_proxy`    | `bool` | Auto-pick a proxy from `STEALTH_PROXIES`                                         |
+| `rotate_profile`  | `bool` | Auto-pick a random browser profile                                               |
 
 ---
 
@@ -224,9 +240,10 @@ All options are passed via `request.meta`:
 yield scrapy.Request(
     url,
     meta={
-        "engine": "stealth",
-        "rotate_proxy": True,
-        "rotate_profile": True,
+        "stealth": {
+            "rotate_proxy": True,
+            "rotate_profile": True,
+        }
     },
 )
 ```
@@ -248,8 +265,9 @@ proxy_rotator = ProxyRotator([
 yield scrapy.Request(
     url,
     meta={
-        "engine": "stealth",
-        "proxy": proxy_rotator.get(),
+        "stealth": {
+            "proxy": proxy_rotator.get(),
+        }
     },
 )
 ```
@@ -266,8 +284,9 @@ fp = ProfileRotator()
 yield scrapy.Request(
     url,
     meta={
-        "engine": "stealth",
-        "profile": fp.get(),
+        "stealth": {
+            "profile": fp.get(),
+        }
     },
 )
 ```
@@ -316,9 +335,10 @@ class ExampleSpider(scrapy.Spider):
         yield scrapy.Request(
             "https://example.com",
             meta={
-                "engine": "stealth",
-                "rotate_proxy": True,
-                "rotate_profile": True,
+                "stealth": {
+                    "rotate_proxy": True,
+                    "rotate_profile": True,
+                }
             },
         )
 
