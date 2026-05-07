@@ -3,12 +3,14 @@ from __future__ import annotations
 from .config import config
 from .engines.base import BaseEngine
 from .engines.basic import BasicEngine
+from .engines.browser import BrowserEngine
 from .engines.scrapy import ScrapyEngine
 from .engines.turbo import TurboEngine
 
 _STEALTH_DRIVERS: dict[str, type[BaseEngine]] = {
     "basic": BasicEngine,
     "turbo": TurboEngine,
+    "browser": BrowserEngine,
 }
 
 

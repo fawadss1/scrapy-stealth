@@ -5,6 +5,8 @@ from typing import Any, Final
 from .constants import (
     BLOCK_CODES,
     BLOCK_KEYWORDS,
+    BROWSER_HEADLESS,
+    BROWSER_SETTLE_S,
     DEFAULT_ENGINE,
     DEFAULT_PROFILE,
     DEFAULT_TIMEOUT,
@@ -37,6 +39,8 @@ class StealthConfig:
     LOGGER_NAME: Final[str] = LOGGER_NAME
     HTTP2: bool = HTTP2
     STEALTH_DRIVER: str = STEALTH_DRIVER
+    BROWSER_HEADLESS: bool = BROWSER_HEADLESS
+    BROWSER_SETTLE_S: float = BROWSER_SETTLE_S
 
     def get(self, key: str, default: Any = None) -> Any:
         """Return a config value by name, with an optional fallback."""

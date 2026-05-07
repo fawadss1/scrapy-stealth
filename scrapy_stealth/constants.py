@@ -38,5 +38,11 @@ except PackageNotFoundError:
 # Disable if targeting servers that only support HTTP/1.1.
 HTTP2: bool = True
 
-# Default stealth driver. Options: "basic", "turbo".
+# Default stealth driver. Options: "basic", "turbo", "browser".
 STEALTH_DRIVER: str = "basic"
+
+# Browser engine: run Chrome headless by default.
+BROWSER_HEADLESS: bool = True
+
+# Browser engine: seconds to wait after navigation for JS to finish rendering.
+BROWSER_SETTLE_S: float = 4.0
