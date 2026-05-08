@@ -6,7 +6,6 @@ import threading
 from typing import Any
 
 from scrapy.http import Request, Response
-import nodriver as _nd
 
 from .base import BaseEngine
 from ..config import config
@@ -102,6 +101,7 @@ class BrowserEngine(BaseEngine):
             self._browser = future.result(timeout=30)
 
     async def _start(self, headless: bool) -> Any:
+        import nodriver as _nd
         _silence_browser()
         return await _nd.start(browser_args=self._build_args(headless))
 
@@ -125,6 +125,7 @@ class BrowserEngine(BaseEngine):
         self, url: str, settle: float, headless: bool, proxy: str | None
     ) -> tuple[bytes, int]:
         if proxy:
+            import nodriver as _nd
             _silence_browser()
             browser = await _nd.start(browser_args=self._build_args(headless))
             try:
