@@ -1,5 +1,8 @@
+import asyncio
+import threading
+
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch, call
 from scrapy.http import Request, HtmlResponse
 
 from curl_cffi import CurlHttpVersion
@@ -7,6 +10,7 @@ from curl_cffi import CurlHttpVersion
 from scrapy_stealth.config import config
 from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
+from scrapy_stealth.engines.browser import BrowserEngine
 from scrapy_stealth.engines.turbo import TurboEngine
 from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
 from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
@@ -317,3 +321,126 @@ class TestTurboEngine:
         }
         assert "content-encoding" not in resp_headers
         assert "content-type" in resp_headers
+
+
+# ---------------------------------------------------------------------------
+# BrowserEngine
+# ---------------------------------------------------------------------------
+
+class TestBrowserEngine:
+    @pytest.fixture(autouse=True)
+    def fast_settle(self, monkeypatch):
+        # Zero the settle delay so _execute tests complete instantly instead of waiting 4s each.
+        monkeypatch.setattr(config, "BROWSER_SETTLE_S", 0.0)
+
+    @pytest.fixture
+    def event_loop(self):
+        loop = asyncio.new_event_loop()
+        thread = threading.Thread(target=loop.run_forever, daemon=True)
+        thread.start()
+        yield loop
+        loop.call_soon_threadsafe(lambda: loop.stop())
+
+    @pytest.fixture
+    def mock_tab(self):
+        tab = AsyncMock()
+        tab.evaluate = AsyncMock(
+            side_effect=lambda js: 200 if "responseStatus" in js else "<html><body>browser ok</body></html>"
+        )
+        tab.close = AsyncMock()
+        return tab
+
+    @pytest.fixture
+    def mock_browser(self, mock_tab):
+        browser = MagicMock()
+        browser.get = AsyncMock(return_value=mock_tab)
+        browser.stop = MagicMock()
+        return browser
+
+    @pytest.fixture
+    def engine(self, event_loop, mock_browser):
+        e = BrowserEngine()
+        e._browser = mock_browser
+        e._loop = event_loop
+        return e
+
+    def test_fetch_returns_deferred(self):
+        from twisted.internet.defer import Deferred
+        from scrapy_stealth.engines.base import deferToThread
+        engine = BrowserEngine()
+        # Patch deferToThread so no thread is started — we only verify the return type.
+        with patch("scrapy_stealth.engines.base.deferToThread", return_value=Deferred()):
+            result = engine.fetch(Request("https://example.com"), MagicMock())
+        assert isinstance(result, Deferred)
+
+    def test_execute_returns_stealth_response(self, engine):
+        response = engine._execute(Request("https://example.com"))
+        assert isinstance(response, StealthResponse)
+        assert response.status == 200
+
+    def test_execute_body_contains_evaluated_html(self, engine, mock_tab):
+        mock_tab.evaluate = AsyncMock(
+            side_effect=lambda js: 200 if "responseStatus" in js else "<html><body>stealth browser</body></html>"
+        )
+        response = engine._execute(Request("https://example.com"))
+        assert b"stealth browser" in response.body
+
+    def test_execute_opens_tab_per_request(self, engine, mock_browser):
+        engine._execute(Request("https://example.com/page1"))
+        engine._execute(Request("https://example.com/page2"))
+        assert mock_browser.get.call_count == 2
+
+    def test_execute_closes_tab_after_fetch(self, engine, mock_tab):
+        engine._execute(Request("https://example.com"))
+        mock_tab.close.assert_called_once()
+
+    def test_execute_returns_none_on_exception(self, engine, mock_browser):
+        mock_browser.get = AsyncMock(side_effect=Exception("network error"))
+        result = engine._execute(Request("https://example.com"))
+        assert result is None
+
+    def test_execute_reraises_timeout(self, engine, mock_browser):
+        mock_browser.get = AsyncMock(side_effect=TimeoutError("timed out"))
+        with pytest.raises(TimeoutError):
+            engine._execute(Request("https://example.com"))
+
+    def test_execute_passes_headless_from_meta(self, engine):
+        with patch.object(engine, "_ensure_browser") as mock_ensure:
+            engine._execute(Request("https://example.com", meta={"stealth": {"headless": False}}))
+        assert mock_ensure.call_args.kwargs["headless"] is False
+
+    def test_execute_uses_config_headless_default(self, engine):
+        with patch.object(engine, "_ensure_browser") as mock_ensure:
+            engine._execute(Request("https://example.com"))
+        assert mock_ensure.call_args.kwargs["headless"] == config.get("BROWSER_HEADLESS")
+
+    def test_execute_passes_proxy_to_do_fetch(self, engine):
+        with patch.object(engine, "_do_fetch", new_callable=AsyncMock, return_value=(b"<html></html>", 200)) as mock_fetch:
+            engine._execute(Request(
+                "https://example.com",
+                meta={"stealth": {"proxy": "http://proxy:8080"}},
+            ))
+        # _do_fetch(url, settle, headless, proxy) — proxy is the 4th positional arg
+        assert mock_fetch.call_args.args[3] == "http://proxy:8080"
+
+    def test_execute_uses_custom_settle_from_meta(self, engine):
+        captured = []
+
+        async def fake_fetch(url, settle, headless, proxy):
+            captured.append(settle)
+            return b"<html></html>", 200
+
+        with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
+            engine._execute(Request("https://example.com", meta={"stealth": {"settle": 9.0}}))
+        assert captured[0] == 9.0
+
+    def test_execute_uses_config_settle_default(self, engine):
+        captured = []
+
+        async def fake_fetch(url, settle, headless, proxy):
+            captured.append(settle)
+            return b"<html></html>", 200
+
+        with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
+            engine._execute(Request("https://example.com"))
+        assert captured[0] == config.get("BROWSER_SETTLE_S")
