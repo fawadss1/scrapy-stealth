@@ -17,6 +17,7 @@ dependencies = [
     "scrapy>=2.15.2",
     "wreq>=0.11.2",
     "curl_cffi>=0.15.0",
+    "nodriver>=0.48.1",
 ]
 
 keywords = [
