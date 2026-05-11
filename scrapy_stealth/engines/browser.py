@@ -56,6 +56,16 @@ def _splash_url() -> str:
     return "chrome://welcome"
 
 
+async def _cdp_snapshot(page: Any) -> bytes | None:
+    import base64
+    try:
+        import nodriver.cdp.page as _cdp_page
+        data: str = await page.send(_cdp_page.capture_screenshot())
+        return base64.b64decode(data)
+    except Exception:
+        return None
+
+
 def _silence_browser() -> None:
     import logging
     import nodriver.core.util as _nd_util
@@ -122,8 +132,31 @@ class BrowserEngine(BaseEngine):
             self._browser = None
 
     async def _do_fetch(
-        self, url: str, settle: float, headless: bool, proxy: str | None
-    ) -> tuple[bytes, int]:
+            self,
+            url: str,
+            settle: float,
+            headless: bool,
+            proxy: str | None,
+            snapshot: bool = False,
+    ) -> tuple[bytes, int, bytes | None]:
+        """
+        Fetches data from a specified URL asynchronously, allowing for the use of a proxy, headless browser,
+        and optional snapshot capture. Adjusts to settle time before retrieving the webpage content and status.
+
+        Parameters:
+            url (str): The URL to fetch data from.
+            settle (float): The amount of time to wait before retrieving content.
+            headless (bool): Whether to use a headless browser for the operation.
+            proxy (str | None): The proxy server to use for the request, or None to not use a proxy.
+            snapshot (bool): Optional; Defaults to False. Determines if a snapshot of the page should
+                be captured.
+
+        Returns:
+            tuple[bytes, int, bytes | None]: A tuple containing the HTML content of the page in bytes,
+            the HTTP status code as an integer, and optionally the snapshot data in bytes (or None
+            if no snapshot is taken).
+        """
+        shot: bytes | None = None
         if proxy:
             import nodriver as _nd
             _silence_browser()
@@ -140,6 +173,8 @@ class BrowserEngine(BaseEngine):
                 await asyncio.sleep(settle)
                 html: Any = await page.evaluate(_JS_HTML)
                 status: Any = await page.evaluate(_JS_STATUS)
+                if snapshot:
+                    shot = await _cdp_snapshot(page)
             finally:
                 browser.stop()
         else:
@@ -147,18 +182,21 @@ class BrowserEngine(BaseEngine):
             await asyncio.sleep(settle)
             html = await page.evaluate(_JS_HTML)
             status = await page.evaluate(_JS_STATUS)
+            if snapshot:
+                shot = await _cdp_snapshot(page)
             try:
                 await page.close()
             except Exception:
                 pass
 
-        return str(html).encode(errors="replace"), int(status)
+        return str(html).encode(errors="replace"), int(status), shot
 
     def _execute(self, request: Request) -> Response | None:
         try:
             ctx = self._ctx(request)
             headless: bool = _get_meta_data(request, "headless", config.get("BROWSER_HEADLESS"))
             settle: float = _get_meta_data(request, "settle", config.get("BROWSER_SETTLE_S"))
+            snap: bool = _get_meta_data(request, "snapshot", False)
 
             logger.debug(
                 "Initializing browser engine (headless=%s & settle=%ss)",
@@ -168,8 +206,8 @@ class BrowserEngine(BaseEngine):
             if ctx.proxy:
                 loop = _make_loop()
                 try:
-                    body, status = loop.run_until_complete(
-                        self._do_fetch(request.url, settle, headless, ctx.proxy)
+                    body, status, shot = loop.run_until_complete(
+                        self._do_fetch(request.url, settle, headless, ctx.proxy, snap)
                     )
                 finally:
                     pending = asyncio.all_tasks(loop)
@@ -182,9 +220,9 @@ class BrowserEngine(BaseEngine):
                 self._ensure_browser(headless=headless)
                 assert self._loop is not None
                 future = asyncio.run_coroutine_threadsafe(
-                    self._do_fetch(request.url, settle, headless, None), self._loop
+                    self._do_fetch(request.url, settle, headless, None, snap), self._loop
                 )
-                body, status = future.result(timeout=ctx.timeout)
+                body, status, shot = future.result(timeout=ctx.timeout)
 
             logger.debug(
                 "Browser engine fetched %s  status=%s  size=%d bytes",
@@ -195,6 +233,7 @@ class BrowserEngine(BaseEngine):
                 status=status,
                 headers={"content-type": "text/html; charset=utf-8"},
                 body=body,
+                _meta={"snapshot_content": shot} if shot is not None else None,
             )
 
         except TimeoutError:

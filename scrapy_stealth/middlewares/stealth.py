@@ -7,6 +7,7 @@ from scrapy.http import Request, Response
 from twisted.internet.defer import Deferred
 
 from ..config import config
+from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
@@ -65,4 +66,12 @@ class StealthDownloaderMiddleware:
 
         driver = _get_meta_data(request, "driver")
         engine = self.manager.get(engine_name, driver)
+
+        if _get_meta_data(request, "snapshot", False) and not isinstance(engine, BrowserEngine):
+            logger.error(
+                "snapshot=True requires driver='browser' but current driver is %r. "
+                "Snapshot will be ignored.",
+                driver or config.get("STEALTH_DRIVER"),
+            )
+
         return engine.fetch(request, spider)
