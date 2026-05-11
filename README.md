@@ -75,6 +75,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
 * ⚡  Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
+* 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
 
@@ -238,6 +239,7 @@ yield scrapy.Request(
 | `rotate_profile`  | `bool`  | Auto-pick a random browser profile                                               |
 | `headless`        | `bool`  | Browser driver only: `True` = headless, `False` = visible window (more stealthy)|
 | `settle`          | `float` | Browser driver only: seconds to wait for JS after navigation (default `4.0`)     |
+| `snapshot`        | `bool`  | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`) |
 
 ---
 
@@ -280,6 +282,67 @@ config.BROWSER_SETTLE_S = 6.0    # longer wait for JS
 
 > **Performance note**: the browser engine is slower than `basic`/`turbo` (~5-15s per page vs <2s).
 > Use it selectively — route only JS-protected URLs to `"browser"` and keep everything else on `"turbo"`.
+
+---
+
+## 📸 Screenshots
+
+Capture a PNG screenshot of any page rendered by the `browser` driver and save it to disk.
+
+### Enable on the request
+
+```python
+yield scrapy.Request(
+    url,
+    meta={
+        "stealth": {
+            "driver": "browser",
+            "snapshot": True,
+        }
+    },
+    callback=self.parse,
+)
+```
+
+The raw PNG bytes are available at `response.meta["snapshot_content"]` inside your callback.
+
+### Auto-save with `snapshot` decorator
+
+```python
+from scrapy_stealth.decorators import snapshot
+
+class MySpider(scrapy.Spider):
+
+    @snapshot
+    def parse(self, response): ...
+
+    @snapshot(path="stealth_shots/page.png")
+    def parse(self, response): ...
+
+    @snapshot(path=lambda r: r.url.split("/")[-1] + ".png")
+    def parse(self, response): ...
+```
+
+> **Note:** Requires `driver="browser"` and `snapshot=True` in the request meta.
+> Logs an error if no snapshot data is found in the response.
+
+### Custom handling (without the built-in helper)
+
+The screenshot is just `bytes` in `response.meta["snapshot_content"]` — do anything you like with it:
+
+```python
+def parse(self, response):
+    shot: bytes | None = response.meta.get("snapshot_content")
+    if shot is None:
+        return  # screenshot was not requested or capture failed
+
+    # Save manually
+    with open("page.png", "wb") as f:
+        f.write(shot)
+
+    # Pass to a pipeline via item
+    yield {"url": response.url, "screenshot": shot}
+```
 
 ---
 
