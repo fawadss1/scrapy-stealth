@@ -415,20 +415,20 @@ class TestBrowserEngine:
         assert mock_ensure.call_args.kwargs["headless"] == config.get("BROWSER_HEADLESS")
 
     def test_execute_passes_proxy_to_do_fetch(self, engine):
-        with patch.object(engine, "_do_fetch", new_callable=AsyncMock, return_value=(b"<html></html>", 200)) as mock_fetch:
+        with patch.object(engine, "_do_fetch", new_callable=AsyncMock, return_value=(b"<html></html>", 200, None)) as mock_fetch:
             engine._execute(Request(
                 "https://example.com",
                 meta={"stealth": {"proxy": "http://proxy:8080"}},
             ))
-        # _do_fetch(url, settle, headless, proxy) — proxy is the 4th positional arg
+        # _do_fetch(url, settle, headless, proxy, snapshot) — proxy is the 4th positional arg
         assert mock_fetch.call_args.args[3] == "http://proxy:8080"
 
     def test_execute_uses_custom_settle_from_meta(self, engine):
         captured = []
 
-        async def fake_fetch(url, settle, headless, proxy):
+        async def fake_fetch(url, settle, headless, proxy, snapshot=False):
             captured.append(settle)
-            return b"<html></html>", 200
+            return b"<html></html>", 200, None
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
             engine._execute(Request("https://example.com", meta={"stealth": {"settle": 9.0}}))
@@ -437,9 +437,9 @@ class TestBrowserEngine:
     def test_execute_uses_config_settle_default(self, engine):
         captured = []
 
-        async def fake_fetch(url, settle, headless, proxy):
+        async def fake_fetch(url, settle, headless, proxy, snapshot=False):
             captured.append(settle)
-            return b"<html></html>", 200
+            return b"<html></html>", 200, None
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
             engine._execute(Request("https://example.com"))
