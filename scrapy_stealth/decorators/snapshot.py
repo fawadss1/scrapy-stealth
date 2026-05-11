@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import os
+import functools
+from typing import Any, Callable
+
+from ..utils.logger import get_logger
+
+logger = get_logger()
+
+
+def snapshot(fn: Callable | None = None, *, path: str | Callable | None = None) -> Any:
+    """
+    Decorator that auto-saves a browser snapshot before the callback runs.
+
+    Usage::
+
+        @snapshot
+        def parse(self, response): ...
+
+        @snapshot()
+        def parse(self, response): ...
+
+        @snapshot(path="stealth_shots/page.png")
+        def parse(self, response): ...
+
+        @snapshot(path=lambda r: r.url.split("/")[-1] + ".png")
+        def parse(self, response): ...
+
+    Logs an error if ``meta={'stealth': {'snapshot': True}}`` was not set.
+    """
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(self: Any, response: Any, *args: Any, **kwargs: Any) -> Any:
+            _save(response, path)
+            return func(self, response, *args, **kwargs)
+        return wrapper
+
+    if fn is not None:
+        if hasattr(fn, "meta"):
+            raise TypeError(
+                "snapshot is a decorator, not a callable method. "
+                "Use @snapshot on your callback, or access "
+                "response.meta['snapshot_content'] directly."
+            )
+        return decorator(fn)
+    return decorator
+
+
+def _save(response: Any, path: str | Callable | None) -> None:
+    if callable(path):
+        path = path(response)
+
+    shot: bytes | None = response.meta.get("snapshot_content")
+    if not shot:
+        logger.error(
+            "snapshot decorator called on %s but no snapshot data found. "
+            "Set meta={'stealth': {'snapshot': True}} on the request.",
+            response.url,
+        )
+        return
+
+    if path is None:
+        import re
+        from datetime import datetime
+        safe = re.sub(r"\W", "_", response.url)[:20].strip("_")
+        path = f"snapshot_{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
+
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "wb") as fh:
+        fh.write(shot)
+    logger.debug("Snapshot saved → %s (%d bytes)", path, len(shot))
