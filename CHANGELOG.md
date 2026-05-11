@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-05-11
+
+### Added
+
+#### Real Browser Engine (`driver="browser"`)
+
+A third stealth driver powered by a real Chrome instance via the Chrome DevTools Protocol (no WebDriver).
+Designed for Cloudflare-protected pages, heavy JavaScript SPAs, and any site that defeats HTTP-level impersonation.
+
+Key characteristics:
+- **No WebDriver** — communicates over CDP directly; `navigator.webdriver` is never set
+- **Persistent browser, tab-per-request** — one Chrome process is reused across requests; each request opens a new tab and closes it when done, keeping memory overhead low
+- **Proxy isolation** — when a proxy is set, a fresh browser is started per request so every request exits from a different IP with no shared state
+- **Splash screen** — loads the project logo before the target URL when using a proxy, warming up the browser context
+- **Configurable globally** via `config.BROWSER_HEADLESS` (default `True`) and `config.BROWSER_SETTLE_S` (default `4.0`)
+- **Per-request overrides** via `meta["stealth"]["headless"]` and `meta["stealth"]["settle"]`
+
+#### Browser Snapshots
+
+Capture a full-page PNG of any browser-rendered page and access the raw bytes in the response:
+
+#### `@snapshot` Decorator (`scrapy_stealth.decorators`)
+
+New `decorators` package with a `snapshot` decorator that auto-saves the PNG to disk before the callback.
+
+- Creates intermediate directories automatically
+- Auto-generates a timestamped filename when `path` is omitted
+- Logs an error (does not raise) if `snapshot=True` was not set on the request
+- Raises `TypeError` if called directly as a method instead of used as a decorator
+- Middleware logs an error if `snapshot=True` is used with a non-browser driver
+
+---
+
 ## [0.4.0] - 2026-05-06
 
 ### Changed
