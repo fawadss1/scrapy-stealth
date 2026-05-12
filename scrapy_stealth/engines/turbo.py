@@ -11,12 +11,19 @@ from ..utils.headers import _FINGERPRINT_KEYS
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
 from ..utils.response import StealthResponse
+from ..utils.session import SessionCache
 
 logger = get_logger()
 
 
 class TurboEngine(BaseEngine):
     """Stealth HTTP engine with deep TLS fingerprinting (turbo driver)."""
+
+    def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
+        super().__init__(profile, timeout)
+        self._sessions: SessionCache[Any, Session] = SessionCache(
+            lambda impersonate: Session(impersonate=impersonate)
+        )
 
     def _execute(self, request: Request) -> Response | None:
         try:
@@ -43,9 +50,9 @@ class TurboEngine(BaseEngine):
                 ctx.profile, "HTTP/2" if ctx.http2 else "HTTP/1.1",
             )
 
-            with Session(impersonate=browser) as session:
-                method_fn = getattr(session, request.method.lower())
-                resp = method_fn(request.url, **kwargs)
+            session = self._sessions.get(browser)
+            method_fn = getattr(session, request.method.lower())
+            resp = method_fn(request.url, **kwargs)
 
             resp_headers = {
                 k: v for k, v in resp.headers.items()
