@@ -12,6 +12,7 @@ from ..utils.profiles import resolve_browser
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
 from ..utils.response import StealthResponse
+from ..utils.session import SessionCache
 
 logger = get_logger()
 
@@ -22,12 +23,9 @@ class BasicEngine(BaseEngine):
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         super().__init__(profile, timeout)
         self.default_profile = resolve_browser(self._default_profile)
-        self._clients: dict[bool, Client] = {}
-
-    def _get_client(self, http2: bool) -> Client:
-        if http2 not in self._clients:
-            self._clients[http2] = Client(http2_only=http2)
-        return self._clients[http2]
+        self._clients: SessionCache[bool, Client] = SessionCache(
+            lambda http2: Client(http2_only=http2)
+        )
 
     def _execute(self, request: Request) -> Response | None:
         try:
@@ -57,7 +55,7 @@ class BasicEngine(BaseEngine):
                 ctx.profile, "HTTP/2" if ctx.http2 else "HTTP/1.1",
             )
 
-            method_fn = getattr(self._get_client(ctx.http2), request.method.lower())
+            method_fn = getattr(self._clients.get(ctx.http2), request.method.lower())
             resp = method_fn(request.url, **kwargs)
 
             return StealthResponse(
