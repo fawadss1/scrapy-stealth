@@ -46,3 +46,9 @@ BROWSER_HEADLESS: bool = True
 
 # Browser engine: seconds to wait after navigation for JS to finish rendering.
 BROWSER_SETTLE_S: float = 4.0
+
+# Browser engine: max Chrome tabs open simultaneously across concurrent requests.
+BROWSER_MAX_TABS: int = 10
+
+# Browser engine: restart Chrome after this many requests to prevent memory bloat.
+BROWSER_RESTART_EVERY: int = 200
