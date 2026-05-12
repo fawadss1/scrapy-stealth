@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-05-12
+
+### Fixed
+
+- **Browser engine — `StopIteration` / `RuntimeError` crash under concurrent load**
+  `browser.get(url)` without `new_tab=True` reused the persistent main tab; after `page.close()` the main tab was destroyed, so the next call to `browser.get()` found no `"page"` targets and raised `StopIteration` inside a coroutine (→ `RuntimeError: coroutine raised StopIteration`).
+  All fetches now use `browser.get(url, new_tab=True)` — each request gets its own isolated tab, the main tab stays alive permanently, and `StopIteration` can never occur.
+
+- **Browser engine — noisy `[asyncio] ERROR: Task exception was never retrieved` spam**
+  nodriver fires background `update_targets()` tasks on a timer; when Chrome restarts these tasks raise `ConnectionRefusedError` which asyncio logs as unhandled task exceptions.
+  A custom loop exception handler now suppresses `ConnectionRefusedError` from the browser event loop, eliminating the log noise.
+
+- **Browser engine — automatic crash recovery**
+  On `ConnectionRefusedError` (Chrome process died) the engine now restarts the browser and retries the current request once before giving up.
+  A dead-browser guard (`dead_browser` parameter on `_reset_browser`) prevents multiple concurrent threads from each triggering a redundant restart.
+
+### Added
+
+- **`BROWSER_MAX_TABS`** (default `10`) — caps the number of Chrome tabs open simultaneously via an asyncio `Semaphore`, preventing Chrome from being overwhelmed when Scrapy fires many concurrent requests.
+  Configurable via `config.BROWSER_MAX_TABS` or `constants.BROWSER_MAX_TABS`.
+
+- **`BROWSER_RESTART_EVERY`** (default `200`) — proactively restarts Chrome every N requests to prevent memory bloat on long high-volume runs.
+  Configurable via `config.BROWSER_RESTART_EVERY` or `constants.BROWSER_RESTART_EVERY`.
+
+- **`utils/session.py` — `SessionCache[K, V]`** — generic lazy per-thread cache backed by a factory callable.
+  Each Twisted thread pool thread maintains its own isolated dict; the factory is called once per key per thread and the result is reused on every subsequent call from that thread.
+  Eliminates the boilerplate `threading.local()` + `hasattr` + dict pattern that both `BasicEngine` and `TurboEngine` previously duplicated.
+
+### Changed
+
+- **`TurboEngine` — persistent thread-local sessions** (performance)
+  Previously a fresh `Session` was created and destroyed for every request, incurring a full TLS handshake cost each time.
+  Sessions are now cached per `(thread, impersonation-profile)` via `SessionCache`, enabling TCP connection reuse and TLS session resumption within each Twisted thread pool thread.
+
+- **`BasicEngine` — thread-local clients** (correctness + performance)
+  The previous `self._clients: dict[bool, Client]` was shared across all Scrapy threads, creating a potential concurrent-write race on first use and preventing per-thread connection pooling.
+  Replaced with `SessionCache` — each thread gets its own `wreq.Client` per http2 setting.
+
+- **`BROWSER_MAX_TABS` and `BROWSER_RESTART_EVERY`** added to `constants.py` and registered as `StealthConfig` attributes so they are accessible via `config.get()` like all other browser settings.
+
+---
+
 ## [0.5.0] - 2026-05-11
 
 ### Added
@@ -167,6 +209,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 
 ---
 
+[0.6.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.0
+[0.5.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.5.0
 [0.4.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.4.0
 [0.3.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.3.0
 [0.2.2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.2
