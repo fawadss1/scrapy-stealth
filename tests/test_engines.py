@@ -362,6 +362,7 @@ class TestBrowserEngine:
         e = BrowserEngine()
         e._browser = mock_browser
         e._loop = event_loop
+        e._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return e
 
     def test_fetch_returns_deferred(self):
