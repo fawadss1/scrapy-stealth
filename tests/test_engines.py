@@ -175,6 +175,22 @@ class TestBasicEngine:
             engine = BasicEngine()
         assert engine.default_profile == resolve_browser(config.get("DEFAULT_PROFILE"))
 
+    def test_client_reused_within_thread(self):
+        mock_cls = MagicMock(return_value=_make_mock_client())
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine()
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+        assert mock_cls.call_count == 1
+
+    def test_separate_clients_per_http2_setting(self):
+        mock_cls = MagicMock(return_value=_make_mock_client())
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine()
+            engine._execute(Request("https://example.com", meta={"stealth": {"http2": True}}))
+            engine._execute(Request("https://example.com", meta={"stealth": {"http2": False}}))
+        assert mock_cls.call_count == 2
+
 
 # ---------------------------------------------------------------------------
 # TurboEngine
@@ -189,14 +205,13 @@ def _make_turbo_response(status=200, content=b"<html><body>turbo</body></html>",
 
 
 def _turbo_session_ctx(mock_resp):
-    """Return a Session class mock whose context manager yields a session that returns mock_resp."""
+    """Return a Session class mock whose instances return mock_resp on HTTP calls."""
     mock_session = MagicMock()
     mock_session.get.return_value = mock_resp
     mock_session.post.return_value = mock_resp
 
     mock_cls = MagicMock()
-    mock_cls.return_value.__enter__ = MagicMock(return_value=mock_session)
-    mock_cls.return_value.__exit__ = MagicMock(return_value=False)
+    mock_cls.return_value = mock_session
     return mock_cls, mock_session
 
 
@@ -290,22 +305,36 @@ class TestTurboEngine:
         assert impersonate_arg == "firefox135"
 
     def test_execute_returns_none_on_exception(self):
-        mock_cls = MagicMock()
-        mock_cls.return_value.__enter__ = MagicMock(side_effect=Exception("connection error"))
-        mock_cls.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.get.side_effect = Exception("connection error")
+        mock_cls = MagicMock(return_value=mock_session)
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             engine = TurboEngine()
             result = engine._execute(Request("https://example.com"))
         assert result is None
 
     def test_execute_reraises_timeout(self):
-        mock_cls = MagicMock()
-        mock_cls.return_value.__enter__ = MagicMock(side_effect=TimeoutError("timed out"))
-        mock_cls.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.get.side_effect = TimeoutError("timed out")
+        mock_cls = MagicMock(return_value=mock_session)
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             engine = TurboEngine()
             with pytest.raises(TimeoutError):
                 engine._execute(Request("https://example.com"))
+
+    def test_session_reused_for_same_profile(self, session_patch):
+        mock_cls, _ = session_patch
+        engine = TurboEngine()
+        engine._execute(Request("https://example.com"))
+        engine._execute(Request("https://example.com"))
+        assert mock_cls.call_count == 1
+
+    def test_separate_session_per_profile(self, session_patch):
+        mock_cls, _ = session_patch
+        engine = TurboEngine()
+        engine._execute(Request("https://example.com", meta={"stealth": {"profile": "chrome_133"}}))
+        engine._execute(Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}}))
+        assert mock_cls.call_count == 2
 
     def test_execute_drops_content_encoding_header(self, session_patch):
         mock_resp = _make_turbo_response(
