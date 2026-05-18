@@ -72,7 +72,7 @@ class BaseEngine(ABC):
     def _execute_timed(self, request: Request) -> Response | None:
         resp, latency = self._timed(self._execute, request)
         if resp is not None:
-            resp.meta["download_latency"] = f"{latency:.2f}s"
+            resp.meta["download_latency"] = latency
         return resp
 
     def _ctx(self, request: Request) -> RequestContext:
