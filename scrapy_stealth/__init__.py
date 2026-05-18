@@ -38,8 +38,6 @@ The presence of the ``stealth`` key activates the stealth engine.
 Omit it entirely to use the default Scrapy engine.
 """
 
-from importlib.metadata import PackageNotFoundError, metadata
-
 from .config import StealthConfig, config
 from .detectors.antibot import AntiBotDetector
 from .engines.base import BaseEngine
@@ -50,16 +48,11 @@ from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
 from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
+from .utils.meta_info import _pkg_meta
 
-try:
-    _meta = metadata("scrapy-stealth")
-    __version__ = _meta["Version"]
-    __author__ = _meta["Author-email"].split("<")[0].strip()
-except PackageNotFoundError:
-    __version__ = "unknown"
-    __author__ = "Fawad Ali"
-
-__license__ = "MIT"
+__version__: str = _pkg_meta.version
+__author__: str = _pkg_meta.author
+__license__: str = _pkg_meta.license
 
 __all__ = [
     # Middleware
