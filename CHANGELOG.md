@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.1] - 2026-05-18
+
+### Fixed
+
+- **Zyte (ScrapyCloud) — `ValueError: invalid literal for int()` on `download_latency`**
+  `BaseEngine._execute_timed` stored download latency as a formatted string (`"0.18s"`) instead of a numeric value. Zyte's `sh_scrapy` pipe writer calls `int(duration)` and expects a plain number; the string caused a `ValueError` at response write time, and the string was repeated across concurrent/retried requests making it unreadable.
+  `download_latency` is now stored as a plain `float` (e.g. `0.18`), consistent with Scrapy's own HTTP downloader.
+
+### Added
+
+- **`utils/meta_info.py` — `PackageMetadata` utility**
+  Frozen dataclass that reads `name`, `version`, `author`, `email`, `license`, `summary`, and `homepage` from the installed distribution metadata via `importlib.metadata`.
+  Parses `"Name <email>"` author strings with a regex, picks the first available URL field, and falls back to compile-time defaults when the package is not installed (e.g. running from source without `pip install -e .`).
+  A module-level singleton `_pkg_meta` is resolved once at import time; `__init__.py` now derives `__version__`, `__author__`, and `__license__` from it. `PackageMetadata` is exported in `__all__`.
+
+---
+
 ## [0.6.0] - 2026-05-12
 
 ### Fixed
@@ -209,6 +226,7 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 
 ---
 
+[0.6.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.1
 [0.6.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.0
 [0.5.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.5.0
 [0.4.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.4.0
