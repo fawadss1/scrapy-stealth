@@ -85,7 +85,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 pip install scrapy-stealth
 ```
 
-> Requires Python 3.11+ and Scrapy 2.15+
+> Requires Python 3.11+ and Scrapy 2.12–2.x
 
 ---
 
@@ -189,17 +189,17 @@ config.get("DEFAULT_ENGINE")          # "scrapy"
 config.get("MISSING_KEY", "default")  # "default"
 ```
 
-| Attribute         | Type             | Default                           | Description                                                                    |
-|-------------------|------------------|-----------------------------------|--------------------------------------------------------------------------------|
-| `DEFAULT_ENGINE`  | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                       |
-| `DEFAULT_PROFILE` | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                    |
-| `DEFAULT_TIMEOUT` | `int`            | `30`                              | Request timeout in seconds                                                     |
-| `STEALTH_DRIVER`    | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`                          |
-| `HTTP2`             | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`            |
-| `BLOCK_CODES`       | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                           |
-| `BLOCK_KEYWORDS`    | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                          |
-| `BROWSER_HEADLESS`  | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)        |
-| `BROWSER_SETTLE_S`  | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering    |
+| Attribute          | Type             | Default                           | Description                                                                 |
+|--------------------|------------------|-----------------------------------|-----------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`   | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                    |
+| `DEFAULT_PROFILE`  | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                 |
+| `DEFAULT_TIMEOUT`  | `int`            | `30`                              | Request timeout in seconds                                                  |
+| `STEALTH_DRIVER`   | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`                        |
+| `HTTP2`            | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`         |
+| `BLOCK_CODES`      | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                        |
+| `BLOCK_KEYWORDS`   | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                       |
+| `BROWSER_HEADLESS` | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)     |
+| `BROWSER_SETTLE_S` | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
@@ -228,17 +228,17 @@ yield scrapy.Request(
 )
 ```
 
-| Key               | Type   | Description                                                                      |
-|-------------------|--------|----------------------------------------------------------------------------------|
-| `driver`          | `str`   | `"basic"`, `"turbo"`, or `"browser"` — overrides `config.STEALTH_DRIVER` per-request |
-| `profile`         | `str`   | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`)                    |
-| `proxy`           | `str`   | Explicit proxy URL                                                               |
-| `stealth_timeout` | `int`   | Per-request timeout in seconds (overrides default 30s)                           |
-| `http2`           | `bool`  | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request) |
-| `rotate_proxy`    | `bool`  | Auto-pick a proxy from `STEALTH_PROXIES`                                         |
-| `rotate_profile`  | `bool`  | Auto-pick a random browser profile                                               |
-| `headless`        | `bool`  | Browser driver only: `True` = headless, `False` = visible window (more stealthy)|
-| `settle`          | `float` | Browser driver only: seconds to wait for JS after navigation (default `4.0`)     |
+| Key               | Type    | Description                                                                                                     |
+|-------------------|---------|-----------------------------------------------------------------------------------------------------------------|
+| `driver`          | `str`   | `"basic"`, `"turbo"`, or `"browser"` — overrides `config.STEALTH_DRIVER` per-request                            |
+| `profile`         | `str`   | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`)                                                    |
+| `proxy`           | `str`   | Explicit proxy URL                                                                                              |
+| `stealth_timeout` | `int`   | Per-request timeout in seconds (overrides default 30s)                                                          |
+| `http2`           | `bool`  | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request)                                 |
+| `rotate_proxy`    | `bool`  | Auto-pick a proxy from `STEALTH_PROXIES`                                                                        |
+| `rotate_profile`  | `bool`  | Auto-pick a random browser profile                                                                              |
+| `headless`        | `bool`  | Browser driver only: `True` = headless, `False` = visible window (more stealthy)                                |
+| `settle`          | `float` | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                    |
 | `snapshot`        | `bool`  | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`) |
 
 ---
