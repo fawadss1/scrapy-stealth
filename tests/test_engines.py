@@ -27,7 +27,7 @@ class TestScrapyEngine:
         engine = ScrapyEngine()
         request = Request("https://example.com")
         spider = MagicMock()
-        assert engine.fetch(request, spider) is None
+        assert asyncio.run(engine.fetch(request, spider)) is None
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +112,12 @@ class TestBasicEngine:
     def spider(self):
         return MagicMock()
 
-    def test_fetch_returns_deferred(self, engine, spider):
-        from twisted.internet.defer import Deferred
+    def test_fetch_is_coroutine(self, engine, spider):
+        import inspect
         request = Request("https://example.com")
         result = engine.fetch(request, spider)
-        assert isinstance(result, Deferred)
+        assert inspect.iscoroutine(result)
+        result.close()
 
     def test_execute_returns_html_response(self):
         mock_client = _make_mock_client(200, b"<html>hello</html>")
@@ -226,12 +227,13 @@ class TestTurboEngine:
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             yield mock_cls, mock_session
 
-    def test_fetch_returns_deferred(self, session_patch):
-        from twisted.internet.defer import Deferred
+    def test_fetch_is_coroutine(self, session_patch):
+        import inspect
         engine = TurboEngine()
         spider = MagicMock()
         result = engine.fetch(Request("https://example.com"), spider)
-        assert isinstance(result, Deferred)
+        assert inspect.iscoroutine(result)
+        result.close()
 
     def test_execute_returns_stealth_response(self, session_patch):
         engine = TurboEngine()
@@ -394,14 +396,12 @@ class TestBrowserEngine:
         e._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return e
 
-    def test_fetch_returns_deferred(self):
-        from twisted.internet.defer import Deferred
-        from scrapy_stealth.engines.base import deferToThread
+    def test_fetch_is_coroutine(self):
+        import inspect
         engine = BrowserEngine()
-        # Patch deferToThread so no thread is started — we only verify the return type.
-        with patch("scrapy_stealth.engines.base.deferToThread", return_value=Deferred()):
-            result = engine.fetch(Request("https://example.com"), MagicMock())
-        assert isinstance(result, Deferred)
+        result = engine.fetch(Request("https://example.com"), MagicMock())
+        assert inspect.iscoroutine(result)
+        result.close()
 
     def test_execute_returns_stealth_response(self, engine):
         response = engine._execute(Request("https://example.com"))
