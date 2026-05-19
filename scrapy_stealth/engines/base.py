@@ -4,7 +4,14 @@ import asyncio
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    TypeVar,
+    cast,
+    Optional,
+)
 
 from scrapy.http import Request, Response
 
@@ -71,7 +78,7 @@ class BaseEngine(ABC):
             return await loop.run_in_executor(None, self._execute_timed, request)
         except RuntimeError:
             from twisted.internet.threads import deferToThread
-            return await deferToThread(self._execute_timed, request)
+            return await cast(Awaitable[Optional[Response]], deferToThread(self._execute_timed, request))
 
     def _execute_timed(self, request: Request) -> Response | None:
         resp, latency = self._timed(self._execute, request)
