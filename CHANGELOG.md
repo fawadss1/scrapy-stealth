@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.2a3] - 2026-05-19
+
+### Fixed
+
+- **All Scrapy versions — unified async dispatch in `BaseEngine.fetch`**
+  Scrapy routes async downloader middlewares through one of two runners depending on
+  the version, and each runner requires a different awaitable type:
+
+  | Scrapy path | Runner | Needs |
+  |---|---|---|
+  | `ensure_awaitable` (newer Scrapy, local) | asyncio Task | `asyncio.Future` (`run_in_executor`) |
+  | `deferred_from_coro` (Zyte `scrapy:2.11–2.12`) | Twisted `_inlineCallbacks` | Twisted `Deferred` (`deferToThread`) |
+
+  `BaseEngine.fetch` now detects the active runner via `asyncio.get_running_loop()`:
+  if a running loop is found (asyncio Task context) it uses `loop.run_in_executor`;
+  if `RuntimeError` is raised (no asyncio Task, Twisted `_inlineCallbacks` context)
+  it falls back to `deferToThread`. This replaces the single-strategy implementations
+  from `a2` that each fixed one path but broke the other.
+
+---
+
 ## [0.6.2a2] - 2026-05-19
 
 ### Fixed
