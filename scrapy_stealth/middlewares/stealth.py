@@ -4,7 +4,6 @@ from typing import Any
 
 from scrapy import signals
 from scrapy.http import Request, Response
-from twisted.internet.defer import Deferred
 
 from ..config import config
 from ..engines.browser import BrowserEngine
@@ -42,7 +41,7 @@ class StealthDownloaderMiddleware:
         self._proxy_rotator = ProxyRotator(proxies=proxies)
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
-    def process_request(self, request: Request, spider: Any) -> Response | Deferred | None:
+    async def process_request(self, request: Request, spider: Any) -> Response | None:
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
 
         if engine_name == "stealth":
@@ -74,4 +73,4 @@ class StealthDownloaderMiddleware:
                 driver or config.get("STEALTH_DRIVER"),
             )
 
-        return engine.fetch(request, spider)
+        return await engine.fetch(request, spider)

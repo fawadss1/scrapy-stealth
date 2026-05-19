@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, TypeVar
 
 from scrapy.http import Request, Response
-from twisted.internet.defer import Deferred
-from twisted.internet.threads import deferToThread
 
 from ..config import config
 from ..utils.meta import _get_meta_data
@@ -53,21 +52,22 @@ class BaseEngine(ABC):
         self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
         self.timeout: int = timeout or config.get("DEFAULT_TIMEOUT")
 
-    def fetch(self, request: Request, spider: Any) -> Response | Deferred | None:
+    async def fetch(self, request: Request, spider: Any) -> Response | None:
         """
         This method processes the given request by delegating its execution to a worker
-        thread. It ensures asynchronous execution and returns the result as a Response,
-        a Deferred object, or None.
+        thread. It ensures asynchronous execution and returns the result as a Response
+        or None.
 
         Args:
             request (Request): The request object to be processed.
             spider (Any): The spider instance associated with this request.
 
         Returns:
-            Response | Deferred | None: The result of processing the request. If deferred,
-            the computation will be completed asynchronously.
+            Response | None: The result of processing the request. Computation is
+            completed asynchronously via asyncio's thread-pool executor.
         """
-        return deferToThread(self._execute_timed, request)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._execute_timed, request)
 
     def _execute_timed(self, request: Request) -> Response | None:
         resp, latency = self._timed(self._execute, request)
