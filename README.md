@@ -45,22 +45,24 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 
 ## 📊 Comparison
 
-| Feature                      | scrapy-stealth | scrapy-playwright | scrapy-splash | scrapy-selenium | Scrapy (default) |
-|------------------------------|:--------------:|:-----------------:|:-------------:|:---------------:|:----------------:|
-| TLS fingerprint spoofing     |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
-| HTTP/2 support               |       ✅        |         ✅         |       ❌       |        ❌        |        ❌         |
-| Browser impersonation        |       ✅        |    ⚠️ partial     |       ❌       |        ❌        |        ❌         |
-| Proxy rotation (built-in)    |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
-| Fingerprint rotation         |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
-| Anti-bot detection           |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
-| Smart retry logic            |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
-| Per-request engine switching |       ✅        |         ❌         |       ❌       |        ❌        |        ❌         |
-| Headless browser required    |       ✅        |         ✅         |       ✅       |        ✅        |        ❌         |
-| JavaScript rendering         |       ️✅       |         ✅         |       ✅       |        ✅        |        ❌         |
-| Native Scrapy integration    |       ✅        |         ✅         |       ✅       |   ⚠️ partial    |        ✅         |
-| Memory footprint             |     🟢 Low     |      🔴 High      |    🔴 High    |     🔴 High     |      🟢 Low      |
+| Feature                      | scrapy-stealth | scrapy-impersonate | scrapy-playwright | scrapy-splash | Scrapy (default) |
+|------------------------------|:--------------:|:------------------:|:-----------------:|:-------------:|:----------------:|
+| TLS fingerprint spoofing     |       ✅        |         ✅          |         ❌         |       ❌       |        ❌         |
+| HTTP/2 support               |       ✅        |         ✅          |         ✅         |       ❌       |        ❌         |
+| Browser impersonation        |       ✅        |         ✅          |    ⚠️ partial     |       ❌       |        ❌         |
+| Proxy rotation (built-in)    |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
+| Fingerprint rotation         |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
+| Anti-bot detection           |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
+| Smart retry logic            |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
+| Per-request engine switching |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
+| Headless browser required    |       ✅        |         ❌          |         ✅         |       ✅       |        ❌         |
+| JavaScript rendering         |       ️✅       |         ❌          |         ✅         |       ✅       |        ❌         |
+| Screenshot / snapshot        |       ✅        |         ❌          |         ✅         |       ✅       |        ❌         |
+| Native Scrapy integration    |       ✅        |         ✅          |         ✅         |       ✅       |        ✅         |
+| Memory footprint             |     🟢 Low     |       🟢 Low       |      🔴 High      |    🔴 High    |      🟢 Low      |
 
 > ⚠️ `scrapy-playwright` passes real browser TLS but does not spoof fingerprint profiles like `scrapy-stealth` does.
+> `scrapy-impersonate` provides TLS/HTTP2 impersonation via `curl_cffi` but lacks built-in rotation, detection, or per-request engine switching.
 > JavaScript rendering is available via the optional `browser` driver — use it selectively for pages that require a full browser.
 
 ---
