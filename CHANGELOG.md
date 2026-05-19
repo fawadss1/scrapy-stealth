@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.2a2] - 2026-05-19
+
+### Fixed
+
+- **Scrapy 2.12 (Python 3.12) — `RuntimeError: no running event loop` in `BaseEngine.fetch`**
+  `asyncio.get_running_loop()` requires the coroutine to be executing inside an asyncio Task.
+  In Scrapy 2.12, async downloader middlewares are driven by Twisted's `_inlineCallbacks`
+  (via `deferred_from_coro`) rather than an asyncio Task, so `get_running_loop()` raised
+  `RuntimeError: no running event loop` on every stealth request.
+  `BaseEngine.fetch` now falls back to `asyncio.get_event_loop()` when `get_running_loop()`
+  raises `RuntimeError`, which safely retrieves the Twisted asyncio reactor's event loop in
+  that context while still using the true running loop on Scrapy 2.15+.
+
+---
+
 ## [0.6.2a1] - 2026-05-19
 
 ### Fixed
