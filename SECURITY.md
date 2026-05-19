@@ -2,10 +2,13 @@
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 0.6.x   | ✅         |
-| 0.5.x   | ❌         |
+Only the latest minor series receives security fixes.
+
+| Version        | Supported |
+|----------------|-----------|
+| 0.6.x (latest) | ✅         |
+| 0.5.x          | ❌         |
+| < 0.5          | ❌         |
 
 ## Reporting a Vulnerability
 

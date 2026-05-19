@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.2a1] - 2026-05-19
+
+### Fixed
+
+- **Zyte (ScrapyCloud) — `FileException: download-error` on `scrapy:2.15` stack**
+  `BaseEngine.fetch()` used Twisted's `deferToThread` to dispatch blocking HTTP calls to a thread pool.
+  In Scrapy 2.15 on Python 3.14 the media pipeline's new fully-async architecture calls
+  `crawler.engine.download_async()` and relies on native asyncio awaiting; the Twisted→asyncio
+  bridge (`deferred_to_future` / `ensure_awaitable`) no longer reliably resolved these Deferreds,
+  causing file/image downloads to fail before `media_downloaded` received a valid response, which
+  then raised `FileException("download-error")`.
+  `BaseEngine.fetch()` is now `async def` and uses `asyncio.get_running_loop().run_in_executor()`
+  — semantically identical (blocking I/O runs in a thread pool) but returns a native coroutine
+  that Scrapy 2.15 can properly await.
+  `ScrapyEngine.fetch()` and `StealthDownloaderMiddleware.process_request()` are also made `async`
+  for consistency. Twisted imports removed from both files.
+
+- **Zyte (ScrapyCloud) — `ImportError: cannot import name 'request_fingerprint'` on `scrapy:2.11` stack**
+  `scrapy-stealth` previously declared `scrapy>=2.15.2` as a hard dependency.
+  Installing the package on a `scrapy:2.11` Zyte stack caused pip to upgrade Scrapy to 2.15.2+,
+  which removed `request_fingerprint` from `scrapy.utils.request`.
+  Zyte's bundled `sh_scrapy` extension still imports that symbol, so the spider process crashed
+  before the first request.
+  The Scrapy lower-bound is now `>=2.12.0,<3.0`; `scrapy-stealth` uses no Scrapy 2.15-specific
+  APIs, so the relaxed constraint is safe and prevents the forced upgrade.
+
+---
+
 ## [0.6.1] - 2026-05-18
 
 ### Fixed
