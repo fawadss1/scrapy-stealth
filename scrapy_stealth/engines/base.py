@@ -64,13 +64,14 @@ class BaseEngine(ABC):
 
         Returns:
             Response | None: The result of processing the request. Computation is
-            completed asynchronously via asyncio's thread-pool executor.
+            completed asynchronously in a thread pool.
         """
         try:
             loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, self._execute_timed, request)
         except RuntimeError:
-            loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._execute_timed, request)
+            from twisted.internet.threads import deferToThread
+            return await deferToThread(self._execute_timed, request)
 
     def _execute_timed(self, request: Request) -> Response | None:
         resp, latency = self._timed(self._execute, request)
