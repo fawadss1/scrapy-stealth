@@ -7,7 +7,7 @@ from curl_cffi.requests import Session
 from scrapy.http import Request, Response
 
 from .base import BaseEngine
-from ..exceptions import StealthTimeoutError
+from ..exceptions import StealthConnectionError, StealthTimeoutError
 from ..utils.headers import _FINGERPRINT_KEYS
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
@@ -70,10 +70,17 @@ class TurboEngine(BaseEngine):
         except TimeoutError:
             raise
         except Exception as exc:
+            from curl_cffi.requests.exceptions import ConnectionError as CurlConn
+            from curl_cffi.requests.exceptions import DNSError as CurlDNS
+            from curl_cffi.requests.exceptions import ProxyError as CurlProxy
             from curl_cffi.requests.exceptions import Timeout as CurlTimeout
             if isinstance(exc, CurlTimeout):
                 raise StealthTimeoutError(
                     f"Turbo engine timed out after {ctx.timeout}s fetching {request.url!r}"
+                ) from exc
+            if isinstance(exc, (CurlConn, CurlDNS, CurlProxy)):
+                raise StealthConnectionError(
+                    f"Turbo engine connection failed fetching {request.url!r}"
                 ) from exc
             logger.exception("Turbo engine request failed: %s", exc)
             return None

@@ -9,7 +9,7 @@ from scrapy.http import Request, Response
 
 from .base import BaseEngine
 from ..config import config
-from ..exceptions import StealthTimeoutError
+from ..exceptions import StealthConnectionError, StealthTimeoutError
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.response import StealthResponse
@@ -28,6 +28,7 @@ _JS_HTML = (
     " : document.documentElement.innerHTML"
 )
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 200"
+_JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 
 
 def _make_loop() -> asyncio.AbstractEventLoop:
@@ -216,6 +217,10 @@ class BrowserEngine(BaseEngine):
                 await tab.get(_splash_url())
                 page = await tab.get(url)
                 await asyncio.sleep(settle)
+                if await page.evaluate(_JS_IS_CHROME_ERROR):
+                    raise StealthConnectionError(
+                        f"Browser engine connection failed fetching {url!r}"
+                    )
                 html = await page.evaluate(_JS_HTML)
                 status = await page.evaluate(_JS_STATUS)
                 if snapshot:
@@ -227,6 +232,14 @@ class BrowserEngine(BaseEngine):
             async with self._tab_sem:
                 page = await self._browser.get(url, new_tab=True)
                 await asyncio.sleep(settle)
+                if await page.evaluate(_JS_IS_CHROME_ERROR):
+                    try:
+                        await page.close()
+                    except Exception:
+                        pass
+                    raise StealthConnectionError(
+                        f"Browser engine connection failed fetching {url!r}"
+                    )
                 html = await page.evaluate(_JS_HTML)
                 status = await page.evaluate(_JS_STATUS)
                 if snapshot:
@@ -310,6 +323,12 @@ class BrowserEngine(BaseEngine):
         except TimeoutError as exc:
             raise StealthTimeoutError(
                 f"Browser engine timed out after {ctx.timeout}s fetching {request.url!r}"
+            ) from exc
+        except StealthConnectionError:
+            raise
+        except (ConnectionRefusedError, OSError) as exc:
+            raise StealthConnectionError(
+                f"Browser engine connection failed fetching {request.url!r}"
             ) from exc
         except Exception as exc:
             logger.exception("Browser engine request failed: %s", exc)
