@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.3] - 2026-05-20
+
+### Added
+
+- **`STEALTH_ENABLED` — global stealth mode**
+  New Scrapy setting that routes all requests through the stealth engine automatically — no need
+  to add `meta={"stealth": {...}}` on every request. Set once in `settings.py` or `custom_settings`:
+
+  ```python
+  STEALTH_ENABLED = True
+  ```
+
+  Per-request opt-out is still supported via `meta={"stealth": False}`.
+  `STEALTH_ENABLED` is also read from `spider_opened` so `custom_settings` on the spider class
+  takes effect without restarting the crawler process.
+
+- **`STEALTH_DRIVER` — engine driver configurable from Scrapy settings**
+  The default stealth driver (`"basic"`, `"turbo"`, or `"browser"`) can now be set globally in
+  `settings.py` or `custom_settings` instead of per-request:
+
+  ```python
+  STEALTH_DRIVER = "turbo"
+  ```
+
+  `spider_opened` reads this setting and applies it to `config.STEALTH_DRIVER` at spider start.
+
+- **`StealthResponse` — engine name in response flags**
+  Every `StealthResponse` now includes the engine driver name in its Scrapy `flags` list alongside
+  the package logger name (e.g. `["scrapy-stealth", "turbo"]`). The flag appears in Scrapy's
+  crawl log next to each response line, making it easy to see which engine handled each request.
+
+### Fixed
+
+- **`EngineManager.get()` — `KeyError` crash on invalid driver**
+  When `STEALTH_DRIVER` was set to a typo (e.g. `"browsesr"`) the fallback path also read
+  `config.get("STEALTH_DRIVER")`, which returned the same invalid value, causing a `KeyError`.
+  The fallback now uses `_DEFAULT_DRIVER` from `constants` (the package-level safe default),
+  with `config.STEALTH_DRIVER` preferred when it is itself valid.
+
+---
+
 ## [0.6.2] - 2026-05-20
 
 ### Added
