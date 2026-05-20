@@ -8,6 +8,7 @@ from wreq.proxy import Proxy
 from scrapy.http import Request, Response
 
 from .base import BaseEngine
+from ..exceptions import StealthTimeoutError
 from ..utils.profiles import resolve_browser
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
@@ -68,5 +69,8 @@ class BasicEngine(BaseEngine):
         except TimeoutError:
             raise
         except Exception as exc:
+            from wreq.exceptions import TimeoutError as WTimeout
+            if isinstance(exc, WTimeout):
+                raise StealthTimeoutError(str(exc)) from exc
             logger.exception("Basic engine request failed: %s", exc)
             return None
