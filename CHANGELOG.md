@@ -7,67 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.6.2a3] - 2026-05-19
+## [0.6.2] - 2026-05-20
 
-### Fixed
+### Added
 
-- **All Scrapy versions — unified async dispatch in `BaseEngine.fetch`**
-  Scrapy routes async downloader middlewares through one of two runners depending on
-  the version, and each runner requires a different awaitable type:
+- **Custom engine exceptions — `StealthTimeoutError`, `StealthConnectionError`, `StealthBrowserNotFoundError`**
+  All three engines previously swallowed non-standard library exceptions and returned `None`, silently
+  bypassing Scrapy's retry middleware. Three typed exceptions now replace raw library errors:
 
-  | Scrapy path | Runner | Needs |
-  |---|---|---|
-  | `ensure_awaitable` (newer Scrapy, local) | asyncio Task | `asyncio.Future` (`run_in_executor`) |
-  | `deferred_from_coro` (Zyte `scrapy:2.11–2.12`) | Twisted `_inlineCallbacks` | Twisted `Deferred` (`deferToThread`) |
+  | Exception                     | Inherits from                 | Retried by Scrapy                           | Raised by                                                                             |
+  |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
+  | `StealthTimeoutError`         | `DownloadTimeoutError`        | ✅ (in default `RETRY_EXCEPTIONS`)           | All engines on request timeout                                                        |
+  | `StealthConnectionError`      | `ConnectionError` → `OSError` | ✅ (`OSError` in default `RETRY_EXCEPTIONS`) | `BasicEngine` / `TurboEngine` on DNS or network failure; `BrowserEngine` on `OSError` |
+  | `StealthBrowserNotFoundError` | `StealthException` only       | ❌ (config error, retrying is pointless)     | `BrowserEngine` when Chrome/Chromium binary is missing                                |
 
-  `BaseEngine.fetch` now detects the active runner via `asyncio.get_running_loop()`:
-  if a running loop is found (asyncio Task context) it uses `loop.run_in_executor`;
-  if `RuntimeError` is raised (no asyncio Task, Twisted `_inlineCallbacks` context)
-  it falls back to `deferToThread`. This replaces the single-strategy implementations
-  from `a2` that each fixed one path but broke the other.
+  Library-specific exceptions (`curl_cffi.Timeout`, `wreq.TimeoutError`, `wreq.ConnectionError`,
+  `curl_cffi.ConnectionError`, `curl_cffi.DNSError`, `curl_cffi.ProxyError`, `wreq.ProxyConnectionError`)
+  are caught and re-raised as the appropriate stealth exception, preserving the original as `__cause__`.
+  All three are exported from `scrapy_stealth` and can be caught in spider `errback` handlers.
 
----
-
-## [0.6.2a2] - 2026-05-19
-
-### Fixed
-
-- **Scrapy 2.12 (Python 3.12) — `RuntimeError: no running event loop` in `BaseEngine.fetch`**
-  `asyncio.get_running_loop()` requires the coroutine to be executing inside an asyncio Task.
-  In Scrapy 2.12, async downloader middlewares are driven by Twisted's `_inlineCallbacks`
-  (via `deferred_from_coro`) rather than an asyncio Task, so `get_running_loop()` raised
-  `RuntimeError: no running event loop` on every stealth request.
-  `BaseEngine.fetch` now falls back to `asyncio.get_event_loop()` when `get_running_loop()`
-  raises `RuntimeError`, which safely retrieves the Twisted asyncio reactor's event loop in
-  that context while still using the true running loop on Scrapy 2.15+.
-
----
-
-## [0.6.2a1] - 2026-05-19
+- **`BrowserEngine` — Chrome error page detection**
+  When a target URL is unreachable (DNS failure, network down), Chrome silently navigates to
+  `chrome-error://chromewebdata/` instead of raising a Python exception. The engine now evaluates
+  `window.location.href.startsWith('chrome-error://')` immediately after navigation; if true,
+  `StealthConnectionError` is raised so Scrapy's retry middleware handles it correctly.
 
 ### Fixed
 
 - **Zyte (ScrapyCloud) — `FileException: download-error` on `scrapy:2.15` stack**
-  `BaseEngine.fetch()` used Twisted's `deferToThread` to dispatch blocking HTTP calls to a thread pool.
-  In Scrapy 2.15 on Python 3.14 the media pipeline's new fully-async architecture calls
-  `crawler.engine.download_async()` and relies on native asyncio awaiting; the Twisted→asyncio
-  bridge (`deferred_to_future` / `ensure_awaitable`) no longer reliably resolved these Deferreds,
-  causing file/image downloads to fail before `media_downloaded` received a valid response, which
-  then raised `FileException("download-error")`.
-  `BaseEngine.fetch()` is now `async def` and uses `asyncio.get_running_loop().run_in_executor()`
-  — semantically identical (blocking I/O runs in a thread pool) but returns a native coroutine
-  that Scrapy 2.15 can properly await.
-  `ScrapyEngine.fetch()` and `StealthDownloaderMiddleware.process_request()` are also made `async`
-  for consistency. Twisted imports removed from both files.
+  `BaseEngine.fetch()` used Twisted's `deferToThread` to run blocking HTTP calls in a thread pool.
+  On Scrapy 2.15 / Python 3.14, the media pipeline's fully-async architecture relies on native
+  asyncio awaiting; the Twisted→asyncio bridge no longer reliably resolved these Deferreds, causing
+  file/image downloads to fail with `FileException("download-error")`.
+  `BaseEngine.fetch()` is now `async def` and uses `asyncio.get_running_loop().run_in_executor()`.
+  `ScrapyEngine.fetch()` and `StealthDownloaderMiddleware.process_request()` are also made `async`.
 
 - **Zyte (ScrapyCloud) — `ImportError: cannot import name 'request_fingerprint'` on `scrapy:2.11` stack**
-  `scrapy-stealth` previously declared `scrapy>=2.15.2` as a hard dependency.
-  Installing the package on a `scrapy:2.11` Zyte stack caused pip to upgrade Scrapy to 2.15.2+,
-  which removed `request_fingerprint` from `scrapy.utils.request`.
-  Zyte's bundled `sh_scrapy` extension still imports that symbol, so the spider process crashed
-  before the first request.
-  The Scrapy lower-bound is now `>=2.12.0,<3.0`; `scrapy-stealth` uses no Scrapy 2.15-specific
-  APIs, so the relaxed constraint is safe and prevents the forced upgrade.
+  The previous `scrapy>=2.15.2` constraint forced pip to upgrade Scrapy on Zyte's `scrapy:2.11`
+  stack, which broke Zyte's bundled `sh_scrapy` extension that still imports `request_fingerprint`
+  (removed in Scrapy 2.15). The constraint is now `scrapy>=2.12.0,<3.0`.
+
+- **All Scrapy versions — unified async dispatch in `BaseEngine.fetch`**
+  Scrapy routes async downloader middlewares through different runners depending on version:
+  `ensure_awaitable` (newer Scrapy / local) runs coroutines as asyncio Tasks and requires an
+  asyncio Future; `deferred_from_coro` (Zyte `scrapy:2.11–2.12`) drives them via Twisted
+  `_inlineCallbacks` and requires a Twisted Deferred. `BaseEngine.fetch` now detects the active
+  runner via `asyncio.get_running_loop()` and dispatches to `run_in_executor` or `deferToThread`
+  accordingly, making stealth requests work correctly on all supported Scrapy versions.
+
+- **`TurboEngine` / `BasicEngine` — timeout exceptions silently swallowed**
+  `curl_cffi.requests.exceptions.Timeout` and `wreq.exceptions.TimeoutError` are not subclasses
+  of Python's built-in `TimeoutError`, so the `except TimeoutError: raise` guard did not catch
+  them. Both were swallowed by the broad `except Exception` handler and discarded as `None`,
+  preventing Scrapy's retry middleware from ever seeing a timeout. Both engines now raise
+  `StealthTimeoutError` for their respective library timeout types.
+
+- **`RequestContext` (`ctx`) moved before `try` block in all engines**
+  `ctx = self._ctx(request)` was inside the `try` block, causing IDE warnings about possible
+  reference before assignment when `ctx` was used in `except` handler messages.
 
 ---
 

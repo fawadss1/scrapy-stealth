@@ -4,11 +4,12 @@
 
 Only the latest minor series receives security fixes.
 
-| Version        | Supported |
-|----------------|-----------|
-| 0.6.x (latest) | ✅         |
-| 0.5.x          | ❌         |
-| < 0.5          | ❌         |
+| Version         | Supported |
+|-----------------|-----------|
+| 0.6.2 (latest)  | ✅         |
+| 0.6.x (< 0.6.2) | ❌         |
+| 0.5.x           | ❌         |
+| < 0.5           | ❌         |
 
 ## Reporting a Vulnerability
 
