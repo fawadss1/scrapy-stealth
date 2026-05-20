@@ -45,6 +45,7 @@ from .engines.basic import BasicEngine
 from .engines.turbo import TurboEngine
 from .exceptions import (
     EngineNotFound,
+    StealthBrowserNotFoundError,
     StealthException,
     StealthTimeoutError,
     StealthConnectionError,
@@ -80,6 +81,7 @@ __all__ = [
     "EngineNotFound",
     "StealthTimeoutError",
     "StealthConnectionError",
+    "StealthBrowserNotFoundError",
     # Metadata
     "__version__",
     "__author__",

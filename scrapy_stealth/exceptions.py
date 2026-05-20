@@ -15,3 +15,7 @@ class StealthTimeoutError(StealthException, DownloadTimeoutError):
 
 class StealthConnectionError(StealthException, ConnectionError):
     """Raised when a stealth engine fails to connect (DNS, network, proxy)."""
+
+
+class StealthBrowserNotFoundError(StealthException):
+    """Raised when the browser binary is not found on the system."""
