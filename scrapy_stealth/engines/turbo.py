@@ -65,6 +65,7 @@ class TurboEngine(BaseEngine):
                 headers=resp_headers,
                 body=resp.content,
                 encoding=resp.encoding,
+                _flags=["turbo"],
             )
 
         except TimeoutError:

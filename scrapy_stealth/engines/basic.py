@@ -64,6 +64,7 @@ class BasicEngine(BaseEngine):
                 status=resp.status.as_int(),
                 headers=resp.headers,
                 body=resp.bytes(),
+                _flags=["basic"],
             )
 
         except TimeoutError:

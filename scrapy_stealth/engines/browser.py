@@ -332,6 +332,7 @@ class BrowserEngine(BaseEngine):
                 headers={"content-type": "text/html; charset=utf-8"},
                 body=body,
                 _meta={"snapshot_content": shot} if shot is not None else None,
+                _flags=["browser"],
             )
 
         except TimeoutError as exc:

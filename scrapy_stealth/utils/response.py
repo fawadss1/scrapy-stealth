@@ -23,6 +23,7 @@ class StealthResponse(HtmlResponse):
             body: bytes,
             encoding: str | None = None,
             _meta: dict | None = None,
+            _flags: list[str] | None = None,
     ) -> None:
 
         if _meta:
@@ -38,7 +39,7 @@ class StealthResponse(HtmlResponse):
             body=body,
             encoding=encoding,
             request=request,
-            flags=[config.get("LOGGER_NAME")],
+            flags=[config.get("LOGGER_NAME"), *_flags],
         )
 
     @staticmethod
