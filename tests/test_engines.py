@@ -12,7 +12,7 @@ from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
 from scrapy_stealth.engines.browser import BrowserEngine
 from scrapy_stealth.engines.turbo import TurboEngine
-from scrapy_stealth.exceptions import StealthTimeoutError
+from scrapy_stealth.exceptions import StealthConnectionError, StealthTimeoutError
 from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
 from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
 from scrapy_stealth.utils.response import StealthResponse
@@ -189,6 +189,15 @@ class TestBasicEngine:
             with pytest.raises(TimeoutError):
                 engine._execute(Request("https://example.com"))
 
+    def test_execute_raises_stealth_connection_error_on_wreq_connection_error(self):
+        from wreq.exceptions import ConnectionError as WConn
+        mock_client = MagicMock()
+        mock_client.get.side_effect = WConn("dns error")
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
+            with pytest.raises(StealthConnectionError, match=r"Basic engine connection failed fetching"):
+                engine._execute(Request("https://example.com"))
+
     def test_default_profile_matches_config(self):
         with patch("scrapy_stealth.engines.basic.Client"):
             engine = BasicEngine()
@@ -352,6 +361,16 @@ class TestTurboEngine:
             with pytest.raises(StealthTimeoutError, match=r"Turbo engine timed out after .+s fetching"):
                 engine._execute(Request("https://example.com"))
 
+    def test_execute_raises_stealth_connection_error_on_curl_connection_error(self):
+        from curl_cffi.requests.exceptions import ConnectionError as CurlConn
+        mock_session = MagicMock()
+        mock_session.get.side_effect = CurlConn("dns error")
+        mock_cls = MagicMock(return_value=mock_session)
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            engine = TurboEngine()
+            with pytest.raises(StealthConnectionError, match=r"Turbo engine connection failed fetching"):
+                engine._execute(Request("https://example.com"))
+
     def test_session_reused_for_same_profile(self, session_patch):
         mock_cls, _ = session_patch
         engine = TurboEngine()
@@ -404,7 +423,7 @@ class TestBrowserEngine:
     def mock_tab(self):
         tab = AsyncMock()
         tab.evaluate = AsyncMock(
-            side_effect=lambda js: 200 if "responseStatus" in js else "<html><body>browser ok</body></html>"
+            side_effect=lambda js: 200 if "responseStatus" in js else (False if "chrome-error" in js else "<html><body>browser ok</body></html>")
         )
         tab.close = AsyncMock()
         return tab
@@ -438,7 +457,7 @@ class TestBrowserEngine:
 
     def test_execute_body_contains_evaluated_html(self, engine, mock_tab):
         mock_tab.evaluate = AsyncMock(
-            side_effect=lambda js: 200 if "responseStatus" in js else "<html><body>stealth browser</body></html>"
+            side_effect=lambda js: 200 if "responseStatus" in js else (False if "chrome-error" in js else "<html><body>stealth browser</body></html>")
         )
         response = engine._execute(Request("https://example.com"))
         assert b"stealth browser" in response.body
@@ -460,6 +479,11 @@ class TestBrowserEngine:
     def test_execute_raises_stealth_timeout(self, engine, mock_browser):
         mock_browser.get = AsyncMock(side_effect=TimeoutError("timed out"))
         with pytest.raises(StealthTimeoutError, match=r"Browser engine timed out after .+s fetching"):
+            engine._execute(Request("https://example.com"))
+
+    def test_execute_raises_stealth_connection_error_on_oserror(self, engine, mock_browser):
+        mock_browser.get = AsyncMock(side_effect=OSError("connection refused"))
+        with pytest.raises(StealthConnectionError, match=r"Browser engine connection failed fetching"):
             engine._execute(Request("https://example.com"))
 
     def test_execute_passes_headless_from_meta(self, engine):

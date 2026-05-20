@@ -3,6 +3,7 @@ from scrapy.exceptions import DownloadTimeoutError
 
 from scrapy_stealth.exceptions import (
     EngineNotFound,
+    StealthConnectionError,
     StealthException,
     StealthTimeoutError,
 )
@@ -53,5 +54,35 @@ class TestStealthTimeoutError:
     def test_cause_preserved(self):
         original = RuntimeError("original")
         exc = StealthTimeoutError("timed out")
+        exc.__cause__ = original
+        assert exc.__cause__ is original
+
+
+class TestStealthConnectionError:
+    def test_is_stealth_exception(self):
+        assert issubclass(StealthConnectionError, StealthException)
+
+    def test_is_builtin_connection_error(self):
+        assert issubclass(StealthConnectionError, ConnectionError)
+
+    def test_is_oserror(self):
+        # ConnectionError → OSError; OSError is in Scrapy's RETRY_EXCEPTIONS
+        assert issubclass(StealthConnectionError, OSError)
+
+    def test_can_be_raised(self):
+        with pytest.raises(StealthConnectionError):
+            raise StealthConnectionError("connection failed")
+
+    def test_caught_as_connection_error(self):
+        with pytest.raises(ConnectionError):
+            raise StealthConnectionError("connection failed")
+
+    def test_message_preserved(self):
+        exc = StealthConnectionError("Basic engine connection failed fetching 'https://example.com'")
+        assert "Basic engine connection failed" in str(exc)
+
+    def test_cause_preserved(self):
+        original = RuntimeError("dns error")
+        exc = StealthConnectionError("connection failed")
         exc.__cause__ = original
         assert exc.__cause__ is original
