@@ -101,10 +101,13 @@ DOWNLOADER_MIDDLEWARES = {
     "scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware": 950,
 }
 
-# 2. (Optional) Proxy list for automatic rotation
-#    Used when request.meta["stealth"]["rotate_proxy"] = True
+# 2. (Optional) Route ALL requests through stealth automatically — no meta needed per request
+STEALTH_ENABLED = True
+STEALTH_DRIVER  = "turbo"   # "basic" (default), "turbo", or "browser"
+
+# 3. (Optional) Proxy list for automatic rotation
+#    Used when rotate_proxy=True (per-request) or when STEALTH_ENABLED=True with rotate_proxy
 #    Supported schemes: http, https, socks4, socks5
-#    Each entry must include a scheme and port
 STEALTH_PROXIES = [
     "http://proxy1:8080",
     "http://proxy2:8080",
@@ -115,8 +118,7 @@ STEALTH_PROXIES = [
 
 ### Option 2 — Per-spider (`custom_settings`)
 
-Configure the middleware and proxies directly on the spider — no changes to `settings.py` required.
-Each spider can have its own independent proxy list.
+Configure the middleware and all stealth settings directly on the spider — no changes to `settings.py` required.
 
 ```python
 class MySpider(scrapy.Spider):
@@ -126,6 +128,8 @@ class MySpider(scrapy.Spider):
         "DOWNLOADER_MIDDLEWARES": {
             "scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware": 950,
         },
+        "STEALTH_ENABLED": True,
+        "STEALTH_DRIVER": "turbo",
         "STEALTH_PROXIES": [
             "http://proxy1:8080",
             "http://user:pass@proxy2:8080",
@@ -140,11 +144,29 @@ class MySpider(scrapy.Spider):
 
 ## 🚀 Quick Start
 
+**Option A — Per-request** (stealth only on specific requests):
+
 ```python
 yield scrapy.Request(
     url="https://example.com",
     meta={"stealth": {}},
 )
+```
+
+**Option B — Global mode** (stealth on every request automatically):
+
+```python
+# settings.py or custom_settings
+STEALTH_ENABLED = True
+STEALTH_DRIVER  = "turbo"
+```
+
+```python
+# No meta needed — all requests go through stealth
+yield scrapy.Request(url="https://example.com")
+
+# Opt out for a specific request
+yield scrapy.Request(url="https://api.internal/health", meta={"stealth": False})
 ```
 
 ---
@@ -191,17 +213,17 @@ config.get("DEFAULT_ENGINE")          # "scrapy"
 config.get("MISSING_KEY", "default")  # "default"
 ```
 
-| Attribute          | Type             | Default                           | Description                                                                 |
-|--------------------|------------------|-----------------------------------|-----------------------------------------------------------------------------|
-| `DEFAULT_ENGINE`   | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                    |
-| `DEFAULT_PROFILE`  | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                 |
-| `DEFAULT_TIMEOUT`  | `int`            | `30`                              | Request timeout in seconds                                                  |
-| `STEALTH_DRIVER`   | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`                        |
-| `HTTP2`            | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`         |
-| `BLOCK_CODES`      | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                        |
-| `BLOCK_KEYWORDS`   | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                       |
-| `BROWSER_HEADLESS` | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)     |
-| `BROWSER_SETTLE_S` | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering |
+| Attribute          | Type             | Default                           | Description                                                                                                  |
+|--------------------|------------------|-----------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`   | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                     |
+| `DEFAULT_PROFILE`  | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                  |
+| `DEFAULT_TIMEOUT`  | `int`            | `30`                              | Request timeout in seconds                                                                                   |
+| `STEALTH_DRIVER`   | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER` |
+| `HTTP2`            | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                          |
+| `BLOCK_CODES`      | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                         |
+| `BLOCK_KEYWORDS`   | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                        |
+| `BROWSER_HEADLESS` | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                      |
+| `BROWSER_SETTLE_S` | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                  |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
@@ -209,9 +231,10 @@ For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `m
 
 ## ⚙️ Per-Request Configuration
 
-All options are passed via `request.meta["stealth"]`:
+All options are passed via `request.meta["stealth"]`.
 
-The presence of `meta["stealth"]` activates the stealth engine. Omit the key entirely to use the default Scrapy engine.
+The presence of `meta["stealth"]` (a dict) activates the stealth engine. Omit the key to use the default Scrapy engine.
+When `STEALTH_ENABLED = True`, all requests are stealth by default — pass `meta={"stealth": False}` to opt out for a specific request.
 
 ```python
 yield scrapy.Request(
