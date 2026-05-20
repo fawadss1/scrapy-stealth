@@ -43,7 +43,11 @@ from .detectors.antibot import AntiBotDetector
 from .engines.base import BaseEngine
 from .engines.basic import BasicEngine
 from .engines.turbo import TurboEngine
-from .exceptions import EngineNotFound, StealthException
+from .exceptions import (
+    EngineNotFound,
+    StealthException,
+    StealthTimeoutError,
+)
 from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
 from .strategies.proxy import ProxyRotator
@@ -73,6 +77,7 @@ __all__ = [
     # Exceptions
     "StealthException",
     "EngineNotFound",
+    "StealthTimeoutError",
     # Metadata
     "__version__",
     "__author__",
