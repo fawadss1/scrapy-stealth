@@ -8,11 +8,12 @@ STEALTH_KEY = "stealth"
 
 
 def _stealth_meta(request: Request) -> dict:
-    return request.meta.get(STEALTH_KEY, {})
+    val = request.meta.get(STEALTH_KEY, {})
+    return val if isinstance(val, dict) else {}
 
 
 def _resolve_engine(request: Request, default: str) -> str:
-    return "stealth" if STEALTH_KEY in request.meta else default
+    return "stealth" if isinstance(request.meta.get(STEALTH_KEY), dict) else default
 
 
 def _is_meta_enabled(request: Request, key: str) -> bool:
