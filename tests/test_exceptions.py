@@ -3,6 +3,7 @@ from scrapy.exceptions import DownloadTimeoutError
 
 from scrapy_stealth.exceptions import (
     EngineNotFound,
+    StealthBrowserNotFoundError,
     StealthConnectionError,
     StealthException,
     StealthTimeoutError,
@@ -84,5 +85,28 @@ class TestStealthConnectionError:
     def test_cause_preserved(self):
         original = RuntimeError("dns error")
         exc = StealthConnectionError("connection failed")
+        exc.__cause__ = original
+        assert exc.__cause__ is original
+
+
+class TestStealthBrowserNotFoundError:
+    def test_is_stealth_exception(self):
+        assert issubclass(StealthBrowserNotFoundError, StealthException)
+
+    def test_is_not_oserror(self):
+        # Should NOT be retried — browser missing is a config problem, not a transient error
+        assert not issubclass(StealthBrowserNotFoundError, OSError)
+
+    def test_can_be_raised(self):
+        with pytest.raises(StealthBrowserNotFoundError):
+            raise StealthBrowserNotFoundError("Browser binary not found.")
+
+    def test_message_preserved(self):
+        exc = StealthBrowserNotFoundError("Browser binary not found. Install Google Chrome.")
+        assert "Browser binary not found" in str(exc)
+
+    def test_cause_preserved(self):
+        original = FileNotFoundError("google-chrome")
+        exc = StealthBrowserNotFoundError("Browser binary not found.")
         exc.__cause__ = original
         assert exc.__cause__ is original

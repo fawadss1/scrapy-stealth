@@ -12,7 +12,7 @@ from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
 from scrapy_stealth.engines.browser import BrowserEngine
 from scrapy_stealth.engines.turbo import TurboEngine
-from scrapy_stealth.exceptions import StealthConnectionError, StealthTimeoutError
+from scrapy_stealth.exceptions import StealthBrowserNotFoundError, StealthConnectionError, StealthTimeoutError
 from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
 from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
 from scrapy_stealth.utils.response import StealthResponse
@@ -485,6 +485,11 @@ class TestBrowserEngine:
         mock_browser.get = AsyncMock(side_effect=OSError("connection refused"))
         with pytest.raises(StealthConnectionError, match=r"Browser engine connection failed fetching"):
             engine._execute(Request("https://example.com"))
+
+    def test_execute_raises_browser_not_found_on_file_not_found(self, engine):
+        with patch.object(engine, "_ensure_browser", side_effect=StealthBrowserNotFoundError("Browser binary not found.")):
+            with pytest.raises(StealthBrowserNotFoundError, match="Browser binary not found"):
+                engine._execute(Request("https://example.com"))
 
     def test_execute_passes_headless_from_meta(self, engine):
         with patch.object(engine, "_ensure_browser") as mock_ensure:
