@@ -38,6 +38,12 @@ HTTP2: bool = True
 # Default stealth driver. Options: "basic", "turbo", "browser".
 STEALTH_DRIVER: str = "basic"
 
+# When True, all requests are routed through the stealth engine automatically —
+# no need to set meta={"stealth": {...}} on each request.
+# Set to True in settings.py or spider custom_settings to enable globally.
+# Per-request opt-out: meta={"stealth": False}
+STEALTH_ENABLED: bool = False
+
 # Browser engine: run Chrome headless by default.
 BROWSER_HEADLESS: bool = True
 
