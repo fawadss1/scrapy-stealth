@@ -9,7 +9,11 @@ from scrapy.http import Request, Response
 
 from .base import BaseEngine
 from ..config import config
-from ..exceptions import StealthConnectionError, StealthTimeoutError
+from ..exceptions import (
+    StealthBrowserNotFoundError,
+    StealthConnectionError,
+    StealthTimeoutError,
+)
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.response import StealthResponse
@@ -129,7 +133,12 @@ class BrowserEngine(BaseEngine):
     async def _start(self, headless: bool) -> Any:
         import nodriver as _nd
         _silence_browser()
-        browser = await _nd.start(browser_args=self._build_args(headless))
+        try:
+            browser = await _nd.start(browser_args=self._build_args(headless))
+        except FileNotFoundError as exc:
+            raise StealthBrowserNotFoundError(
+                "Browser binary not found. Install Google Chrome or Chromium to use the browser engine."
+            ) from exc
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
 
@@ -206,7 +215,12 @@ class BrowserEngine(BaseEngine):
         if proxy:
             import nodriver as _nd
             _silence_browser()
-            browser = await _nd.start(browser_args=self._build_args(headless))
+            try:
+                browser = await _nd.start(browser_args=self._build_args(headless))
+            except FileNotFoundError as exc:
+                raise StealthBrowserNotFoundError(
+                    "Browser binary not found. Install Google Chrome or Chromium to use the browser engine."
+                ) from exc
             try:
                 initial_tab = browser.main_tab
                 tab = await browser.create_context(proxy_server=proxy)
@@ -324,6 +338,8 @@ class BrowserEngine(BaseEngine):
             raise StealthTimeoutError(
                 f"Browser engine timed out after {ctx.timeout}s fetching {request.url!r}"
             ) from exc
+        except StealthBrowserNotFoundError:
+            raise
         except StealthConnectionError:
             raise
         except (ConnectionRefusedError, OSError) as exc:
