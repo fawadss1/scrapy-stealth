@@ -11,3 +11,7 @@ class EngineNotFound(StealthException):
 
 class StealthTimeoutError(StealthException, DownloadTimeoutError):
     """Raised when a stealth engine request times out."""
+
+
+class StealthConnectionError(StealthException, ConnectionError):
+    """Raised when a stealth engine fails to connect (DNS, network, proxy)."""

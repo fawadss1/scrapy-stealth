@@ -47,6 +47,7 @@ from .exceptions import (
     EngineNotFound,
     StealthException,
     StealthTimeoutError,
+    StealthConnectionError,
 )
 from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
@@ -78,6 +79,7 @@ __all__ = [
     "StealthException",
     "EngineNotFound",
     "StealthTimeoutError",
+    "StealthConnectionError",
     # Metadata
     "__version__",
     "__author__",
