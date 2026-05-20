@@ -1,5 +1,11 @@
 import pytest
-from scrapy_stealth.exceptions import StealthException, EngineNotFound
+from scrapy.exceptions import DownloadTimeoutError
+
+from scrapy_stealth.exceptions import (
+    EngineNotFound,
+    StealthException,
+    StealthTimeoutError,
+)
 
 
 def test_stealth_exception_is_exception():
@@ -23,3 +29,29 @@ def test_engine_not_found_can_be_raised():
 def test_engine_not_found_message():
     exc = EngineNotFound("unknown_engine")
     assert "unknown_engine" in str(exc)
+
+
+class TestStealthTimeoutError:
+    def test_is_stealth_exception(self):
+        assert issubclass(StealthTimeoutError, StealthException)
+
+    def test_is_download_timeout_error(self):
+        assert issubclass(StealthTimeoutError, DownloadTimeoutError)
+
+    def test_can_be_raised(self):
+        with pytest.raises(StealthTimeoutError):
+            raise StealthTimeoutError("timed out")
+
+    def test_caught_as_download_timeout_error(self):
+        with pytest.raises(DownloadTimeoutError):
+            raise StealthTimeoutError("timed out")
+
+    def test_message_preserved(self):
+        exc = StealthTimeoutError("curl: (28) timed out")
+        assert "curl: (28) timed out" in str(exc)
+
+    def test_cause_preserved(self):
+        original = RuntimeError("original")
+        exc = StealthTimeoutError("timed out")
+        exc.__cause__ = original
+        assert exc.__cause__ is original

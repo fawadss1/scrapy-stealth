@@ -12,6 +12,7 @@ from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
 from scrapy_stealth.engines.browser import BrowserEngine
 from scrapy_stealth.engines.turbo import TurboEngine
+from scrapy_stealth.exceptions import StealthTimeoutError
 from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
 from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
 from scrapy_stealth.utils.response import StealthResponse
@@ -171,6 +172,23 @@ class TestBasicEngine:
 
         assert result is None
 
+    def test_execute_raises_stealth_timeout_on_wreq_timeout(self):
+        from wreq.exceptions import TimeoutError as WreqTimeout
+        mock_client = MagicMock()
+        mock_client.get.side_effect = WreqTimeout("wreq timed out")
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
+            with pytest.raises(StealthTimeoutError):
+                engine._execute(Request("https://example.com"))
+
+    def test_execute_reraises_builtin_timeout(self):
+        mock_client = MagicMock()
+        mock_client.get.side_effect = TimeoutError("builtin timeout")
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
+            with pytest.raises(TimeoutError):
+                engine._execute(Request("https://example.com"))
+
     def test_default_profile_matches_config(self):
         with patch("scrapy_stealth.engines.basic.Client"):
             engine = BasicEngine()
@@ -315,13 +333,23 @@ class TestTurboEngine:
             result = engine._execute(Request("https://example.com"))
         assert result is None
 
-    def test_execute_reraises_timeout(self):
+    def test_execute_reraises_builtin_timeout(self):
         mock_session = MagicMock()
         mock_session.get.side_effect = TimeoutError("timed out")
         mock_cls = MagicMock(return_value=mock_session)
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             engine = TurboEngine()
             with pytest.raises(TimeoutError):
+                engine._execute(Request("https://example.com"))
+
+    def test_execute_raises_stealth_timeout_on_curl_timeout(self):
+        from curl_cffi.requests.exceptions import Timeout as CurlTimeout
+        mock_session = MagicMock()
+        mock_session.get.side_effect = CurlTimeout("curl: (28) timed out")
+        mock_cls = MagicMock(return_value=mock_session)
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            engine = TurboEngine()
+            with pytest.raises(StealthTimeoutError):
                 engine._execute(Request("https://example.com"))
 
     def test_session_reused_for_same_profile(self, session_patch):
