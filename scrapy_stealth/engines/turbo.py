@@ -27,8 +27,8 @@ class TurboEngine(BaseEngine):
         )
 
     def _execute(self, request: Request) -> Response | None:
+        ctx = self._ctx(request)
         try:
-            ctx = self._ctx(request)
             browser = resolve_browser(ctx.profile, backend="turbo")
 
             headers = {
@@ -72,6 +72,8 @@ class TurboEngine(BaseEngine):
         except Exception as exc:
             from curl_cffi.requests.exceptions import Timeout as CurlTimeout
             if isinstance(exc, CurlTimeout):
-                raise StealthTimeoutError(str(exc)) from exc
+                raise StealthTimeoutError(
+                    f"Turbo engine timed out after {ctx.timeout}s fetching {request.url!r}"
+                ) from exc
             logger.exception("Turbo engine request failed: %s", exc)
             return None

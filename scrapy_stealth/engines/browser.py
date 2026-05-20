@@ -9,6 +9,7 @@ from scrapy.http import Request, Response
 
 from .base import BaseEngine
 from ..config import config
+from ..exceptions import StealthTimeoutError
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.response import StealthResponse
@@ -238,8 +239,8 @@ class BrowserEngine(BaseEngine):
         return str(html).encode(errors="replace"), int(status), shot
 
     def _execute(self, request: Request) -> Response | None:
+        ctx = self._ctx(request)
         try:
-            ctx = self._ctx(request)
             headless: bool = _get_meta_data(request, "headless", config.get("BROWSER_HEADLESS"))
             settle: float = _get_meta_data(request, "settle", config.get("BROWSER_SETTLE_S"))
             snap: bool = _get_meta_data(request, "snapshot", False)
@@ -306,8 +307,10 @@ class BrowserEngine(BaseEngine):
                 _meta={"snapshot_content": shot} if shot is not None else None,
             )
 
-        except TimeoutError:
-            raise
+        except TimeoutError as exc:
+            raise StealthTimeoutError(
+                f"Browser engine timed out after {ctx.timeout}s fetching {request.url!r}"
+            ) from exc
         except Exception as exc:
             logger.exception("Browser engine request failed: %s", exc)
             return None

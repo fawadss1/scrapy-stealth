@@ -29,8 +29,8 @@ class BasicEngine(BaseEngine):
         )
 
     def _execute(self, request: Request) -> Response | None:
+        ctx = self._ctx(request)
         try:
-            ctx = self._ctx(request)
             emulation = (
                 self.default_profile
                 if ctx.profile == self._default_profile
@@ -71,6 +71,8 @@ class BasicEngine(BaseEngine):
         except Exception as exc:
             from wreq.exceptions import TimeoutError as WTimeout
             if isinstance(exc, WTimeout):
-                raise StealthTimeoutError(str(exc)) from exc
+                raise StealthTimeoutError(
+                    f"Basic engine timed out after {ctx.timeout}s fetching {request.url!r}"
+                ) from exc
             logger.exception("Basic engine request failed: %s", exc)
             return None
