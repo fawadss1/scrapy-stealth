@@ -15,6 +15,7 @@ from .constants import (
     HTTP2,
     LOGGER_NAME,
     STEALTH_DRIVER,
+    STEALTH_ENABLED,
 )
 
 
@@ -41,6 +42,7 @@ class StealthConfig:
     LOGGER_NAME: Final[str] = LOGGER_NAME
     HTTP2: bool = HTTP2
     STEALTH_DRIVER: str = STEALTH_DRIVER
+    STEALTH_ENABLED: bool = STEALTH_ENABLED
     BROWSER_HEADLESS: bool = BROWSER_HEADLESS
     BROWSER_SETTLE_S: float = BROWSER_SETTLE_S
     BROWSER_MAX_TABS: int = BROWSER_MAX_TABS
