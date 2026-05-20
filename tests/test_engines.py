@@ -178,7 +178,7 @@ class TestBasicEngine:
         mock_client.get.side_effect = WreqTimeout("wreq timed out")
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine()
-            with pytest.raises(StealthTimeoutError):
+            with pytest.raises(StealthTimeoutError, match=r"Basic engine timed out after .+s fetching"):
                 engine._execute(Request("https://example.com"))
 
     def test_execute_reraises_builtin_timeout(self):
@@ -349,7 +349,7 @@ class TestTurboEngine:
         mock_cls = MagicMock(return_value=mock_session)
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             engine = TurboEngine()
-            with pytest.raises(StealthTimeoutError):
+            with pytest.raises(StealthTimeoutError, match=r"Turbo engine timed out after .+s fetching"):
                 engine._execute(Request("https://example.com"))
 
     def test_session_reused_for_same_profile(self, session_patch):
@@ -457,9 +457,9 @@ class TestBrowserEngine:
         result = engine._execute(Request("https://example.com"))
         assert result is None
 
-    def test_execute_reraises_timeout(self, engine, mock_browser):
+    def test_execute_raises_stealth_timeout(self, engine, mock_browser):
         mock_browser.get = AsyncMock(side_effect=TimeoutError("timed out"))
-        with pytest.raises(TimeoutError):
+        with pytest.raises(StealthTimeoutError, match=r"Browser engine timed out after .+s fetching"):
             engine._execute(Request("https://example.com"))
 
     def test_execute_passes_headless_from_meta(self, engine):
