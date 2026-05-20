@@ -47,3 +47,32 @@ class TestEngineManager:
         assert manager.get("scrapy") is manager.get("scrapy")
         assert manager.get("stealth", "basic") is manager.get("stealth", "basic")
         assert manager.get("stealth", "turbo") is manager.get("stealth", "turbo")
+
+    # -------------------------------------------------------------------
+    # Unknown driver fallback
+    # -------------------------------------------------------------------
+
+    def test_unknown_driver_falls_back_to_default(self, manager):
+        engine = manager.get("stealth", "browsesr")
+        assert isinstance(engine, BasicEngine)
+
+    def test_unknown_driver_logs_error(self, manager, caplog):
+        import logging
+        with caplog.at_level(logging.ERROR):
+            manager.get("stealth", "browsesr")
+        assert "browsesr" in caplog.text
+        assert "Falling back to" in caplog.text
+
+    def test_unknown_config_driver_falls_back_to_default(self, manager):
+        original = config.STEALTH_DRIVER
+        try:
+            config.STEALTH_DRIVER = "browsesr"
+            engine = manager.get("stealth")
+        finally:
+            config.STEALTH_DRIVER = original
+        assert isinstance(engine, BasicEngine)
+
+    def test_invalid_driver_fallback_is_always_valid(self, manager):
+        from scrapy_stealth.constants import STEALTH_DRIVER as _DEFAULT_DRIVER
+        engine = manager.get("stealth", "nonexistent")
+        assert engine is manager._stealth[_DEFAULT_DRIVER]
