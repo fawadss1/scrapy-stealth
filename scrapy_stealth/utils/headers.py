@@ -57,22 +57,24 @@ _CH_BRAND: dict[str, str] = {
 
 # Headers controlled by browser impersonation — Scrapy defaults must never override these.
 # User-Agent is always stripped: the stealth driver sets the correct browser UA via impersonation.
-_FINGERPRINT_KEYS: frozenset[str] = frozenset({
-    "user-agent",
-    "accept",
-    "accept-language",
-    "accept-encoding",
-    "sec-fetch-dest",
-    "sec-fetch-mode",
-    "sec-fetch-site",
-    "sec-fetch-user",
-    "sec-ch-ua",
-    "sec-ch-ua-mobile",
-    "sec-ch-ua-platform",
-    "upgrade-insecure-requests",
-    "cache-control",
-    "connection",
-})
+_FINGERPRINT_KEYS: frozenset[str] = frozenset(
+    {
+        "user-agent",
+        "accept",
+        "accept-language",
+        "accept-encoding",
+        "sec-fetch-dest",
+        "sec-fetch-mode",
+        "sec-fetch-site",
+        "sec-fetch-user",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "upgrade-insecure-requests",
+        "cache-control",
+        "connection",
+    }
+)
 
 
 def _chromium_version(profile: str) -> str:
@@ -104,8 +106,12 @@ def get_default_headers(profile: str) -> dict[str, str]:
     return hdrs
 
 
-def merge_headers(defaults: dict[str, str], request_headers: dict[str, str]) -> dict[str, str]:
+def merge_headers(
+    defaults: dict[str, str], request_headers: dict[str, str]
+) -> dict[str, str]:
     # Keep only non-fingerprint request headers (Cookie, Authorization, custom headers).
     # Fingerprint headers always use browser defaults so the profile stays consistent.
-    custom = {k: v for k, v in request_headers.items() if k.lower() not in _FINGERPRINT_KEYS}
+    custom = {
+        k: v for k, v in request_headers.items() if k.lower() not in _FINGERPRINT_KEYS
+    }
     return {**defaults, **custom}

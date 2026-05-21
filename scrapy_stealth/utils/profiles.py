@@ -28,14 +28,14 @@ _ALIASES: dict[str, str] = {
 
 # Turbo driver browser targets, ordered most-specific first.
 _TURBO_PREFIXES: list[tuple[str, str]] = [
-    ("safari_ios",  "safari18_0_ios"),
+    ("safari_ios", "safari18_0_ios"),
     ("safari_ipad", "safari18_0_ios"),
-    ("firefox",     "firefox135"),
-    ("safari",      "safari18_0"),
-    ("chrome",      "chrome131"),
-    ("edge",        "chrome131"),
-    ("opera",       "chrome131"),
-    ("okhttp",      "chrome131"),
+    ("firefox", "firefox135"),
+    ("safari", "safari18_0"),
+    ("chrome", "chrome131"),
+    ("edge", "chrome131"),
+    ("opera", "chrome131"),
+    ("okhttp", "chrome131"),
 ]
 
 
@@ -49,7 +49,7 @@ def _build_browser_map() -> dict[str, Profile]:
             continue
         for prefix, key_prefix in _PREFIXES:
             if attr.startswith(prefix):
-                version = attr[len(prefix):]
+                version = attr[len(prefix) :]
                 result[f"{key_prefix}_{version.lower()}"] = value
                 break
     for alias, target in _ALIASES.items():

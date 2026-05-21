@@ -16,15 +16,6 @@ def _parse_author(raw: str) -> tuple[str, str]:
     return raw, ""
 
 
-def _first_url(meta: object, *keys: str) -> str:
-    """Return the first non-empty value found among the given metadata keys."""
-    for key in keys:
-        val = meta.get(key)  # type: ignore[union-attr]
-        if val:
-            return val.strip()
-    return ""
-
-
 @dataclass(frozen=True)
 class PackageMetadata:
     """Immutable snapshot of a package's distribution metadata."""
@@ -41,7 +32,7 @@ class PackageMetadata:
         try:
             meta = metadata(package)
         except PackageNotFoundError:
-            meta = {}
+            return cls(name=package, version="", author="", email="", license="")
 
         raw_author = meta.get("Author-email") or meta.get("Author") or ""
         author, email = _parse_author(raw_author)

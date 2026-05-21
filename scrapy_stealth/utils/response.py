@@ -16,14 +16,14 @@ class StealthResponse(HtmlResponse):
     """
 
     def __init__(
-            self,
-            request: Request,
-            status: int,
-            headers,
-            body: bytes,
-            encoding: str | None = None,
-            _meta: dict | None = None,
-            _flags: list[str] | None = None,
+        self,
+        request: Request,
+        status: int,
+        headers,
+        body: bytes,
+        encoding: str | None = None,
+        _meta: dict | None = None,
+        _flags: list[str] | None = None,
     ) -> None:
 
         if _meta:
@@ -39,13 +39,10 @@ class StealthResponse(HtmlResponse):
             body=body,
             encoding=encoding,
             request=request,
-            flags=[config.get("LOGGER_NAME"), *_flags],
+            flags=[config.get("LOGGER_NAME"), *(_flags or [])],
         )
 
     @staticmethod
     def _to_dict(headers) -> dict:
         pairs = headers.items() if hasattr(headers, "items") else headers
-        return {
-            k.decode() if isinstance(k, bytes) else k: v
-            for k, v in pairs
-        }
+        return {k.decode() if isinstance(k, bytes) else k: v for k, v in pairs}
