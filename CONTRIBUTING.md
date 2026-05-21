@@ -24,7 +24,7 @@ ruff check .
 ruff format .
 
 # Type check
-mypy scrapy_stealth --ignore-missing-imports --no-site-packages
+mypy scrapy_stealth
 ```
 
 All three must pass before your pull request can be merged.
