@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.4] - 2026-05-21
+
+### Added
+
+- **Auto-patch for `nodriver` encoding bug**
+  `scrapy_stealth.utils.patch.patch_nodriver()` is now called automatically when the browser
+  engine is first imported. It detects and fixes the Latin-1 byte (`\xb1`) in
+  `nodriver/cdp/network.py` that causes a `SyntaxError` on Python 3 without an encoding
+  declaration. The patch is re-applied after every `pip install --upgrade nodriver` without
+  any manual intervention required.
+
+### Fixed
+
+- **`StealthTimeoutError` compatibility with Scrapy < 2.15**
+  `scrapy.exceptions.DownloadTimeoutError` was added in Scrapy 2.15. Importing it directly
+  caused an `ImportError` on older Scrapy versions (e.g. 2.12–2.14). `StealthTimeoutError`
+  now falls back to `TimeoutError` as its base class when `DownloadTimeoutError` is not
+  available, keeping full compatibility across all supported Scrapy versions.
+
+### Changed
+
+- **Shorter middleware import path**
+  `StealthDownloaderMiddleware` is now importable directly from the top-level package:
+
+  ```python
+  DOWNLOADER_MIDDLEWARES = {
+      "scrapy_stealth.StealthDownloaderMiddleware": 950,
+  }
+  ```
+
+  The full path `scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware` still works
+  for backwards compatibility.
+
+---
+
 ## [0.6.3] - 2026-05-20
 
 ### Added
