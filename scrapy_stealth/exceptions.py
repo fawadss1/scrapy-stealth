@@ -1,4 +1,7 @@
-from scrapy.exceptions import DownloadTimeoutError
+try:
+    from scrapy.exceptions import DownloadTimeoutError as _DownloadTimeoutError
+except ImportError:
+    _DownloadTimeoutError = TimeoutError
 
 
 class StealthException(Exception):
@@ -9,7 +12,7 @@ class EngineNotFound(StealthException):
     """Raised when engine is not registered."""
 
 
-class StealthTimeoutError(StealthException, DownloadTimeoutError):
+class StealthTimeoutError(StealthException, _DownloadTimeoutError):
     """Raised when a stealth engine request times out."""
 
 
