@@ -98,7 +98,7 @@ pip install scrapy-stealth
 ```python
 # 1. Enable the middleware
 DOWNLOADER_MIDDLEWARES = {
-    "scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware": 950,
+    "scrapy_stealth.StealthDownloaderMiddleware": 950,
 }
 
 # 2. (Optional) Route ALL requests through stealth automatically — no meta needed per request
@@ -126,7 +126,7 @@ class MySpider(scrapy.Spider):
 
     custom_settings = {
         "DOWNLOADER_MIDDLEWARES": {
-            "scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware": 950,
+            "scrapy_stealth.StealthDownloaderMiddleware": 950,
         },
         "STEALTH_ENABLED": True,
         "STEALTH_DRIVER": "turbo",

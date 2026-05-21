@@ -13,7 +13,7 @@ Quick start
 Add the middleware to your settings.py or spider custom_settings::
 
     DOWNLOADER_MIDDLEWARES = {
-        "scrapy_stealth.middlewares.stealth.StealthDownloaderMiddleware": 950,
+        "scrapy_stealth.StealthDownloaderMiddleware": 950,
     }
 
     # Optional: proxy list for automatic rotation
