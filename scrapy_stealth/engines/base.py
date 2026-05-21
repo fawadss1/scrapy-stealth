@@ -34,6 +34,7 @@ class RequestContext:
             a response, expressed in seconds.
         http2 (bool): Indicates whether the request should use HTTP/2 or not.
     """
+
     profile: str
     proxy: str | None
     timeout: int | float
@@ -51,11 +52,7 @@ class BaseEngine(ABC):
     specific execution logic.
     """
 
-    def __init__(
-            self,
-            profile: str | None = None,
-            timeout: int | None = None
-    ) -> None:
+    def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
         self.timeout: int = timeout or config.get("DEFAULT_TIMEOUT")
 
@@ -78,7 +75,11 @@ class BaseEngine(ABC):
             return await loop.run_in_executor(None, self._execute_timed, request)
         except RuntimeError:
             from twisted.internet.threads import deferToThread
-            return await cast(Awaitable[Optional[Response]], deferToThread(self._execute_timed, request))
+
+            return await cast(
+                Awaitable[Optional[Response]],
+                deferToThread(self._execute_timed, request),
+            )
 
     def _execute_timed(self, request: Request) -> Response | None:
         resp, latency = self._timed(self._execute, request)
@@ -104,11 +105,7 @@ class BaseEngine(ABC):
         )
 
     @staticmethod
-    def _timed(
-            fn: Callable[..., _T],
-            *args: Any,
-            **kwargs: Any
-    ) -> tuple[_T, float]:
+    def _timed(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> tuple[_T, float]:
         """
         Executes the provided function and measures the time taken for its execution.
 

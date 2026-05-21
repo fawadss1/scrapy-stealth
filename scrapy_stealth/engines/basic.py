@@ -53,7 +53,8 @@ class BasicEngine(BaseEngine):
 
             logger.debug(
                 "Initializing basic stealth client (profile=%s & protocol=%s)",
-                ctx.profile, "HTTP/2" if ctx.http2 else "HTTP/1.1",
+                ctx.profile,
+                "HTTP/2" if ctx.http2 else "HTTP/1.1",
             )
 
             method_fn = getattr(self._clients.get(ctx.http2), request.method.lower())
@@ -73,6 +74,7 @@ class BasicEngine(BaseEngine):
             from wreq.exceptions import ConnectionError as WConn
             from wreq.exceptions import ProxyConnectionError as WProxyConn
             from wreq.exceptions import TimeoutError as WTimeout
+
             if isinstance(exc, WTimeout):
                 raise StealthTimeoutError(
                     f"Basic engine timed out after {ctx.timeout}s fetching {request.url!r}"

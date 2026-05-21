@@ -32,14 +32,17 @@ class TurboEngine(BaseEngine):
             browser = resolve_browser(ctx.profile, backend="turbo")
 
             headers = {
-                k: v for k, v in request.headers.to_unicode_dict().items()
+                k: v
+                for k, v in request.headers.to_unicode_dict().items()
                 if k.lower() not in _FINGERPRINT_KEYS
             }
 
             kwargs: dict[str, Any] = {
                 "headers": headers,
                 "timeout": ctx.timeout,
-                "http_version": CurlHttpVersion.V2_0 if ctx.http2 else CurlHttpVersion.V1_1,
+                "http_version": CurlHttpVersion.V2_0
+                if ctx.http2
+                else CurlHttpVersion.V1_1,
             }
             if request.body:
                 kwargs["data"] = request.body
@@ -48,7 +51,8 @@ class TurboEngine(BaseEngine):
 
             logger.debug(
                 "Initializing turbo stealth client (profile=%s & protocol=%s)",
-                ctx.profile, "HTTP/2" if ctx.http2 else "HTTP/1.1",
+                ctx.profile,
+                "HTTP/2" if ctx.http2 else "HTTP/1.1",
             )
 
             session = self._sessions.get(browser)
@@ -56,8 +60,7 @@ class TurboEngine(BaseEngine):
             resp = method_fn(request.url, **kwargs)
 
             resp_headers = {
-                k: v for k, v in resp.headers.items()
-                if k.lower() != "content-encoding"
+                k: v for k, v in resp.headers.items() if k.lower() != "content-encoding"
             }
             return StealthResponse(
                 request=request,
@@ -75,6 +78,7 @@ class TurboEngine(BaseEngine):
             from curl_cffi.requests.exceptions import DNSError as CurlDNS
             from curl_cffi.requests.exceptions import ProxyError as CurlProxy
             from curl_cffi.requests.exceptions import Timeout as CurlTimeout
+
             if isinstance(exc, CurlTimeout):
                 raise StealthTimeoutError(
                     f"Turbo engine timed out after {ctx.timeout}s fetching {request.url!r}"

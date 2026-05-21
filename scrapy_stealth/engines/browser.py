@@ -45,8 +45,10 @@ def _make_loop() -> asyncio.AbstractEventLoop:
 def _splash_url() -> str:
     import json
     import pathlib
+
     try:
         from importlib.metadata import distribution
+
         raw = distribution("scrapy-stealth").read_text("direct_url.json")
         if raw:
             url = json.loads(raw).get("url", "")
@@ -64,8 +66,10 @@ def _splash_url() -> str:
 
 async def _cdp_snapshot(page: Any) -> bytes | None:
     import base64
+
     try:
         import nodriver.cdp.page as _cdp_page
+
         data: str = await page.send(_cdp_page.capture_screenshot())
         return base64.b64decode(data)
     except Exception:
@@ -79,6 +83,7 @@ def _is_browser_crash(exc: BaseException) -> bool:
 def _silence_browser() -> None:
     import logging
     import nodriver.core.util as _nd_util
+
     logging.getLogger("nodriver").setLevel(logging.WARNING)
     logging.getLogger("nodriver.core.util").setLevel(logging.CRITICAL)
     _nd_util.print = lambda *a, **kw: None
@@ -115,6 +120,7 @@ class BrowserEngine(BaseEngine):
         loop.default_exception_handler(context)
 
     def _run_loop(self) -> None:
+        assert self._loop is not None
         asyncio.set_event_loop(self._loop)
         self._loop.set_exception_handler(self._loop_exception_handler)
         self._loop.run_forever()
@@ -132,6 +138,7 @@ class BrowserEngine(BaseEngine):
 
     async def _start(self, headless: bool) -> Any:
         import nodriver as _nd
+
         _silence_browser()
         try:
             browser = await _nd.start(browser_args=self._build_args(headless))
@@ -185,12 +192,12 @@ class BrowserEngine(BaseEngine):
             logger.info("Browser restarted successfully")
 
     async def _do_fetch(
-            self,
-            url: str,
-            settle: float,
-            headless: bool,
-            proxy: str | None,
-            snapshot: bool = False,
+        self,
+        url: str,
+        settle: float,
+        headless: bool,
+        proxy: str | None,
+        snapshot: bool = False,
     ) -> tuple[bytes, int, bytes | None]:
         """
         Fetches data from a specified URL asynchronously, allowing for the use of a proxy, headless browser,
@@ -214,6 +221,7 @@ class BrowserEngine(BaseEngine):
         shot: bytes | None = None
         if proxy:
             import nodriver as _nd
+
             _silence_browser()
             try:
                 browser = await _nd.start(browser_args=self._build_args(headless))
@@ -268,13 +276,18 @@ class BrowserEngine(BaseEngine):
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
         try:
-            headless: bool = _get_meta_data(request, "headless", config.get("BROWSER_HEADLESS"))
-            settle: float = _get_meta_data(request, "settle", config.get("BROWSER_SETTLE_S"))
+            headless: bool = _get_meta_data(
+                request, "headless", config.get("BROWSER_HEADLESS")
+            )
+            settle: float = _get_meta_data(
+                request, "settle", config.get("BROWSER_SETTLE_S")
+            )
             snap: bool = _get_meta_data(request, "snapshot", False)
 
             logger.debug(
                 "Initializing browser engine (headless=%s & settle=%ss)",
-                headless, settle,
+                headless,
+                settle,
             )
 
             body: bytes = b""
@@ -292,7 +305,9 @@ class BrowserEngine(BaseEngine):
                     if pending:
                         for task in pending:
                             task.cancel()
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
                     loop.close()
             else:
                 self._ensure_browser(headless=headless)
@@ -300,18 +315,25 @@ class BrowserEngine(BaseEngine):
                 # Proactive restart every N requests to prevent Chrome memory bloat.
                 with self._count_lock:
                     self._request_count += 1
-                    should_restart = self._request_count >= config.get("BROWSER_RESTART_EVERY")
+                    should_restart = self._request_count >= config.get(
+                        "BROWSER_RESTART_EVERY"
+                    )
                     if should_restart:
                         self._request_count = 0
 
                 if should_restart:
-                    logger.info("Proactively restarting browser after %d requests", config.get("BROWSER_RESTART_EVERY"))
+                    logger.info(
+                        "Proactively restarting browser after %d requests",
+                        config.get("BROWSER_RESTART_EVERY"),
+                    )
                     self._reset_browser(headless, self._browser)
 
                 for attempt in range(2):
                     try:
+                        assert self._loop is not None
                         future = asyncio.run_coroutine_threadsafe(
-                            self._do_fetch(request.url, settle, headless, None, snap), self._loop
+                            self._do_fetch(request.url, settle, headless, None, snap),
+                            self._loop,
                         )
                         body, status, shot = future.result(timeout=ctx.timeout)
                         break
@@ -324,7 +346,9 @@ class BrowserEngine(BaseEngine):
 
             logger.debug(
                 "Browser engine fetched %s  status=%s  size=%d bytes",
-                request.url, status, len(body),
+                request.url,
+                status,
+                len(body),
             )
             return StealthResponse(
                 request=request,
