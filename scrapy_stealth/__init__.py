@@ -1,9 +1,9 @@
 """
    _____                                      _____ __             __  __
   / ___/______________ _____  __  __         / ___// /____  ____ _/ /_/ /_
-  \__ \/ ___/ ___/ __ `/ __ \/ / / /        \__ \/ __/ _ \/ __ `/ / __/ __ \
+  \\__ \\/ ___/ ___/ __ `/ __ \\/ / / /        \\__ \\/ __/ _ \\/ __ `/ / __/ __ \
  ___/ / /__/ /  / /_/ / /_/ / /_/ /  ____  ___/ / /_/  __/ /_/ / / /_/ / / /
-/____/\___/_/   \__,_/ .___/\__, /  /___/ ____/\__/\___/\__,_/_/\__/_/ /_/
+/____/\\___/_/   \\__,_/ .___/\\__, /  /___/ ____/\\__/\\___/\\__,_/_/\\__/_/ /_/
                     /_/    /____/
 
 scrapy-stealth: A pluggable anti-bot and stealth framework for Scrapy.
@@ -46,9 +46,9 @@ from .engines.turbo import TurboEngine
 from .exceptions import (
     EngineNotFound,
     StealthBrowserNotFoundError,
+    StealthConnectionError,
     StealthException,
     StealthTimeoutError,
-    StealthConnectionError,
 )
 from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
@@ -56,7 +56,6 @@ from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
 from .utils.meta_info import _pkg_meta
 
-__version__: str = _pkg_meta.version
 __author__: str = _pkg_meta.author
 __license__: str = _pkg_meta.license
 
