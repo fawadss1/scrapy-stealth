@@ -83,8 +83,7 @@ class StealthDownloaderMiddleware:
             engine, BrowserEngine
         ):
             logger.error(
-                "snapshot=True requires driver='browser' but current driver is %r. "
-                "Snapshot will be ignored.",
+                "snapshot=True requires driver='browser' but current driver is %r. Snapshot will be ignored.",
                 driver or config.get("STEALTH_DRIVER"),
             )
 
