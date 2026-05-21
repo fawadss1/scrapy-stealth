@@ -8,9 +8,9 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    Optional,
     TypeVar,
     cast,
-    Optional,
 )
 
 from scrapy.http import Request, Response

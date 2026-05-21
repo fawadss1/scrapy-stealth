@@ -6,13 +6,13 @@ from curl_cffi import CurlHttpVersion
 from curl_cffi.requests import Session
 from scrapy.http import Request, Response
 
-from .base import BaseEngine
 from ..exceptions import StealthConnectionError, StealthTimeoutError
 from ..utils.headers import _FINGERPRINT_KEYS
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
 from ..utils.response import StealthResponse
 from ..utils.session import SessionCache
+from .base import BaseEngine
 
 logger = get_logger()
 

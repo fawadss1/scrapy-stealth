@@ -3,17 +3,17 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from scrapy.http import Request, Response
 from wreq.blocking import Client
 from wreq.proxy import Proxy
-from scrapy.http import Request, Response
 
-from .base import BaseEngine
 from ..exceptions import StealthConnectionError, StealthTimeoutError
-from ..utils.profiles import resolve_browser
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
+from ..utils.profiles import resolve_browser
 from ..utils.response import StealthResponse
 from ..utils.session import SessionCache
+from .base import BaseEngine
 
 logger = get_logger()
 

@@ -7,7 +7,6 @@ from typing import Any
 
 from scrapy.http import Request, Response
 
-from .base import BaseEngine
 from ..config import config
 from ..exceptions import (
     StealthBrowserNotFoundError,
@@ -17,6 +16,7 @@ from ..exceptions import (
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.response import StealthResponse
+from .base import BaseEngine
 
 logger = get_logger()
 
@@ -26,11 +26,7 @@ _BROWSER_ARGS: list[str] = [
     "--disable-blink-features=AutomationControlled",
 ]
 
-_JS_HTML = (
-    "document.querySelector('.json-formatter-container')"
-    " ? document.body.innerText"
-    " : document.documentElement.innerHTML"
-)
+_JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.innerText : document.documentElement.innerHTML"
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 200"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 
@@ -82,6 +78,7 @@ def _is_browser_crash(exc: BaseException) -> bool:
 
 def _silence_browser() -> None:
     import logging
+
     import nodriver.core.util as _nd_util
 
     logging.getLogger("nodriver").setLevel(logging.WARNING)
