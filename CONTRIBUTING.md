@@ -15,7 +15,7 @@ Contributions are welcome! This is an open source project and all help is apprec
 This project uses [ruff](https://docs.astral.sh/ruff/) for linting and formatting, and [mypy](https://mypy-lang.org/) for type checking. The CI pipeline will fail if any of these checks do not pass, so run them locally first:
 
 ```bash
-pip install ruff mypy
+pip install -e ".[dev]"
 
 # Lint
 ruff check .
