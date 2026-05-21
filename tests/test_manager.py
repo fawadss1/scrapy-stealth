@@ -11,8 +11,10 @@ from scrapy_stealth.engines.turbo import TurboEngine
 class TestEngineManager:
     @pytest.fixture
     def manager(self):
-        with patch("scrapy_stealth.engines.basic.Client"), \
-             patch("scrapy_stealth.engines.turbo.Session"):
+        with (
+            patch("scrapy_stealth.engines.basic.Client"),
+            patch("scrapy_stealth.engines.turbo.Session"),
+        ):
             yield EngineManager()
 
     def test_get_default_engine(self, manager):
@@ -58,6 +60,7 @@ class TestEngineManager:
 
     def test_unknown_driver_logs_error(self, manager, caplog):
         import logging
+
         with caplog.at_level(logging.ERROR):
             manager.get("stealth", "browsesr")
         assert "browsesr" in caplog.text
@@ -74,5 +77,6 @@ class TestEngineManager:
 
     def test_invalid_driver_fallback_is_always_valid(self, manager):
         from scrapy_stealth.constants import STEALTH_DRIVER as _DEFAULT_DRIVER
+
         engine = manager.get("stealth", "nonexistent")
         assert engine is manager._stealth[_DEFAULT_DRIVER]

@@ -29,13 +29,18 @@ class TestAntiBotDetector:
         assert detector.is_blocked(make_response(301)) is False
 
     def test_captcha_keyword_blocked(self, detector):
-        assert detector.is_blocked(make_response(200, "Please solve the captcha")) is True
+        assert (
+            detector.is_blocked(make_response(200, "Please solve the captcha")) is True
+        )
 
     def test_access_denied_keyword_blocked(self, detector):
         assert detector.is_blocked(make_response(200, "Access Denied")) is True
 
     def test_verify_human_keyword_blocked(self, detector):
-        assert detector.is_blocked(make_response(200, "Verify you are human to continue")) is True
+        assert (
+            detector.is_blocked(make_response(200, "Verify you are human to continue"))
+            is True
+        )
 
     def test_keyword_case_insensitive(self, detector):
         assert detector.is_blocked(make_response(200, "CAPTCHA REQUIRED")) is True

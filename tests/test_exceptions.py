@@ -79,7 +79,9 @@ class TestStealthConnectionError:
             raise StealthConnectionError("connection failed")
 
     def test_message_preserved(self):
-        exc = StealthConnectionError("Basic engine connection failed fetching 'https://example.com'")
+        exc = StealthConnectionError(
+            "Basic engine connection failed fetching 'https://example.com'"
+        )
         assert "Basic engine connection failed" in str(exc)
 
     def test_cause_preserved(self):
@@ -102,7 +104,9 @@ class TestStealthBrowserNotFoundError:
             raise StealthBrowserNotFoundError("Browser binary not found.")
 
     def test_message_preserved(self):
-        exc = StealthBrowserNotFoundError("Browser binary not found. Install Google Chrome.")
+        exc = StealthBrowserNotFoundError(
+            "Browser binary not found. Install Google Chrome."
+        )
         assert "Browser binary not found" in str(exc)
 
     def test_cause_preserved(self):

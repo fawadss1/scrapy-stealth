@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from scrapy.http import Request
 
 from scrapy_stealth.config import config
@@ -11,6 +11,7 @@ from scrapy_stealth.strategies.retry import RetryHandler
 # ---------------------------------------------------------------------------
 # ProxyRotator
 # ---------------------------------------------------------------------------
+
 
 class TestProxyRotator:
     def test_returns_none_when_no_proxies(self):
@@ -69,6 +70,7 @@ class TestProxyRotator:
 # ProfileRotator
 # ---------------------------------------------------------------------------
 
+
 class TestProfileRotator:
     def test_returns_valid_fingerprint(self):
         strategy = ProfileRotator()
@@ -84,14 +86,20 @@ class TestProfileRotator:
         assert len(results) > 1
 
     def test_fingerprints_are_latest(self):
-        assert any(fp in FINGERPRINTS for fp in ("chrome_145", "chrome_146", "chrome_147"))
-        assert any(fp in FINGERPRINTS for fp in ("firefox_147", "firefox_148", "firefox_149"))
+        assert any(
+            fp in FINGERPRINTS for fp in ("chrome_145", "chrome_146", "chrome_147")
+        )
+        assert any(
+            fp in FINGERPRINTS for fp in ("firefox_147", "firefox_148", "firefox_149")
+        )
         assert any("safari_26" in fp for fp in FINGERPRINTS)
         assert any(fp in FINGERPRINTS for fp in ("edge_145", "edge_146", "edge_147"))
         assert any(fp in FINGERPRINTS for fp in ("opera_128", "opera_129", "opera_130"))
 
     def test_fingerprints_include_mobile(self):
-        assert any("ios" in fp or "android" in fp or "ipad" in fp for fp in FINGERPRINTS)
+        assert any(
+            "ios" in fp or "android" in fp or "ipad" in fp for fp in FINGERPRINTS
+        )
 
     def test_fingerprints_include_multiple_browsers(self):
         browsers = {"chrome", "firefox", "safari", "edge", "opera"}
@@ -105,6 +113,7 @@ class TestProfileRotator:
 # ---------------------------------------------------------------------------
 # RetryHandler
 # ---------------------------------------------------------------------------
+
 
 def make_response(status: int):
     response = MagicMock()
@@ -132,7 +141,9 @@ class TestRetryHandler:
 
     def test_all_block_codes_trigger_retry(self, strategy):
         for code in config.get("BLOCK_CODES"):
-            assert strategy.should_retry(make_response(code)) is True, f"Expected {code} to trigger retry"
+            assert strategy.should_retry(make_response(code)) is True, (
+                f"Expected {code} to trigger retry"
+            )
 
     def test_should_not_retry_on_200(self, strategy):
         assert strategy.should_retry(make_response(200)) is False
@@ -167,4 +178,6 @@ class TestRetryHandler:
     def test_build_does_not_mutate_original(self, strategy, base_request):
         original_meta = dict(base_request.meta)
         strategy.build(base_request)
-        assert base_request.meta.get("retry_times", 0) == original_meta.get("retry_times", 0)
+        assert base_request.meta.get("retry_times", 0) == original_meta.get(
+            "retry_times", 0
+        )

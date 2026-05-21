@@ -2,7 +2,7 @@ import asyncio
 import threading
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 from scrapy.http import Request, HtmlResponse
 
 from curl_cffi import CurlHttpVersion
@@ -12,7 +12,11 @@ from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
 from scrapy_stealth.engines.browser import BrowserEngine
 from scrapy_stealth.engines.turbo import TurboEngine
-from scrapy_stealth.exceptions import StealthBrowserNotFoundError, StealthConnectionError, StealthTimeoutError
+from scrapy_stealth.exceptions import (
+    StealthBrowserNotFoundError,
+    StealthConnectionError,
+    StealthTimeoutError,
+)
 from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
 from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
 from scrapy_stealth.utils.response import StealthResponse
@@ -22,6 +26,7 @@ from wreq.emulation import Emulation, Profile
 # ---------------------------------------------------------------------------
 # ScrapyEngine
 # ---------------------------------------------------------------------------
+
 
 class TestScrapyEngine:
     def test_fetch_returns_none(self):
@@ -34,6 +39,7 @@ class TestScrapyEngine:
 # ---------------------------------------------------------------------------
 # resolve_browser
 # ---------------------------------------------------------------------------
+
 
 class TestResolveBrowser:
     def test_default_profile_string_resolves(self):
@@ -87,6 +93,7 @@ class TestBrowserMap:
 # BasicEngine
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_client(status=200, content=b"<html><body>ok</body></html>"):
     mock_status = MagicMock()
     mock_status.as_int.return_value = status
@@ -115,6 +122,7 @@ class TestBasicEngine:
 
     def test_fetch_is_coroutine(self, engine, spider):
         import inspect
+
         request = Request("https://example.com")
         result = engine.fetch(request, spider)
         assert inspect.iscoroutine(result)
@@ -133,10 +141,13 @@ class TestBasicEngine:
 
     def test_execute_passes_proxy(self):
         from wreq.proxy import Proxy
+
         mock_client = _make_mock_client()
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine()
-            request = Request("https://example.com", meta={"stealth": {"proxy": "http://proxy:8080"}})
+            request = Request(
+                "https://example.com", meta={"stealth": {"proxy": "http://proxy:8080"}}
+            )
             engine._execute(request)
 
         call_kwargs = mock_client.get.call_args.kwargs
@@ -156,7 +167,9 @@ class TestBasicEngine:
         mock_client = _make_mock_client()
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine(profile="chrome_137")
-            request = Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}})
+            request = Request(
+                "https://example.com", meta={"stealth": {"profile": "firefox_139"}}
+            )
             engine._execute(request)
 
         call_kwargs = mock_client.get.call_args.kwargs
@@ -174,11 +187,14 @@ class TestBasicEngine:
 
     def test_execute_raises_stealth_timeout_on_wreq_timeout(self):
         from wreq.exceptions import TimeoutError as WreqTimeout
+
         mock_client = MagicMock()
         mock_client.get.side_effect = WreqTimeout("wreq timed out")
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine()
-            with pytest.raises(StealthTimeoutError, match=r"Basic engine timed out after .+s fetching"):
+            with pytest.raises(
+                StealthTimeoutError, match=r"Basic engine timed out after .+s fetching"
+            ):
                 engine._execute(Request("https://example.com"))
 
     def test_execute_reraises_builtin_timeout(self):
@@ -191,11 +207,14 @@ class TestBasicEngine:
 
     def test_execute_raises_stealth_connection_error_on_wreq_connection_error(self):
         from wreq.exceptions import ConnectionError as WConn
+
         mock_client = MagicMock()
         mock_client.get.side_effect = WConn("dns error")
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
             engine = BasicEngine()
-            with pytest.raises(StealthConnectionError, match=r"Basic engine connection failed fetching"):
+            with pytest.raises(
+                StealthConnectionError, match=r"Basic engine connection failed fetching"
+            ):
                 engine._execute(Request("https://example.com"))
 
     def test_default_profile_matches_config(self):
@@ -215,8 +234,12 @@ class TestBasicEngine:
         mock_cls = MagicMock(return_value=_make_mock_client())
         with patch("scrapy_stealth.engines.basic.Client", mock_cls):
             engine = BasicEngine()
-            engine._execute(Request("https://example.com", meta={"stealth": {"http2": True}}))
-            engine._execute(Request("https://example.com", meta={"stealth": {"http2": False}}))
+            engine._execute(
+                Request("https://example.com", meta={"stealth": {"http2": True}})
+            )
+            engine._execute(
+                Request("https://example.com", meta={"stealth": {"http2": False}})
+            )
         assert mock_cls.call_count == 2
 
 
@@ -224,7 +247,10 @@ class TestBasicEngine:
 # TurboEngine
 # ---------------------------------------------------------------------------
 
-def _make_turbo_response(status=200, content=b"<html><body>turbo</body></html>", headers=None):
+
+def _make_turbo_response(
+    status=200, content=b"<html><body>turbo</body></html>", headers=None
+):
     mock_resp = MagicMock()
     mock_resp.status_code = status
     mock_resp.content = content
@@ -256,6 +282,7 @@ class TestTurboEngine:
 
     def test_fetch_is_coroutine(self, session_patch):
         import inspect
+
         engine = TurboEngine()
         spider = MagicMock()
         result = engine.fetch(Request("https://example.com"), spider)
@@ -272,14 +299,18 @@ class TestTurboEngine:
     def test_execute_uses_http2_version(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"stealth": {"http2": True}}))
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"http2": True}})
+        )
         call_kwargs = mock_session.get.call_args.kwargs
         assert call_kwargs["http_version"] == CurlHttpVersion.V2_0
 
     def test_execute_uses_http1_version_by_default(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"stealth": {"http2": False}}))
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"http2": False}})
+        )
         call_kwargs = mock_session.get.call_args.kwargs
         assert call_kwargs["http_version"] == CurlHttpVersion.V1_1
 
@@ -301,9 +332,16 @@ class TestTurboEngine:
     def test_execute_passes_proxy(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"stealth": {"proxy": "http://proxy:8080"}}))
+        engine._execute(
+            Request(
+                "https://example.com", meta={"stealth": {"proxy": "http://proxy:8080"}}
+            )
+        )
         call_kwargs = mock_session.get.call_args.kwargs
-        assert call_kwargs["proxies"] == {"http": "http://proxy:8080", "https": "http://proxy:8080"}
+        assert call_kwargs["proxies"] == {
+            "http": "http://proxy:8080",
+            "https": "http://proxy:8080",
+        }
 
     def test_execute_no_proxy_when_not_set(self, session_patch):
         mock_cls, mock_session = session_patch
@@ -329,8 +367,12 @@ class TestTurboEngine:
     def test_execute_resolves_turbo_profile(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}}))
-        impersonate_arg = mock_cls.call_args.kwargs.get("impersonate") or mock_cls.call_args.args[0]
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}})
+        )
+        impersonate_arg = (
+            mock_cls.call_args.kwargs.get("impersonate") or mock_cls.call_args.args[0]
+        )
         assert impersonate_arg == "firefox135"
 
     def test_execute_returns_none_on_exception(self):
@@ -353,22 +395,28 @@ class TestTurboEngine:
 
     def test_execute_raises_stealth_timeout_on_curl_timeout(self):
         from curl_cffi.requests.exceptions import Timeout as CurlTimeout
+
         mock_session = MagicMock()
         mock_session.get.side_effect = CurlTimeout("curl: (28) timed out")
         mock_cls = MagicMock(return_value=mock_session)
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             engine = TurboEngine()
-            with pytest.raises(StealthTimeoutError, match=r"Turbo engine timed out after .+s fetching"):
+            with pytest.raises(
+                StealthTimeoutError, match=r"Turbo engine timed out after .+s fetching"
+            ):
                 engine._execute(Request("https://example.com"))
 
     def test_execute_raises_stealth_connection_error_on_curl_connection_error(self):
         from curl_cffi.requests.exceptions import ConnectionError as CurlConn
+
         mock_session = MagicMock()
         mock_session.get.side_effect = CurlConn("dns error")
         mock_cls = MagicMock(return_value=mock_session)
         with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
             engine = TurboEngine()
-            with pytest.raises(StealthConnectionError, match=r"Turbo engine connection failed fetching"):
+            with pytest.raises(
+                StealthConnectionError, match=r"Turbo engine connection failed fetching"
+            ):
                 engine._execute(Request("https://example.com"))
 
     def test_session_reused_for_same_profile(self, session_patch):
@@ -381,8 +429,12 @@ class TestTurboEngine:
     def test_separate_session_per_profile(self, session_patch):
         mock_cls, _ = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", meta={"stealth": {"profile": "chrome_133"}}))
-        engine._execute(Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}}))
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"profile": "chrome_133"}})
+        )
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"profile": "firefox_139"}})
+        )
         assert mock_cls.call_count == 2
 
     def test_execute_drops_content_encoding_header(self, session_patch):
@@ -405,6 +457,7 @@ class TestTurboEngine:
 # BrowserEngine
 # ---------------------------------------------------------------------------
 
+
 class TestBrowserEngine:
     @pytest.fixture(autouse=True)
     def fast_settle(self, monkeypatch):
@@ -423,7 +476,15 @@ class TestBrowserEngine:
     def mock_tab(self):
         tab = AsyncMock()
         tab.evaluate = AsyncMock(
-            side_effect=lambda js: 200 if "responseStatus" in js else (False if "chrome-error" in js else "<html><body>browser ok</body></html>")
+            side_effect=lambda js: (
+                200
+                if "responseStatus" in js
+                else (
+                    False
+                    if "chrome-error" in js
+                    else "<html><body>browser ok</body></html>"
+                )
+            )
         )
         tab.close = AsyncMock()
         return tab
@@ -445,6 +506,7 @@ class TestBrowserEngine:
 
     def test_fetch_is_coroutine(self):
         import inspect
+
         engine = BrowserEngine()
         result = engine.fetch(Request("https://example.com"), MagicMock())
         assert inspect.iscoroutine(result)
@@ -457,7 +519,15 @@ class TestBrowserEngine:
 
     def test_execute_body_contains_evaluated_html(self, engine, mock_tab):
         mock_tab.evaluate = AsyncMock(
-            side_effect=lambda js: 200 if "responseStatus" in js else (False if "chrome-error" in js else "<html><body>stealth browser</body></html>")
+            side_effect=lambda js: (
+                200
+                if "responseStatus" in js
+                else (
+                    False
+                    if "chrome-error" in js
+                    else "<html><body>stealth browser</body></html>"
+                )
+            )
         )
         response = engine._execute(Request("https://example.com"))
         assert b"stealth browser" in response.body
@@ -478,35 +548,58 @@ class TestBrowserEngine:
 
     def test_execute_raises_stealth_timeout(self, engine, mock_browser):
         mock_browser.get = AsyncMock(side_effect=TimeoutError("timed out"))
-        with pytest.raises(StealthTimeoutError, match=r"Browser engine timed out after .+s fetching"):
+        with pytest.raises(
+            StealthTimeoutError, match=r"Browser engine timed out after .+s fetching"
+        ):
             engine._execute(Request("https://example.com"))
 
-    def test_execute_raises_stealth_connection_error_on_oserror(self, engine, mock_browser):
+    def test_execute_raises_stealth_connection_error_on_oserror(
+        self, engine, mock_browser
+    ):
         mock_browser.get = AsyncMock(side_effect=OSError("connection refused"))
-        with pytest.raises(StealthConnectionError, match=r"Browser engine connection failed fetching"):
+        with pytest.raises(
+            StealthConnectionError, match=r"Browser engine connection failed fetching"
+        ):
             engine._execute(Request("https://example.com"))
 
     def test_execute_raises_browser_not_found_on_file_not_found(self, engine):
-        with patch.object(engine, "_ensure_browser", side_effect=StealthBrowserNotFoundError("Browser binary not found.")):
-            with pytest.raises(StealthBrowserNotFoundError, match="Browser binary not found"):
+        with patch.object(
+            engine,
+            "_ensure_browser",
+            side_effect=StealthBrowserNotFoundError("Browser binary not found."),
+        ):
+            with pytest.raises(
+                StealthBrowserNotFoundError, match="Browser binary not found"
+            ):
                 engine._execute(Request("https://example.com"))
 
     def test_execute_passes_headless_from_meta(self, engine):
         with patch.object(engine, "_ensure_browser") as mock_ensure:
-            engine._execute(Request("https://example.com", meta={"stealth": {"headless": False}}))
+            engine._execute(
+                Request("https://example.com", meta={"stealth": {"headless": False}})
+            )
         assert mock_ensure.call_args.kwargs["headless"] is False
 
     def test_execute_uses_config_headless_default(self, engine):
         with patch.object(engine, "_ensure_browser") as mock_ensure:
             engine._execute(Request("https://example.com"))
-        assert mock_ensure.call_args.kwargs["headless"] == config.get("BROWSER_HEADLESS")
+        assert mock_ensure.call_args.kwargs["headless"] == config.get(
+            "BROWSER_HEADLESS"
+        )
 
     def test_execute_passes_proxy_to_do_fetch(self, engine):
-        with patch.object(engine, "_do_fetch", new_callable=AsyncMock, return_value=(b"<html></html>", 200, None)) as mock_fetch:
-            engine._execute(Request(
-                "https://example.com",
-                meta={"stealth": {"proxy": "http://proxy:8080"}},
-            ))
+        with patch.object(
+            engine,
+            "_do_fetch",
+            new_callable=AsyncMock,
+            return_value=(b"<html></html>", 200, None),
+        ) as mock_fetch:
+            engine._execute(
+                Request(
+                    "https://example.com",
+                    meta={"stealth": {"proxy": "http://proxy:8080"}},
+                )
+            )
         # _do_fetch(url, settle, headless, proxy, snapshot) — proxy is the 4th positional arg
         assert mock_fetch.call_args.args[3] == "http://proxy:8080"
 
@@ -518,7 +611,9 @@ class TestBrowserEngine:
             return b"<html></html>", 200, None
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
-            engine._execute(Request("https://example.com", meta={"stealth": {"settle": 9.0}}))
+            engine._execute(
+                Request("https://example.com", meta={"stealth": {"settle": 9.0}})
+            )
         assert captured[0] == 9.0
 
     def test_execute_uses_config_settle_default(self, engine):

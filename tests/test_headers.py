@@ -1,11 +1,10 @@
-import pytest
-
 from scrapy_stealth.utils.headers import get_default_headers, merge_headers
 
 
 # ---------------------------------------------------------------------------
 # get_default_headers
 # ---------------------------------------------------------------------------
+
 
 class TestGetDefaultHeaders:
     def test_chrome_returns_chromium_headers(self):
@@ -60,6 +59,7 @@ class TestGetDefaultHeaders:
 # sec-ch-ua
 # ---------------------------------------------------------------------------
 
+
 class TestSecChUa:
     def test_chrome_has_sec_ch_ua(self):
         hdrs = get_default_headers("chrome_137")
@@ -102,6 +102,7 @@ class TestSecChUa:
 # ---------------------------------------------------------------------------
 # merge_headers
 # ---------------------------------------------------------------------------
+
 
 class TestMergeHeaders:
     def test_browser_accept_wins_over_scrapy_default(self):

@@ -5,12 +5,13 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
-from scrapy.http import Request
 
 from scrapy_stealth.decorators.snapshot import snapshot
 
 
-def _make_response(snapshot_bytes: bytes | None = None, url: str = "https://example.com") -> MagicMock:
+def _make_response(
+    snapshot_bytes: bytes | None = None, url: str = "https://example.com"
+) -> MagicMock:
     resp = MagicMock()
     resp.url = url
     resp.meta = {"snapshot_content": snapshot_bytes} if snapshot_bytes else {}
@@ -18,7 +19,6 @@ def _make_response(snapshot_bytes: bytes | None = None, url: str = "https://exam
 
 
 class TestSnapshotDecorator:
-
     # ------------------------------------------------------------------
     # Decorator forms
     # ------------------------------------------------------------------
@@ -101,6 +101,7 @@ class TestSnapshotDecorator:
             original_cwd = os.getcwd()
             os.chdir(tmpdir)
             try:
+
                 @snapshot
                 def parse(self, response):
                     pass
@@ -114,7 +115,9 @@ class TestSnapshotDecorator:
 
     def test_saves_file_with_callable_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            path_fn = lambda r: os.path.join(tmpdir, r.url.split("/")[-1] + ".png")
+
+            def path_fn(r):
+                return os.path.join(tmpdir, r.url.split("/")[-1] + ".png")
 
             @snapshot(path=path_fn)
             def parse(self, response):

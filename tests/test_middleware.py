@@ -9,7 +9,9 @@ from scrapy_stealth.middlewares.stealth import StealthDownloaderMiddleware
 
 def _make_html_response(url="https://example.com", status=200, body=b"<html>ok</html>"):
     request = Request(url)
-    return HtmlResponse(url=url, status=status, body=body, encoding="utf-8", request=request)
+    return HtmlResponse(
+        url=url, status=status, body=body, encoding="utf-8", request=request
+    )
 
 
 class TestStealthDownloaderMiddleware:
@@ -67,6 +69,7 @@ class TestStealthDownloaderMiddleware:
 
     def test_process_request_is_coroutine(self, middleware, spider):
         import inspect
+
         request = Request("https://example.com")
         with patch.object(middleware.manager, "get") as mock_get:
             mock_engine = MagicMock()
@@ -78,6 +81,7 @@ class TestStealthDownloaderMiddleware:
 
     def test_middleware_has_manager(self, middleware):
         from scrapy_stealth.manager import EngineManager
+
         assert isinstance(middleware.manager, EngineManager)
 
     # -------------------------------------------------------------------
@@ -85,13 +89,17 @@ class TestStealthDownloaderMiddleware:
     # -------------------------------------------------------------------
 
     def test_rotate_profile_sets_profile(self, middleware, spider):
-        request = Request("https://example.com", meta={"stealth": {"rotate_profile": True}})
+        request = Request(
+            "https://example.com", meta={"stealth": {"rotate_profile": True}}
+        )
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
             asyncio.run(middleware.process_request(request, spider))
         assert "profile" in request.meta["stealth"]
 
-    def test_rotate_profile_does_not_override_explicit_profile(self, middleware, spider):
+    def test_rotate_profile_does_not_override_explicit_profile(
+        self, middleware, spider
+    ):
         request = Request(
             "https://example.com",
             meta={"stealth": {"rotate_profile": True, "profile": "chrome_137"}},
@@ -103,7 +111,10 @@ class TestStealthDownloaderMiddleware:
 
     def test_rotate_profile_sets_valid_fingerprint(self, middleware, spider):
         from scrapy_stealth.strategies.fingerprint import FINGERPRINTS
-        request = Request("https://example.com", meta={"stealth": {"rotate_profile": True}})
+
+        request = Request(
+            "https://example.com", meta={"stealth": {"rotate_profile": True}}
+        )
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
             asyncio.run(middleware.process_request(request, spider))
@@ -117,14 +128,18 @@ class TestStealthDownloaderMiddleware:
         proxies = ["http://proxy1:8080", "http://proxy2:8080"]
         with patch("scrapy_stealth.engines.basic.Client"):
             mw = StealthDownloaderMiddleware(proxies=proxies)
-        request = Request("https://example.com", meta={"stealth": {"rotate_proxy": True}})
+        request = Request(
+            "https://example.com", meta={"stealth": {"rotate_proxy": True}}
+        )
         with patch.object(mw.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
             asyncio.run(mw.process_request(request, spider))
         assert request.meta["stealth"].get("proxy") in proxies
 
     def test_rotate_proxy_no_op_when_no_proxies(self, middleware, spider):
-        request = Request("https://example.com", meta={"stealth": {"rotate_proxy": True}})
+        request = Request(
+            "https://example.com", meta={"stealth": {"rotate_proxy": True}}
+        )
         with patch.object(middleware.manager, "get") as mock_get:
             mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
             asyncio.run(middleware.process_request(request, spider))
@@ -214,13 +229,17 @@ class TestStealthDownloaderMiddleware:
         middleware.spider_opened(spider)
         assert config.get("STEALTH_DRIVER") == original
 
-    def test_invalid_stealth_driver_in_settings_falls_back_in_manager(self, middleware, spider):
+    def test_invalid_stealth_driver_in_settings_falls_back_in_manager(
+        self, middleware, spider
+    ):
         spider.crawler.settings.getlist.return_value = []
         spider.crawler.settings.getbool.return_value = False
         spider.crawler.settings.get.return_value = "browsesr"
         middleware.spider_opened(spider)
         request = Request("https://example.com", meta={"stealth": {}})
-        with patch.object(middleware.manager, "get", wraps=middleware.manager.get) as mock_get:
+        with patch.object(
+            middleware.manager, "get", wraps=middleware.manager.get
+        ) as mock_get:
             mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
             asyncio.run(middleware.process_request(request, spider))
         mock_get.assert_called_once_with("stealth", None)
