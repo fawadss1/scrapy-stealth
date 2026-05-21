@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from scrapy_stealth.config import config
-from scrapy_stealth.manager import EngineManager
-from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
+from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.turbo import TurboEngine
+from scrapy_stealth.manager import EngineManager
 
 
 class TestEngineManager:

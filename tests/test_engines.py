@@ -1,16 +1,16 @@
 import asyncio
 import threading
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from scrapy.http import Request, HtmlResponse
-
 from curl_cffi import CurlHttpVersion
+from scrapy.http import HtmlResponse, Request
+from wreq.emulation import Emulation, Profile
 
 from scrapy_stealth.config import config
-from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.basic import BasicEngine
 from scrapy_stealth.engines.browser import BrowserEngine
+from scrapy_stealth.engines.scrapy import ScrapyEngine
 from scrapy_stealth.engines.turbo import TurboEngine
 from scrapy_stealth.exceptions import (
     StealthBrowserNotFoundError,
@@ -20,8 +20,6 @@ from scrapy_stealth.exceptions import (
 from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
 from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
 from scrapy_stealth.utils.response import StealthResponse
-from wreq.emulation import Emulation, Profile
-
 
 # ---------------------------------------------------------------------------
 # ScrapyEngine

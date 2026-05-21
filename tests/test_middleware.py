@@ -1,7 +1,8 @@
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from scrapy.http import Request, HtmlResponse
+
+import pytest
+from scrapy.http import HtmlResponse, Request
 
 from scrapy_stealth.config import config
 from scrapy_stealth.middlewares.stealth import StealthDownloaderMiddleware

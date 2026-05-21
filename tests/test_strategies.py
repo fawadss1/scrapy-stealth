@@ -1,12 +1,12 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from scrapy.http import Request
 
 from scrapy_stealth.config import config
+from scrapy_stealth.strategies.fingerprint import FINGERPRINTS, ProfileRotator
 from scrapy_stealth.strategies.proxy import ProxyRotator
-from scrapy_stealth.strategies.fingerprint import ProfileRotator, FINGERPRINTS
 from scrapy_stealth.strategies.retry import RetryHandler
-
 
 # ---------------------------------------------------------------------------
 # ProxyRotator

@@ -1,6 +1,5 @@
 from scrapy_stealth.utils.headers import get_default_headers, merge_headers
 
-
 # ---------------------------------------------------------------------------
 # get_default_headers
 # ---------------------------------------------------------------------------
