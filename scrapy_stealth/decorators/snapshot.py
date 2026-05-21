@@ -29,11 +29,13 @@ def snapshot(fn: Callable | None = None, *, path: str | Callable | None = None) 
 
     Logs an error if ``meta={'stealth': {'snapshot': True}}`` was not set.
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(self: Any, response: Any, *args: Any, **kwargs: Any) -> Any:
             _save(response, path)
             return func(self, response, *args, **kwargs)
+
         return wrapper
 
     if fn is not None:
@@ -49,7 +51,7 @@ def snapshot(fn: Callable | None = None, *, path: str | Callable | None = None) 
 
 def _save(response: Any, path: str | Callable | None) -> None:
     if callable(path):
-        path = path(response)
+        path = str(path(response))
 
     shot: bytes | None = response.meta.get("snapshot_content")
     if not shot:
@@ -63,6 +65,7 @@ def _save(response: Any, path: str | Callable | None) -> None:
     if path is None:
         import re
         from datetime import datetime
+
         safe = re.sub(r"\W", "_", response.url)[:20].strip("_")
         path = f"snapshot_{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
 

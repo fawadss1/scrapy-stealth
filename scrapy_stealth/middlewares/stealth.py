@@ -24,7 +24,9 @@ logger = get_logger()
 class StealthDownloaderMiddleware:
     """Main middleware routing requests through stealth engines."""
 
-    def __init__(self, proxies: list[str] | None = None, stealth_enabled: bool = False) -> None:
+    def __init__(
+        self, proxies: list[str] | None = None, stealth_enabled: bool = False
+    ) -> None:
         self.manager = EngineManager()
         self._proxy_rotator = ProxyRotator(proxies=proxies or [])
         self._profile_rotator = ProfileRotator()
@@ -42,7 +44,9 @@ class StealthDownloaderMiddleware:
         settings = spider.crawler.settings
         proxies = settings.getlist("STEALTH_PROXIES", [])
         self._proxy_rotator = ProxyRotator(proxies=proxies)
-        self._stealth_enabled = settings.getbool("STEALTH_ENABLED", self._stealth_enabled)
+        self._stealth_enabled = settings.getbool(
+            "STEALTH_ENABLED", self._stealth_enabled
+        )
         if driver := settings.get("STEALTH_DRIVER"):
             config.STEALTH_DRIVER = driver
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
@@ -75,7 +79,9 @@ class StealthDownloaderMiddleware:
         driver = _get_meta_data(request, "driver")
         engine = self.manager.get(engine_name, driver)
 
-        if _get_meta_data(request, "snapshot", False) and not isinstance(engine, BrowserEngine):
+        if _get_meta_data(request, "snapshot", False) and not isinstance(
+            engine, BrowserEngine
+        ):
             logger.error(
                 "snapshot=True requires driver='browser' but current driver is %r. "
                 "Snapshot will be ignored.",
