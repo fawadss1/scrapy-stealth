@@ -15,8 +15,11 @@ from ..exceptions import (
 )
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
+from ..utils.patch import patch_nodriver
 from ..utils.response import StealthResponse
 from .base import BaseEngine
+
+patch_nodriver()
 
 logger = get_logger()
 
