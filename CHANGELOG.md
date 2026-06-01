@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.5] - 2026-06-01
+
+### Fixed
+
+- **`patch_nodriver()` now safe to run multiple times**
+  The previous implementation used `importlib.util.find_spec("nodriver.cdp.network")` which
+  itself triggered the `SyntaxError` it was trying to fix (importing the submodule requires
+  importing the parent, which fails). Switched to `find_spec("nodriver")` (top-level only)
+  and constructing the path to `cdp/network.py` via `pathlib`. Additionally, the replacement
+  now uses a regex negative lookbehind `(?<!\xc2)\xb1` to prevent double-encoding on
+  subsequent runs.
+
+- **Browser engine: handle tab/browser closed mid-request**
+  Two new exception types are now caught and raised as `StealthConnectionError` instead of
+  logging as unhandled errors:
+  - `ConnectionClosedError` — WebSocket dropped (tab closed while loading)
+  - `ProtocolException` — CDP target no longer found (tab/context destroyed)
+
+---
+
 ## [0.6.4] - 2026-05-21
 
 ### Added
