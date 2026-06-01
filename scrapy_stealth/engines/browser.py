@@ -372,5 +372,23 @@ class BrowserEngine(BaseEngine):
                 f"Browser engine connection failed fetching {request.url!r}"
             ) from exc
         except Exception as exc:
+            try:
+                from websockets.exceptions import ConnectionClosedError as _WsClosed
+
+                if isinstance(exc, _WsClosed):
+                    raise StealthConnectionError(
+                        f"Browser tab closed unexpectedly fetching {request.url!r}"
+                    ) from exc
+            except ImportError:
+                pass
+            try:
+                from nodriver.core.connection import ProtocolException as _ProtoExc
+
+                if isinstance(exc, _ProtoExc):
+                    raise StealthConnectionError(
+                        f"Browser target lost fetching {request.url!r}"
+                    ) from exc
+            except ImportError:
+                pass
             logger.exception("Browser engine request failed: %s", exc)
             return None
