@@ -4,6 +4,7 @@ import functools
 import os
 from typing import Any, Callable
 
+from ..utils.console import console
 from ..utils.logger import get_logger
 
 logger = get_logger()
@@ -67,9 +68,9 @@ def _save(response: Any, path: str | Callable | None) -> None:
         from datetime import datetime
 
         safe = re.sub(r"\W", "_", response.url)[:20].strip("_")
-        path = f"snapshot_{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
+        path = f"stealth_snapshots/{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
 
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "wb") as fh:
         fh.write(shot)
-    logger.debug("Snapshot saved → %s (%d bytes)", path, len(shot))
+    console.success(f"Snapshot saved → {os.path.abspath(path)}")
