@@ -32,6 +32,7 @@ _BROWSER_ARGS: list[str] = [
 _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.innerText : document.documentElement.innerHTML"
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 200"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
+_JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
 
 
 def _make_loop() -> asyncio.AbstractEventLoop:
@@ -73,6 +74,20 @@ async def _cdp_snapshot(page: Any) -> bytes | None:
         return base64.b64decode(data)
     except Exception:
         return None
+
+
+async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
+    """Poll until visible body text is substantial; silently continue on timeout."""
+    async def _poll() -> None:
+        while True:
+            if int(await page.evaluate(_JS_BODY_LEN)) > 500:
+                return
+            await asyncio.sleep(0.5)
+
+    try:
+        await asyncio.wait_for(_poll(), timeout=timeout)
+    except asyncio.TimeoutError:
+        pass
 
 
 def _is_browser_crash(exc: BaseException) -> bool:
@@ -238,6 +253,8 @@ class BrowserEngine(BaseEngine):
                     pass
                 await tab.get(_splash_url())
                 page = await tab.get(url)
+                await page.wait()
+                await _wait_for_content(page)
                 await asyncio.sleep(settle)
                 if await page.evaluate(_JS_IS_CHROME_ERROR):
                     raise StealthConnectionError(
@@ -253,6 +270,8 @@ class BrowserEngine(BaseEngine):
             assert self._tab_sem is not None
             async with self._tab_sem:
                 page = await self._browser.get(url, new_tab=True)
+                await page.wait()
+                await _wait_for_content(page)
                 await asyncio.sleep(settle)
                 if await page.evaluate(_JS_IS_CHROME_ERROR):
                     try:
