@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import re
 
 
 def patch_nodriver() -> None:
@@ -14,7 +15,7 @@ def patch_nodriver() -> None:
         if not network_py.exists():
             return
         data = network_py.read_bytes()
-        if b"\xb1" in data:
-            network_py.write_bytes(data.replace(b"\xb1", "\u00b1".encode()))
+        if re.search(b"(?<!\xc2)\xb1", data):
+            network_py.write_bytes(re.sub(b"(?<!\xc2)\xb1", b"\xc2\xb1", data))
     except Exception:
         pass
