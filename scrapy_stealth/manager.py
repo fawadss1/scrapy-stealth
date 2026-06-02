@@ -7,9 +7,7 @@ from .engines.basic import BasicEngine
 from .engines.browser import BrowserEngine
 from .engines.scrapy import ScrapyEngine
 from .engines.turbo import TurboEngine
-from .utils.logger import get_logger
-
-logger = get_logger()
+from .utils.console import console
 
 _STEALTH_DRIVERS: dict[str, type[BaseEngine]] = {
     "basic": BasicEngine,
@@ -32,11 +30,9 @@ class EngineManager:
             resolved = driver or config.get("STEALTH_DRIVER")
             if resolved not in self._stealth:
                 default = _DEFAULT_DRIVER
-                logger.error(
-                    "Unknown driver %r. Available drivers: %s. Falling back to %r.",
-                    resolved,
-                    ", ".join(f"'{k}'" for k in self._stealth),
-                    default,
+                console.warning(
+                    f"Unknown driver {resolved!r}. Available drivers: "
+                    f"{', '.join(repr(k) for k in self._stealth)}. Falling back to {default!r}."
                 )
                 return self._stealth[default]
             return self._stealth[resolved]

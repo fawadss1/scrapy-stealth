@@ -3,9 +3,7 @@ from __future__ import annotations
 from wreq.emulation import Emulation, Profile
 
 from ..config import config
-from .logger import get_logger
-
-logger = get_logger()
+from .console import console
 
 # Order matters: longer/more-specific prefixes must come before shorter ones.
 _PREFIXES: list[tuple[str, str]] = [
@@ -49,7 +47,7 @@ def _build_browser_map() -> dict[str, Profile]:
             continue
         for prefix, key_prefix in _PREFIXES:
             if attr.startswith(prefix):
-                version = attr[len(prefix) :]
+                version = attr[len(prefix):]
                 result[f"{key_prefix}_{version.lower()}"] = value
                 break
     for alias, target in _ALIASES.items():
@@ -66,8 +64,11 @@ def _resolve_basic(profile: str | Profile) -> Profile:
         return profile
     resolved = _BROWSER_MAP.get(profile)
     if resolved is None:
-        logger.warning("Unknown browser profile %r, falling back to default", profile)
-        return _BROWSER_MAP[config.get("DEFAULT_PROFILE")]
+        _default_profile = config.get("DEFAULT_PROFILE")
+        console.warning(
+            f"Unknown browser profile {profile!r}. Falling back to {_default_profile!r}"
+        )
+        return _BROWSER_MAP[_default_profile]
     return resolved
 
 
@@ -77,7 +78,9 @@ def _resolve_turbo(profile: str | Profile) -> str:
     for prefix, target in _TURBO_PREFIXES:
         if prefix in name_lower:
             return target
-    logger.warning("Unknown browser profile %r for turbo driver, using chrome131", name)
+    console.warning(
+        f"Unknown browser profile {name!r} for turbo driver, using chrome131"
+    )
     return "chrome131"
 
 

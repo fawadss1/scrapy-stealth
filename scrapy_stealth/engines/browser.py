@@ -13,6 +13,7 @@ from ..exceptions import (
     StealthConnectionError,
     StealthTimeoutError,
 )
+from ..utils.console import console
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.patch import patch_nodriver
@@ -204,7 +205,7 @@ class BrowserEngine(BaseEngine):
             self._thread.start()
             future = asyncio.run_coroutine_threadsafe(self._start(headless), loop)
             self._browser = future.result(timeout=30)
-            logger.info("Browser restarted successfully")
+            console.success("Browser restarted successfully")
 
     async def _do_fetch(
         self,
@@ -341,9 +342,8 @@ class BrowserEngine(BaseEngine):
                         self._request_count = 0
 
                 if should_restart:
-                    logger.info(
-                        "Proactively restarting browser after %d requests",
-                        config.get("BROWSER_RESTART_EVERY"),
+                    console.info(
+                        f"Proactively restarting browser after {config.get('BROWSER_RESTART_EVERY')} requests"
                     )
                     self._reset_browser(headless, self._browser)
 
@@ -358,7 +358,7 @@ class BrowserEngine(BaseEngine):
                         break
                     except (ConnectionRefusedError, RuntimeError) as exc:
                         if attempt == 0 and _is_browser_crash(exc):
-                            logger.warning("Browser crashed, restarting: %s", exc)
+                            console.warning(f"Browser crashed, restarting: {exc}")
                             self._reset_browser(headless, self._browser)
                         else:
                             raise
