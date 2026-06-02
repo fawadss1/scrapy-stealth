@@ -6,7 +6,9 @@ from curl_cffi import CurlHttpVersion
 from curl_cffi.requests import Session
 from scrapy.http import Request, Response
 
+from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError
+from ..utils.console import console
 from ..utils.headers import _FINGERPRINT_KEYS
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
@@ -62,6 +64,12 @@ class TurboEngine(BaseEngine):
             resp_headers = {
                 k: v for k, v in resp.headers.items() if k.lower() != "content-encoding"
             }
+            if AntiBotDetector.is_js_challenge_body(resp.content.decode(errors="replace")):
+                console.warning(
+                    f"JS challenge detected at {request.url!r} — "
+                    "switch to driver='browser' to bypass it."
+                )
+
             return StealthResponse(
                 request=request,
                 status=resp.status_code,

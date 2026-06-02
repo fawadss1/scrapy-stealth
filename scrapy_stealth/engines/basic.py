@@ -7,7 +7,9 @@ from scrapy.http import Request, Response
 from wreq.blocking import Client
 from wreq.proxy import Proxy
 
+from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError
+from ..utils.console import console
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
@@ -60,11 +62,18 @@ class BasicEngine(BaseEngine):
             method_fn = getattr(self._clients.get(ctx.http2), request.method.lower())
             resp = method_fn(request.url, **kwargs)
 
+            body = resp.bytes()
+            if AntiBotDetector.is_js_challenge_body(body.decode(errors="replace")):
+                console.warning(
+                    f"JS challenge detected at {request.url!r} — "
+                    "switch to driver='browser' to bypass it."
+                )
+
             return StealthResponse(
                 request=request,
                 status=resp.status.as_int(),
                 headers=resp.headers,
-                body=resp.bytes(),
+                body=body,
                 _flags=["basic"],
             )
 
