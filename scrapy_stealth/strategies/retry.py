@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from scrapy.http import Request, Response
 
-from ..utils.retry import build_retry, is_blocked
+from ..detectors.antibot import AntiBotDetector
+from ..utils.retry import build_retry
 
 
 class RetryHandler:
@@ -10,7 +11,7 @@ class RetryHandler:
 
     @staticmethod
     def should_retry(response: Response) -> bool:
-        return is_blocked(response)
+        return AntiBotDetector.is_blocked(response) and not AntiBotDetector.is_js_challenge(response)
 
     @staticmethod
     def build(request: Request) -> Request:
