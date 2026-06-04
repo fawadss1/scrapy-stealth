@@ -36,6 +36,31 @@ _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
 
 
+_xvfb_proc: Any = None  # module-level so only one Xvfb is started per process
+
+
+def _ensure_xvfb() -> None:
+    """Start Xvfb on Linux when no display is available so Chrome runs non-headless."""
+    import os
+    import subprocess
+
+    global _xvfb_proc
+    if sys.platform == "win32" or os.environ.get("DISPLAY"):
+        return
+    if _xvfb_proc is not None:
+        return  # already started
+    try:
+        _xvfb_proc = subprocess.Popen(
+            ["Xvfb", ":99", "-screen", "0", "1366x768x24"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        os.environ["DISPLAY"] = ":99"
+        logger.debug("Xvfb started on :99 — Chrome will run non-headless")
+    except FileNotFoundError:
+        pass  # Xvfb not installed; fall back to headless
+
+
 def _make_loop() -> asyncio.AbstractEventLoop:
     # ProactorEventLoop is required on Windows for Chrome subprocess management.
     if sys.platform == "win32":
@@ -167,6 +192,7 @@ class BrowserEngine(BaseEngine):
     async def _start(self, headless: bool) -> Any:
         import nodriver as _nd
 
+        _ensure_xvfb()
         _silence_browser()
         try:
             browser = await _nd.start(browser_args=self._build_args(headless))
@@ -250,6 +276,7 @@ class BrowserEngine(BaseEngine):
         if proxy:
             import nodriver as _nd
 
+            _ensure_xvfb()
             _silence_browser()
             try:
                 browser = await _nd.start(browser_args=self._build_args(headless))
