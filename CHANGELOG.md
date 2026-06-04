@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.6a2] - 2026-06-04
+
+### Added
+
+- **Xvfb virtual display support for Docker / Zyte**
+  On Linux without a `$DISPLAY`, the browser engine now automatically starts
+  `Xvfb :99` before launching Chrome. This lets Chrome run in non-headless mode
+  against a virtual framebuffer — identical to a real desktop session — which is
+  significantly harder for anti-bot systems to detect than `--headless=new`.
+  Falls back to headless silently if Xvfb is not installed.
+  Requires `apt-get install -y xvfb` in your Docker image.
+
+---
+
 ## [0.6.6a1] - 2026-06-04
 
 ### Added
