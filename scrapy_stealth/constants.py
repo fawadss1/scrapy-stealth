@@ -55,3 +55,8 @@ BROWSER_MAX_TABS: int = 10
 
 # Browser engine: restart Chrome after this many requests to prevent memory bloat.
 BROWSER_RESTART_EVERY: int = 200
+
+# Browser engine: disable Chrome sandbox (required when running as root, e.g. Docker).
+# None = auto-detect: sandbox is disabled automatically when the process runs as root on Linux.
+# Set True to force no-sandbox mode; False to keep sandbox even when running as root.
+BROWSER_NO_SANDBOX: bool | None = None
