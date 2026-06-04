@@ -58,7 +58,10 @@ def _ensure_xvfb() -> None:
         os.environ["DISPLAY"] = ":99"
         logger.debug("Xvfb started on :99 — Chrome will run non-headless")
     except FileNotFoundError:
-        pass  # Xvfb not installed; fall back to headless
+        console.warning(
+            "Xvfb not found — Chrome will run in headless mode (easier to detect). "
+            "Install it with: apt-get install -y xvfb"
+        )
 
 
 def _make_loop() -> asyncio.AbstractEventLoop:
