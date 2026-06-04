@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.6a1] - 2026-06-04
+
+### Added
+
+- **`BROWSER_NO_SANDBOX` config option**
+  New `BROWSER_NO_SANDBOX: bool | None` setting controls Chrome's sandbox mode.
+  Defaults to `None` (auto-detect): sandbox is disabled automatically when the process runs
+  as root on Linux (e.g. Zyte, Docker). Set `True` to force no-sandbox, `False` to keep
+  sandbox even as root. Configurable via `settings.py` (`BROWSER_NO_SANDBOX = True`) or
+  the `config` object.
+
+### Fixed
+
+- **Browser engine fails on Zyte / Docker (running as root)**
+  Chrome refuses to start without `--no-sandbox` when the process is root. The engine now
+  auto-detects root and adds both `--no-sandbox` and `--disable-dev-shm-usage` (required
+  in containers with limited `/dev/shm`).
+
+- **`headless=False` crashes in display-less environments**
+  When no `$DISPLAY` is set on Linux (Docker, Zyte, CI), the engine now silently overrides
+  `headless=False` to `headless=True`, preventing Chrome from crashing on startup.
+
+---
+
 ## [0.6.5] - 2026-06-01
 
 ### Fixed
