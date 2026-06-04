@@ -4,9 +4,7 @@ import functools
 import os
 from typing import Any, Callable
 
-from ..utils.logger import get_logger
-
-logger = get_logger()
+from ..utils.console import console
 
 
 def snapshot(fn: Callable | None = None, *, path: str | Callable | None = None) -> Any:
@@ -55,10 +53,9 @@ def _save(response: Any, path: str | Callable | None) -> None:
 
     shot: bytes | None = response.meta.get("snapshot_content")
     if not shot:
-        logger.error(
-            "snapshot decorator called on %s but no snapshot data found. "
-            "Set meta={'stealth': {'snapshot': True}} on the request.",
-            response.url,
+        console.error(
+            f"snapshot decorator called on {response.url!r} but no snapshot data found. "
+            "Set meta={'stealth': {'driver'='browser', 'snapshot': True}} on the request."
         )
         return
 
@@ -67,9 +64,11 @@ def _save(response: Any, path: str | Callable | None) -> None:
         from datetime import datetime
 
         safe = re.sub(r"\W", "_", response.url)[:20].strip("_")
-        path = f"snapshot_{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
+        path = (
+            f"stealth_snapshots/{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S%f')}.png"
+        )
 
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "wb") as fh:
         fh.write(shot)
-    logger.debug("Snapshot saved → %s (%d bytes)", path, len(shot))
+    console.success(f"Snapshot saved → {os.path.abspath(path)}")

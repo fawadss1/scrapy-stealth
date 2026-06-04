@@ -13,6 +13,7 @@ from ..exceptions import (
     StealthConnectionError,
     StealthTimeoutError,
 )
+from ..utils.console import console
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.patch import patch_nodriver
@@ -32,6 +33,7 @@ _BROWSER_ARGS: list[str] = [
 _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.innerText : document.documentElement.innerHTML"
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 200"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
+_JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
 
 
 def _make_loop() -> asyncio.AbstractEventLoop:
@@ -75,6 +77,21 @@ async def _cdp_snapshot(page: Any) -> bytes | None:
         return None
 
 
+async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
+    """Poll until visible body text is substantial; silently continue on timeout."""
+
+    async def _poll() -> None:
+        while True:
+            if int(await page.evaluate(_JS_BODY_LEN)) > 500:
+                return
+            await asyncio.sleep(0.5)
+
+    try:
+        await asyncio.wait_for(_poll(), timeout=timeout)
+    except asyncio.TimeoutError:
+        pass
+
+
 def _is_browser_crash(exc: BaseException) -> bool:
     return isinstance(exc, ConnectionRefusedError)
 
@@ -108,9 +125,20 @@ class BrowserEngine(BaseEngine):
         self._count_lock = threading.Lock()
 
     def _build_args(self, headless: bool) -> list[str]:
+        import os
+
         args = list(_BROWSER_ARGS)
+        # Force headless when there is no display (Docker any headless server).
+        if not headless and sys.platform != "win32" and not os.environ.get("DISPLAY"):
+            headless = True
         if headless:
             args.append("--headless=new")
+        no_sandbox = config.get("BROWSER_NO_SANDBOX")
+        if no_sandbox is None:
+            no_sandbox = hasattr(os, "getuid") and os.getuid() == 0
+        if no_sandbox:
+            args.append("--no-sandbox")
+            args.append("--disable-dev-shm-usage")
         return args
 
     @staticmethod
@@ -189,7 +217,7 @@ class BrowserEngine(BaseEngine):
             self._thread.start()
             future = asyncio.run_coroutine_threadsafe(self._start(headless), loop)
             self._browser = future.result(timeout=30)
-            logger.info("Browser restarted successfully")
+            console.success("Browser restarted successfully")
 
     async def _do_fetch(
         self,
@@ -238,6 +266,8 @@ class BrowserEngine(BaseEngine):
                     pass
                 await tab.get(_splash_url())
                 page = await tab.get(url)
+                await page.wait()
+                await _wait_for_content(page)
                 await asyncio.sleep(settle)
                 if await page.evaluate(_JS_IS_CHROME_ERROR):
                     raise StealthConnectionError(
@@ -253,6 +283,8 @@ class BrowserEngine(BaseEngine):
             assert self._tab_sem is not None
             async with self._tab_sem:
                 page = await self._browser.get(url, new_tab=True)
+                await page.wait()
+                await _wait_for_content(page)
                 await asyncio.sleep(settle)
                 if await page.evaluate(_JS_IS_CHROME_ERROR):
                     try:
@@ -322,9 +354,8 @@ class BrowserEngine(BaseEngine):
                         self._request_count = 0
 
                 if should_restart:
-                    logger.info(
-                        "Proactively restarting browser after %d requests",
-                        config.get("BROWSER_RESTART_EVERY"),
+                    console.info(
+                        f"Proactively restarting browser after {config.get('BROWSER_RESTART_EVERY')} requests"
                     )
                     self._reset_browser(headless, self._browser)
 
@@ -339,7 +370,7 @@ class BrowserEngine(BaseEngine):
                         break
                     except (ConnectionRefusedError, RuntimeError) as exc:
                         if attempt == 0 and _is_browser_crash(exc):
-                            logger.warning("Browser crashed, restarting: %s", exc)
+                            console.warning(f"Browser crashed, restarting: {exc}")
                             self._reset_browser(headless, self._browser)
                         else:
                             raise

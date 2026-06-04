@@ -10,6 +10,7 @@ from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
+from ..utils.console import console
 from ..utils.logger import get_logger
 from ..utils.meta import (
     STEALTH_KEY,
@@ -49,6 +50,8 @@ class StealthDownloaderMiddleware:
         )
         if driver := settings.get("STEALTH_DRIVER"):
             config.STEALTH_DRIVER = driver
+        if (no_sandbox := settings.get("BROWSER_NO_SANDBOX")) is not None:
+            config.BROWSER_NO_SANDBOX = no_sandbox
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     async def process_request(self, request: Request, spider: Any) -> Response | None:
@@ -66,7 +69,7 @@ class StealthDownloaderMiddleware:
 
             if _is_meta_enabled(request, "rotate_proxy"):
                 if not self._proxy_rotator.proxies:
-                    logger.error(
+                    console.error(
                         "rotate_proxy=True but STEALTH_PROXIES is not configured in settings. "
                         "Add STEALTH_PROXIES to your settings.py."
                     )
@@ -82,9 +85,9 @@ class StealthDownloaderMiddleware:
         if _get_meta_data(request, "snapshot", False) and not isinstance(
             engine, BrowserEngine
         ):
-            logger.error(
-                "snapshot=True requires driver='browser' but current driver is %r. Snapshot will be ignored.",
-                driver or config.get("STEALTH_DRIVER"),
+            console.warning(
+                f"snapshot=True requires driver='browser' but current driver is "
+                f"{(driver or config.get('STEALTH_DRIVER'))!r}. Snapshot will be ignored."
             )
 
         return await engine.fetch(request, spider)

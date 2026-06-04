@@ -480,7 +480,11 @@ class TestBrowserEngine:
                 else (
                     False
                     if "chrome-error" in js
-                    else "<html><body>browser ok</body></html>"
+                    else (
+                        10000
+                        if "trim().length" in js
+                        else "<html><body>browser ok</body></html>"
+                    )
                 )
             )
         )
@@ -523,7 +527,11 @@ class TestBrowserEngine:
                 else (
                     False
                     if "chrome-error" in js
-                    else "<html><body>stealth browser</body></html>"
+                    else (
+                        10000
+                        if "trim().length" in js
+                        else "<html><body>stealth browser</body></html>"
+                    )
                 )
             )
         )

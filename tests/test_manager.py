@@ -59,13 +59,11 @@ class TestEngineManager:
         engine = manager.get("stealth", "browsesr")
         assert isinstance(engine, BasicEngine)
 
-    def test_unknown_driver_logs_error(self, manager, caplog):
-        import logging
-
-        with caplog.at_level(logging.ERROR):
-            manager.get("stealth", "browsesr")
-        assert "browsesr" in caplog.text
-        assert "Falling back to" in caplog.text
+    def test_unknown_driver_logs_error(self, manager, capsys):
+        manager.get("stealth", "browsesr")
+        out = capsys.readouterr().out
+        assert "browsesr" in out
+        assert "Falling back to" in out
 
     def test_unknown_config_driver_falls_back_to_default(self, manager):
         original = config.STEALTH_DRIVER

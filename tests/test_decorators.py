@@ -107,9 +107,9 @@ class TestSnapshotDecorator:
                     pass
 
                 parse(None, _make_response(b"DATA", "https://test.com/page"))
-                pngs = [f for f in os.listdir(tmpdir) if f.endswith(".png")]
+                snap_dir = os.path.join(tmpdir, "stealth_snapshots")
+                pngs = [f for f in os.listdir(snap_dir) if f.endswith(".png")]
                 assert len(pngs) == 1
-                assert pngs[0].startswith("snapshot_")
             finally:
                 os.chdir(original_cwd)
 
@@ -146,11 +146,10 @@ class TestSnapshotDecorator:
         def parse(self, response):
             pass
 
-        with patch("scrapy_stealth.decorators.snapshot.logger") as mock_log:
+        with patch("scrapy_stealth.decorators.snapshot.console") as mock_console:
             parse(None, _make_response())
-            mock_log.error.assert_called_once()
-            assert "snapshot_content" not in mock_log.error.call_args.args[0] or True
-            assert "'snapshot': True" in mock_log.error.call_args.args[0]
+            mock_console.error.assert_called_once()
+            assert "'snapshot': True" in mock_console.error.call_args.args[0]
 
     def test_callback_still_runs_when_no_snapshot_data(self):
         called = []
@@ -159,7 +158,7 @@ class TestSnapshotDecorator:
         def parse(self, response):
             called.append(True)
 
-        with patch("scrapy_stealth.decorators.snapshot.logger"):
+        with patch("scrapy_stealth.decorators.snapshot.console"):
             parse(None, _make_response())
 
         assert called == [True]
@@ -177,7 +176,7 @@ class TestSnapshotDecorator:
             def parse(self, response):
                 pass
 
-            with patch("scrapy_stealth.decorators.snapshot.logger"):
+            with patch("scrapy_stealth.decorators.snapshot.console"):
                 parse(None, _make_response())
 
             assert not os.path.exists(out)

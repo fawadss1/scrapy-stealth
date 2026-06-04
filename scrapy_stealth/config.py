@@ -7,6 +7,7 @@ from .constants import (
     BLOCK_KEYWORDS,
     BROWSER_HEADLESS,
     BROWSER_MAX_TABS,
+    BROWSER_NO_SANDBOX,
     BROWSER_RESTART_EVERY,
     BROWSER_SETTLE_S,
     DEFAULT_ENGINE,
@@ -47,6 +48,7 @@ class StealthConfig:
     BROWSER_SETTLE_S: float = BROWSER_SETTLE_S
     BROWSER_MAX_TABS: int = BROWSER_MAX_TABS
     BROWSER_RESTART_EVERY: int = BROWSER_RESTART_EVERY
+    BROWSER_NO_SANDBOX: bool | None = BROWSER_NO_SANDBOX
 
     def get(self, key: str, default: Any = None) -> Any:
         """Return a config value by name, with an optional fallback."""
