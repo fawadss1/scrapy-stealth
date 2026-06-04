@@ -124,9 +124,20 @@ class BrowserEngine(BaseEngine):
         self._count_lock = threading.Lock()
 
     def _build_args(self, headless: bool) -> list[str]:
+        import os
+
         args = list(_BROWSER_ARGS)
+        # Force headless when there is no display (Docker any headless server).
+        if not headless and sys.platform != "win32" and not os.environ.get("DISPLAY"):
+            headless = True
         if headless:
             args.append("--headless=new")
+        no_sandbox = config.get("BROWSER_NO_SANDBOX")
+        if no_sandbox is None:
+            no_sandbox = hasattr(os, "getuid") and os.getuid() == 0
+        if no_sandbox:
+            args.append("--no-sandbox")
+            args.append("--disable-dev-shm-usage")
         return args
 
     @staticmethod

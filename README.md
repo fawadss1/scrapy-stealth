@@ -213,17 +213,18 @@ config.get("DEFAULT_ENGINE")          # "scrapy"
 config.get("MISSING_KEY", "default")  # "default"
 ```
 
-| Attribute          | Type             | Default                           | Description                                                                                                  |
-|--------------------|------------------|-----------------------------------|--------------------------------------------------------------------------------------------------------------|
-| `DEFAULT_ENGINE`   | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                     |
-| `DEFAULT_PROFILE`  | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                  |
-| `DEFAULT_TIMEOUT`  | `int`            | `30`                              | Request timeout in seconds                                                                                   |
-| `STEALTH_DRIVER`   | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER` |
-| `HTTP2`            | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                          |
-| `BLOCK_CODES`      | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                         |
-| `BLOCK_KEYWORDS`   | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                        |
-| `BROWSER_HEADLESS` | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                      |
-| `BROWSER_SETTLE_S` | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                  |
+| Attribute            | Type             | Default                           | Description                                                                                                  |
+|----------------------|------------------|-----------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`     | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                     |
+| `DEFAULT_PROFILE`    | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                  |
+| `DEFAULT_TIMEOUT`    | `int`            | `30`                              | Request timeout in seconds                                                                                   |
+| `STEALTH_DRIVER`     | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER` |
+| `HTTP2`              | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                          |
+| `BLOCK_CODES`        | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                         |
+| `BLOCK_KEYWORDS`     | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                        |
+| `BROWSER_HEADLESS`   | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                      |
+| `BROWSER_SETTLE_S`   | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                  |
+| `BROWSER_NO_SANDBOX` | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)     |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
@@ -303,6 +304,21 @@ from scrapy_stealth.config import config
 config.STEALTH_DRIVER   = "browser"
 config.BROWSER_HEADLESS = False   # more stealthy
 config.BROWSER_SETTLE_S = 6.0    # longer wait for JS
+```
+
+**Docker (running as root):**
+
+Chrome requires `--no-sandbox` when the process runs as root. `scrapy-stealth` detects this automatically,
+but you can also set it explicitly in `settings.py`:
+
+```python
+BROWSER_NO_SANDBOX = True   # force no-sandbox (Docker, any root environment)
+```
+
+Or via `config`:
+
+```python
+config.BROWSER_NO_SANDBOX = True
 ```
 
 > **Performance note**: the browser engine is slower than `basic`/`turbo` (~5-15s per page vs <2s).
