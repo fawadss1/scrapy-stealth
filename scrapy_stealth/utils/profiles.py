@@ -47,7 +47,7 @@ def _build_browser_map() -> dict[str, Profile]:
             continue
         for prefix, key_prefix in _PREFIXES:
             if attr.startswith(prefix):
-                version = attr[len(prefix):]
+                version = attr[len(prefix) :]
                 result[f"{key_prefix}_{version.lower()}"] = value
                 break
     for alias, target in _ALIASES.items():

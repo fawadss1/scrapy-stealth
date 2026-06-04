@@ -59,14 +59,14 @@ class TestSemanticMethods:
     @pytest.mark.parametrize(
         "method, symbol",
         [
-            ("info",     "ℹ️"),
-            ("success",  "✅"),
-            ("warning",  "⚠️"),
-            ("error",    "❌"),
+            ("info", "ℹ️"),
+            ("success", "✅"),
+            ("warning", "⚠️"),
+            ("error", "❌"),
             ("critical", "⛔"),
-            ("debug",    "🐞"),
-            ("wait",     "⏳"),
-            ("star",     "⭐"),
+            ("debug", "🐞"),
+            ("wait", "⏳"),
+            ("star", "⭐"),
         ],
     )
     def test_symbol_in_output(self, capsys, method, symbol):
@@ -87,7 +87,16 @@ class TestSemanticMethods:
 
     def test_each_method_produces_one_line(self, capsys):
         c = Console()
-        for method in ("info", "success", "warning", "error", "critical", "debug", "wait", "star"):
+        for method in (
+            "info",
+            "success",
+            "warning",
+            "error",
+            "critical",
+            "debug",
+            "wait",
+            "star",
+        ):
             getattr(c, method)("x")
             out = capsys.readouterr().out
             assert out.count("\n") == 1

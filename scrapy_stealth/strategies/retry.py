@@ -11,7 +11,9 @@ class RetryHandler:
 
     @staticmethod
     def should_retry(response: Response) -> bool:
-        return AntiBotDetector.is_blocked(response) and not AntiBotDetector.is_js_challenge(response)
+        return AntiBotDetector.is_blocked(
+            response
+        ) and not AntiBotDetector.is_js_challenge(response)
 
     @staticmethod
     def build(request: Request) -> Request:

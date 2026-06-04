@@ -3,14 +3,14 @@ from __future__ import annotations
 from ..constants import LOGGER_NAME
 
 _SYMBOLS: dict[str, str] = {
-    "info":     "ℹ️",
-    "success":  "✅",
-    "warning":  "⚠️",
-    "error":    "❌",
-    "debug":    "🐞",
+    "info": "ℹ️",
+    "success": "✅",
+    "warning": "⚠️",
+    "error": "❌",
+    "debug": "🐞",
     "critical": "⛔",
-    "wait":     "⏳",
-    "star":     "⭐",
+    "wait": "⏳",
+    "star": "⭐",
 }
 
 

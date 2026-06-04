@@ -64,7 +64,9 @@ class TurboEngine(BaseEngine):
             resp_headers = {
                 k: v for k, v in resp.headers.items() if k.lower() != "content-encoding"
             }
-            if AntiBotDetector.is_js_challenge_body(resp.content.decode(errors="replace")):
+            if AntiBotDetector.is_js_challenge_body(
+                resp.content.decode(errors="replace")
+            ):
                 console.warning(
                     f"JS challenge detected at {request.url!r} — "
                     "switch to driver='browser' to bypass it."

@@ -79,6 +79,7 @@ async def _cdp_snapshot(page: Any) -> bytes | None:
 
 async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
     """Poll until visible body text is substantial; silently continue on timeout."""
+
     async def _poll() -> None:
         while True:
             if int(await page.evaluate(_JS_BODY_LEN)) > 500:
