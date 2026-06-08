@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.6] - 2026-06-08
+
+### Added
+
+- **`BROWSER_EXECUTABLE_PATH` configuration option**
+  New setting allows specifying a custom Chrome/Chromium/Brave binary path for the browser engine.
+  Set via `config.BROWSER_EXECUTABLE_PATH` or `BROWSER_EXECUTABLE_PATH` in Scrapy settings.
+  Useful when Chrome is installed in a non-standard location or when using alternative browsers like Brave.
+  Proper error messages guide users to set the config if the binary is not found at the configured path.
+
+- **Unified logger output for browser engine**
+  Replaced direct `console` module usage with `logger` throughout the browser engine for consistent,
+  structured logging that integrates with Scrapy's logging system. All browser startup messages,
+  restarts, and warnings now appear in the standard `[scrapy-stealth]` log format.
+
+### Changed
+
+- **Browser engine — simplified stealth approach for improved detection evasion**
+  The `BrowserEngine` has been streamlined to focus on real Chrome behavior without aggressive JavaScript injection.
+  Removed the `_STEALTH_JS` injection (which masked CDP fingerprints and spoofed Windows platform attributes)
+  because anti-bot systems increasingly detect the injections themselves rather than the CDP presence.
+  
+  The engine now:
+  - Removes all custom user-agent forcing (uses Chrome's default)
+  - Eliminates JavaScript navigator property overrides (`webdriver`, `platform`, `plugins`, `languages`, WebGL, UAv4)
+  - Simplifies browser arguments to essential flags only (disables only `AutomationControlled` blink feature)
+  - Maintains Xvfb support for non-headless Chrome on Linux without `$DISPLAY`
+  - Keeps persistent browser reuse for performance
+  - Works identically in headless and non-headless modes
+  
+  Result: `headless=False` with real display/Xvfb now evades detection more effectively because
+  the browser appears "normal" to anti-bot systems rather than heavily modified.
+
+### Fixed
+
+- **Browser engine — bans when using `headless=False` with injection-based detection**
+  Anti-bot systems like Akamai specifically scan for the telltale patterns in commonly-used CDP stealth scripts.
+  Removing the injection eliminates a major detection surface while maintaining the evasion benefits of running
+  a real browser process.
+
+### Optimized
+
+- **Browser engine — code duplication eliminated**
+  Extracted `_start_browser()` helper method that centralizes browser startup and `BROWSER_EXECUTABLE_PATH`
+  error handling. `_start()` (persistent browser) and `_do_fetch()` (per-proxy browser) now call the same
+  code path, reducing maintenance burden and ensuring consistent behavior across non-proxy and proxy modes.
+
+---
+
 ## [0.6.6a2] - 2026-06-04
 
 ### Added
