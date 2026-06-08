@@ -191,6 +191,7 @@ config.BLOCK_CODES    |= {407}          # extend blocked status codes (|= keeps 
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
 config.BROWSER_HEADLESS = True          # browser driver: headless mode (False = visible window, more stealthy)
 config.BROWSER_SETTLE_S = 4.0          # browser driver: seconds to wait after navigation for JS to finish
+config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
 
 
 class MySpider(scrapy.Spider):
@@ -213,18 +214,19 @@ config.get("DEFAULT_ENGINE")          # "scrapy"
 config.get("MISSING_KEY", "default")  # "default"
 ```
 
-| Attribute            | Type             | Default                           | Description                                                                                                  |
-|----------------------|------------------|-----------------------------------|--------------------------------------------------------------------------------------------------------------|
-| `DEFAULT_ENGINE`     | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                     |
-| `DEFAULT_PROFILE`    | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                  |
-| `DEFAULT_TIMEOUT`    | `int`            | `30`                              | Request timeout in seconds                                                                                   |
-| `STEALTH_DRIVER`     | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER` |
-| `HTTP2`              | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                          |
-| `BLOCK_CODES`        | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                         |
-| `BLOCK_KEYWORDS`     | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                        |
-| `BROWSER_HEADLESS`   | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                      |
-| `BROWSER_SETTLE_S`   | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                  |
-| `BROWSER_NO_SANDBOX` | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)     |
+| Attribute                 | Type             | Default                           | Description                                                                                                                                              |
+|---------------------------|------------------|-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`          | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                                                                 |
+| `DEFAULT_PROFILE`         | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                                                              |
+| `DEFAULT_TIMEOUT`         | `int`            | `30`                              | Request timeout in seconds                                                                                                                               |
+| `STEALTH_DRIVER`          | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER`                                             |
+| `HTTP2`                   | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                                                                      |
+| `BLOCK_CODES`             | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                                                                     |
+| `BLOCK_KEYWORDS`          | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                    |
+| `BROWSER_HEADLESS`        | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                                                                  |
+| `BROWSER_SETTLE_S`        | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                              |
+| `BROWSER_NO_SANDBOX`      | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                 |
+| `BROWSER_EXECUTABLE_PATH` | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`) |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
@@ -306,19 +308,38 @@ config.BROWSER_HEADLESS = False   # more stealthy
 config.BROWSER_SETTLE_S = 6.0    # longer wait for JS
 ```
 
+**Custom browser binary (Brave, Chromium, or a non-default Chrome install):**
+
+```python
+from scrapy_stealth.config import config
+
+config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # Linux
+# config.BROWSER_EXECUTABLE_PATH = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"  # Windows
+```
+
+Or via `settings.py` / `custom_settings`:
+
+```python
+BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
+```
+
+> When `BROWSER_EXECUTABLE_PATH` is `None` (the default), `scrapy-stealth` auto-detects Google Chrome or Chromium from standard system paths. Set it explicitly when using Brave or a non-standard Chrome installation — a clear error is raised if the path does not exist.
+
 **Docker (running as root):**
 
 Chrome requires `--no-sandbox` when the process runs as root. `scrapy-stealth` detects this automatically,
 but you can also set it explicitly in `settings.py`:
 
 ```python
-BROWSER_NO_SANDBOX = True   # force no-sandbox (Docker, any root environment)
+BROWSER_NO_SANDBOX = True           # force no-sandbox (Docker, any root environment)
+BROWSER_EXECUTABLE_PATH = "/usr/bin/chromium"  # use Chromium instead of Chrome in Docker
 ```
 
 Or via `config`:
 
 ```python
 config.BROWSER_NO_SANDBOX = True
+config.BROWSER_EXECUTABLE_PATH = "/usr/bin/chromium"
 ```
 
 > **Performance note**: the browser engine is slower than `basic`/`turbo` (~5-15s per page vs <2s).

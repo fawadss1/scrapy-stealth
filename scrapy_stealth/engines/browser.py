@@ -43,6 +43,7 @@ def _ensure_xvfb() -> None:
     """Start Xvfb on Linux when no display is available so Chrome runs non-headless."""
     import os
     import subprocess
+    import time
 
     global _xvfb_proc
     if sys.platform == "win32" or os.environ.get("DISPLAY"):
@@ -51,11 +52,16 @@ def _ensure_xvfb() -> None:
         return  # already started
     try:
         _xvfb_proc = subprocess.Popen(
-            ["Xvfb", ":99", "-screen", "0", "1366x768x24"],
+            ["Xvfb", ":99", "-screen", "0", "1366x768x24", "-ac"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         os.environ["DISPLAY"] = ":99"
+        # Wait until Xvfb's Unix socket appears (up to 5 seconds) before Chrome connects.
+        for _ in range(50):
+            if os.path.exists("/tmp/.X11-unix/X99"):
+                break
+            time.sleep(0.1)
         logger.debug("Xvfb started on :99 — Chrome will run non-headless")
     except FileNotFoundError:
         console.warning(
@@ -161,13 +167,47 @@ class BrowserEngine(BaseEngine):
             headless = True
         if headless:
             args.append("--headless=new")
+        # Xvfb has no GPU — disable GPU acceleration so Chrome doesn't crash on startup.
+        if _xvfb_proc is not None:
+            args.append("--disable-gpu")
+            args.append("--disable-gpu-sandbox")
         no_sandbox = config.get("BROWSER_NO_SANDBOX")
         if no_sandbox is None:
             no_sandbox = hasattr(os, "getuid") and os.getuid() == 0
         if no_sandbox:
             args.append("--no-sandbox")
+            args.append("--disable-setuid-sandbox")
             args.append("--disable-dev-shm-usage")
         return args
+
+    def _is_root(self) -> bool:
+        import os
+
+        return hasattr(os, "getuid") and os.getuid() == 0
+
+    async def _start_browser(self, headless: bool) -> Any:
+        """Start a browser instance with proper error handling for executable path."""
+        import nodriver as _nd
+
+        executable_path: str | None = config.get("BROWSER_EXECUTABLE_PATH")
+        try:
+            kwargs: dict[str, Any] = {
+                "browser_args": self._build_args(headless),
+                "no_sandbox": self._is_root(),
+            }
+            if executable_path:
+                kwargs["browser_executable_path"] = executable_path
+            return await _nd.start(**kwargs)
+        except FileNotFoundError as exc:
+            if executable_path:
+                raise StealthBrowserNotFoundError(
+                    f"Browser binary not found at the configured path: {executable_path!r}. "
+                    "Check BROWSER_EXECUTABLE_PATH in your settings or config."
+                ) from exc
+            raise StealthBrowserNotFoundError(
+                "Browser binary not found. Install Google Chrome or Chromium, or set "
+                "BROWSER_EXECUTABLE_PATH to point to your browser binary (e.g. Brave)."
+            ) from exc
 
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
@@ -193,16 +233,10 @@ class BrowserEngine(BaseEngine):
             self._browser = future.result(timeout=30)
 
     async def _start(self, headless: bool) -> Any:
-        import nodriver as _nd
 
         _ensure_xvfb()
         _silence_browser()
-        try:
-            browser = await _nd.start(browser_args=self._build_args(headless))
-        except FileNotFoundError as exc:
-            raise StealthBrowserNotFoundError(
-                "Browser binary not found. Install Google Chrome or Chromium to use the browser engine."
-            ) from exc
+        browser = await self._start_browser(headless)
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
 
@@ -277,16 +311,8 @@ class BrowserEngine(BaseEngine):
         status: Any = 200
         shot: bytes | None = None
         if proxy:
-            import nodriver as _nd
-
-            _ensure_xvfb()
             _silence_browser()
-            try:
-                browser = await _nd.start(browser_args=self._build_args(headless))
-            except FileNotFoundError as exc:
-                raise StealthBrowserNotFoundError(
-                    "Browser binary not found. Install Google Chrome or Chromium to use the browser engine."
-                ) from exc
+            browser = await self._start_browser(headless)
             try:
                 initial_tab = browser.main_tab
                 tab = await browser.create_context(proxy_server=proxy)

@@ -52,6 +52,8 @@ class StealthDownloaderMiddleware:
             config.STEALTH_DRIVER = driver
         if (no_sandbox := settings.get("BROWSER_NO_SANDBOX")) is not None:
             config.BROWSER_NO_SANDBOX = no_sandbox
+        if (executable_path := settings.get("BROWSER_EXECUTABLE_PATH")) is not None:
+            config.BROWSER_EXECUTABLE_PATH = executable_path
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     async def process_request(self, request: Request, spider: Any) -> Response | None:
