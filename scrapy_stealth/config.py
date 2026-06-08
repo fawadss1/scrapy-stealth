@@ -5,6 +5,7 @@ from typing import Any, Final
 from .constants import (
     BLOCK_CODES,
     BLOCK_KEYWORDS,
+    BROWSER_EXECUTABLE_PATH,
     BROWSER_HEADLESS,
     BROWSER_MAX_TABS,
     BROWSER_NO_SANDBOX,
@@ -49,6 +50,7 @@ class StealthConfig:
     BROWSER_MAX_TABS: int = BROWSER_MAX_TABS
     BROWSER_RESTART_EVERY: int = BROWSER_RESTART_EVERY
     BROWSER_NO_SANDBOX: bool | None = BROWSER_NO_SANDBOX
+    BROWSER_EXECUTABLE_PATH: str | None = BROWSER_EXECUTABLE_PATH
 
     def get(self, key: str, default: Any = None) -> Any:
         """Return a config value by name, with an optional fallback."""

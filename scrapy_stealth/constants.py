@@ -60,3 +60,11 @@ BROWSER_RESTART_EVERY: int = 200
 # None = auto-detect: sandbox is disabled automatically when the process runs as root on Linux.
 # Set True to force no-sandbox mode; False to keep sandbox even when running as root.
 BROWSER_NO_SANDBOX: bool | None = None
+
+# Browser engine: path to the browser executable.
+# None = auto-detect: nodriver will locate Google Chrome / Chromium automatically.
+# Set to an explicit path to use a different browser binary (e.g. Brave, Chromium, or a
+# custom Chrome installation):
+#   config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
+#   config.BROWSER_EXECUTABLE_PATH = "/opt/chrome/chrome"
+BROWSER_EXECUTABLE_PATH: str | None = None
