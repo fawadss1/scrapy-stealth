@@ -13,6 +13,21 @@ from ..exceptions import (
     StealthConnectionError,
     StealthTimeoutError,
 )
+from ..utils.browser import (
+    _BROWSER_ARGS,
+    _JS_HTML,
+    _JS_IS_CHROME_ERROR,
+    _JS_STATUS,
+    _cdp_snapshot,
+    _ensure_xvfb,
+    _is_browser_crash,
+    _make_loop,
+    _silence_browser,
+    _splash_url,
+    _start_proxy_relay,
+    _wait_for_content,
+    _xvfb_proc,
+)
 from ..utils.console import console
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
@@ -23,121 +38,6 @@ from .base import BaseEngine
 patch_nodriver()
 
 logger = get_logger()
-
-_BROWSER_ARGS: list[str] = [
-    "--window-size=1366,768",
-    "--window-position=0,0",
-    "--disable-blink-features=AutomationControlled",
-]
-
-_JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.innerText : document.documentElement.innerHTML"
-_JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 200"
-_JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
-_JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
-
-
-_xvfb_proc: Any = None  # module-level so only one Xvfb is started per process
-
-
-def _ensure_xvfb() -> None:
-    """Start Xvfb on Linux when no display is available so Chrome runs non-headless."""
-    import os
-    import subprocess
-    import time
-
-    global _xvfb_proc
-    if sys.platform == "win32" or os.environ.get("DISPLAY"):
-        return
-    if _xvfb_proc is not None:
-        return  # already started
-    try:
-        _xvfb_proc = subprocess.Popen(
-            ["Xvfb", ":99", "-screen", "0", "1366x768x24", "-ac"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        os.environ["DISPLAY"] = ":99"
-        # Wait until Xvfb's Unix socket appears (up to 5 seconds) before Chrome connects.
-        for _ in range(50):
-            if os.path.exists("/tmp/.X11-unix/X99"):
-                break
-            time.sleep(0.1)
-        logger.debug("Xvfb started on :99 — Chrome will run non-headless")
-    except FileNotFoundError:
-        console.warning(
-            "Xvfb not found — Chrome will run in headless mode (easier to detect). "
-            "Install it with: apt-get install -y xvfb"
-        )
-
-
-def _make_loop() -> asyncio.AbstractEventLoop:
-    # ProactorEventLoop is required on Windows for Chrome subprocess management.
-    if sys.platform == "win32":
-        return asyncio.ProactorEventLoop()
-    return asyncio.new_event_loop()
-
-
-def _splash_url() -> str:
-    import json
-    import pathlib
-
-    try:
-        from importlib.metadata import distribution
-
-        raw = distribution("scrapy-stealth").read_text("direct_url.json")
-        if raw:
-            url = json.loads(raw).get("url", "")
-            if url.startswith("file:"):
-                source = pathlib.Path.from_uri(url)
-                if source.suffix == ".whl":
-                    source = source.parent.parent
-                logo = source / "docs" / "static" / "logo.png"
-                if logo.exists():
-                    return logo.as_uri()
-    except Exception:
-        pass
-    return "chrome://welcome"
-
-
-async def _cdp_snapshot(page: Any) -> bytes | None:
-    import base64
-
-    try:
-        import nodriver.cdp.page as _cdp_page
-
-        data: str = await page.send(_cdp_page.capture_screenshot())
-        return base64.b64decode(data)
-    except Exception:
-        return None
-
-
-async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
-    """Poll until visible body text is substantial; silently continue on timeout."""
-
-    async def _poll() -> None:
-        while True:
-            if int(await page.evaluate(_JS_BODY_LEN)) > 500:
-                return
-            await asyncio.sleep(0.5)
-
-    try:
-        await asyncio.wait_for(_poll(), timeout=timeout)
-    except asyncio.TimeoutError:
-        pass
-
-
-def _is_browser_crash(exc: BaseException) -> bool:
-    return isinstance(exc, ConnectionRefusedError)
-
-
-def _silence_browser() -> None:
-    import logging
-
-    import nodriver.core.util as _nd_util
-
-    logging.getLogger("nodriver").setLevel(logging.WARNING)
-    logging.getLogger("nodriver.core.util").setLevel(logging.CRITICAL)
-    _nd_util.print = lambda *a, **kw: None
 
 
 class BrowserEngine(BaseEngine):
@@ -185,18 +85,23 @@ class BrowserEngine(BaseEngine):
 
         return hasattr(os, "getuid") and os.getuid() == 0
 
-    async def _start_browser(self, headless: bool) -> Any:
+    async def _start_browser(
+        self, headless: bool, extra_args: list[str] | None = None
+    ) -> Any:
         """Start a browser instance with proper error handling for executable path."""
         import nodriver as _nd
 
         executable_path: str | None = config.get("BROWSER_EXECUTABLE_PATH")
         try:
             kwargs: dict[str, Any] = {
-                "browser_args": self._build_args(headless),
+                "browser_args": self._build_args(headless) + (extra_args or []),
                 "no_sandbox": self._is_root(),
             }
             if executable_path:
                 kwargs["browser_executable_path"] = executable_path
+                logger.debug(
+                    "Initializing browser with executable path: %s", executable_path
+                )
             return await _nd.start(**kwargs)
         except FileNotFoundError as exc:
             if executable_path:
@@ -312,10 +217,19 @@ class BrowserEngine(BaseEngine):
         shot: bytes | None = None
         if proxy:
             _silence_browser()
-            browser = await self._start_browser(headless)
+            # Route through a local auth-injecting relay: Chrome honours the
+            # browser-level --proxy-server flag (which create_context() inherits),
+            # while the upstream credentials stay out of the browser. A per-context
+            # proxy_server pointing at the relay does NOT route reliably here, and
+            # create_context can't carry user:pass auth itself.
+            relay_server, listen_port = await _start_proxy_relay(proxy)
+            browser = await self._start_browser(
+                headless,
+                extra_args=[f"--proxy-server=http://127.0.0.1:{listen_port}"],
+            )
             try:
                 initial_tab = browser.main_tab
-                tab = await browser.create_context(proxy_server=proxy)
+                tab = await browser.create_context()
                 try:
                     await initial_tab.close()
                 except Exception:
@@ -335,6 +249,7 @@ class BrowserEngine(BaseEngine):
                     shot = await _cdp_snapshot(page)
             finally:
                 browser.stop()
+                relay_server.close()
         else:
             assert self._tab_sem is not None
             async with self._tab_sem:
