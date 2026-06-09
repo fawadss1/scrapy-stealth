@@ -26,7 +26,6 @@ from ..utils.browser import (
     _splash_url,
     _start_proxy_relay,
     _wait_for_content,
-    _xvfb_proc,
 )
 from ..utils.console import console
 from ..utils.logger import get_logger
@@ -62,15 +61,14 @@ class BrowserEngine(BaseEngine):
         import os
 
         args = list(_BROWSER_ARGS)
-        # Force headless when there is no display (Docker any headless server).
-        if not headless and sys.platform != "win32" and not os.environ.get("DISPLAY"):
-            headless = True
         if headless:
             args.append("--headless=new")
-        # Xvfb has no GPU — disable GPU acceleration so Chrome doesn't crash on startup.
-        if _xvfb_proc is not None:
+        # On Linux the non-headless display is Xvfb, which has no GPU, so disable
+        # GPU acceleration or Chrome will hang/crash during GPU init on startup.
+        if sys.platform != "win32":
             args.append("--disable-gpu")
             args.append("--disable-gpu-sandbox")
+            args.append("--disable-software-rasterizer")
         no_sandbox = config.get("BROWSER_NO_SANDBOX")
         if no_sandbox is None:
             no_sandbox = hasattr(os, "getuid") and os.getuid() == 0
@@ -91,11 +89,19 @@ class BrowserEngine(BaseEngine):
         """Start a browser instance with proper error handling for executable path."""
         import nodriver as _nd
 
+        # When running non-headless, enforce a display: on Linux this starts Xvfb
+        # if needed and raises if Xvfb is unavailable, rather than silently
+        # falling back to detectable headless mode. No-op when headless=True.
+        _ensure_xvfb(headless)
+
         executable_path: str | None = config.get("BROWSER_EXECUTABLE_PATH")
         try:
             kwargs: dict[str, Any] = {
                 "browser_args": self._build_args(headless) + (extra_args or []),
-                "no_sandbox": self._is_root(),
+                "headless": headless,
+                # nodriver's start() takes `sandbox` (not `no_sandbox`); False adds
+                # --no-sandbox, required when running as root in a container.
+                "sandbox": not self._is_root(),
             }
             if executable_path:
                 kwargs["browser_executable_path"] = executable_path
@@ -139,7 +145,7 @@ class BrowserEngine(BaseEngine):
 
     async def _start(self, headless: bool) -> Any:
 
-        _ensure_xvfb()
+        _ensure_xvfb(headless)
         _silence_browser()
         browser = await self._start_browser(headless)
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))

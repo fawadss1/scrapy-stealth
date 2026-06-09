@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
+import subprocess
 import sys
+import time
 from typing import Any
 from urllib.parse import urlparse
 
-from ..utils.console import console
 from ..utils.logger import get_logger
 
 logger = get_logger()
@@ -77,13 +79,19 @@ def _is_browser_crash(exc: BaseException) -> bool:
     return isinstance(exc, ConnectionRefusedError)
 
 
-def _ensure_xvfb() -> None:
-    """Start Xvfb on Linux when no display is available so Chrome runs non-headless."""
-    import os
-    import subprocess
-    import time
+def _ensure_xvfb(headless: bool = False) -> None:
+    """Enforce a display when running non-headless.
+
+    When ``headless`` is True the browser needs no display, so this is a no-op.
+    When ``headless`` is False a display is required: the real desktop on Windows
+    or an existing DISPLAY, otherwise an Xvfb virtual display is started — with no
+    fallback to headless. If Xvfb is not installed we raise, so the browser is
+    never silently downgraded to (easily detectable) headless mode.
+    """
 
     global _xvfb_proc
+    if headless:
+        return
     if sys.platform == "win32" or os.environ.get("DISPLAY"):
         return
     if _xvfb_proc is not None:
@@ -94,18 +102,18 @@ def _ensure_xvfb() -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        os.environ["DISPLAY"] = ":99"
-        # Wait until Xvfb's Unix socket appears (up to 5 seconds) before Chrome connects.
-        for _ in range(50):
-            if os.path.exists("/tmp/.X11-unix/X99"):
-                break
-            time.sleep(0.1)
-        logger.debug("Xvfb started on :99 — Browser will run non-headless")
-    except FileNotFoundError:
-        console.warning(
-            "Xvfb not found — Browser will run in headless mode (easier to detect). "
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "Xvfb is required to run the browser non-headless but was not found. "
             "Install it with: apt-get install -y xvfb"
-        )
+        ) from exc
+    os.environ["DISPLAY"] = ":99"
+    # Wait until Xvfb's Unix socket appears (up to 5 seconds) before Chrome connects.
+    for _ in range(50):
+        if os.path.exists("/tmp/.X11-unix/X99"):
+            break
+        time.sleep(0.1)
+    logger.debug("Xvfb started on :99 — browser will run non-headless")
 
 
 async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
@@ -113,7 +121,7 @@ async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
 
     async def _poll() -> None:
         while True:
-            if int(await page.evaluate(_JS_BODY_LEN)) > 500:
+            if int(await page.evaluate(_JS_BODY_LEN)) > 2500:
                 return
             await asyncio.sleep(0.5)
 
