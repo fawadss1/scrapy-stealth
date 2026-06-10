@@ -43,8 +43,12 @@ class BrowserEngine(BaseEngine):
     """
     Chrome engine via DevTools Protocol (no WebDriver overhead).
 
-    - No proxy: one persistent browser; each request opens a new tab then closes it.
-    - With proxy: fresh browser per request so every request gets a new exit IP.
+    - No proxy: one persistent browser; each request opens a new tab (context)
+      then closes it.
+    - With proxy: one persistent browser started with ``--proxy-server`` pointing
+      at a local auth-injecting relay; each request opens a fresh browser context
+      (isolated session) then closes it.  This replaces the old per-request
+      browser-spawn behaviour so only one Chrome process is ever running.
     """
 
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
@@ -57,14 +61,17 @@ class BrowserEngine(BaseEngine):
         self._request_count: int = 0
         self._count_lock = threading.Lock()
 
-    def _build_args(self, headless: bool) -> list[str]:
+        # Proxy-relay state — created once when the first proxied request arrives.
+        self._relay_server: Any = None  # asyncio.AbstractServer
+        self._relay_port: int | None = None
+        self._relay_lock = threading.Lock()
+
+    def _build_args(self, headless: bool, proxy_port: int | None = None) -> list[str]:
         import os
 
         args = list(_BROWSER_ARGS)
         if headless:
             args.append("--headless=new")
-        # On Linux the non-headless display is Xvfb, which has no GPU, so disable
-        # GPU acceleration or Chrome will hang/crash during GPU init on startup.
         if sys.platform != "win32":
             args.append("--disable-gpu")
             args.append("--disable-gpu-sandbox")
@@ -76,6 +83,8 @@ class BrowserEngine(BaseEngine):
             args.append("--no-sandbox")
             args.append("--disable-setuid-sandbox")
             args.append("--disable-dev-shm-usage")
+        if proxy_port is not None:
+            args.append(f"--proxy-server=http://127.0.0.1:{proxy_port}")
         return args
 
     def _is_root(self) -> bool:
@@ -89,9 +98,6 @@ class BrowserEngine(BaseEngine):
         """Start a browser instance with proper error handling for executable path."""
         import nodriver as _nd
 
-        # When running non-headless, enforce a display: on Linux this starts Xvfb
-        # if needed and raises if Xvfb is unavailable, rather than silently
-        # falling back to detectable headless mode. No-op when headless=True.
         _ensure_xvfb(headless)
 
         executable_path: str | None = config.get("BROWSER_EXECUTABLE_PATH")
@@ -99,8 +105,6 @@ class BrowserEngine(BaseEngine):
             kwargs: dict[str, Any] = {
                 "browser_args": self._build_args(headless) + (extra_args or []),
                 "headless": headless,
-                # nodriver's start() takes `sandbox` (not `no_sandbox`); False adds
-                # --no-sandbox, required when running as root in a container.
                 "sandbox": not self._is_root(),
             }
             if executable_path:
@@ -123,7 +127,7 @@ class BrowserEngine(BaseEngine):
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
         if isinstance(context.get("exception"), ConnectionRefusedError):
-            return  # suppress nodriver background CDP polling noise on restart
+            return
         loop.default_exception_handler(context)
 
     def _run_loop(self) -> None:
@@ -132,7 +136,38 @@ class BrowserEngine(BaseEngine):
         self._loop.set_exception_handler(self._loop_exception_handler)
         self._loop.run_forever()
 
-    def _ensure_browser(self, headless: bool) -> None:
+    def _ensure_relay(self, proxy: str) -> int:
+        """
+        Start the auth-injecting relay once and return its listen port.
+        Subsequent calls return the cached port without restarting.
+        The relay runs on the engine's own event loop so it stays alive
+        for the lifetime of the browser.
+        """
+        with self._relay_lock:
+            if self._relay_port is not None:
+                return self._relay_port
+            assert self._loop is not None
+            future = asyncio.run_coroutine_threadsafe(
+                _start_proxy_relay(proxy), self._loop
+            )
+            server, port = future.result(timeout=10)
+            self._relay_server = server
+            self._relay_port = port
+            logger.debug("Proxy relay started on 127.0.0.1:%d", port)
+            return port
+
+    async def _stop_relay(self) -> None:
+        if self._relay_server is not None:
+            self._relay_server.close()
+            self._relay_server = None
+            self._relay_port = None
+
+    def _ensure_browser(self, headless: bool, proxy: str | None = None) -> None:
+        """
+        Ensure the persistent browser is running.  When a proxy is provided the
+        browser is started with ``--proxy-server`` pointing at the local relay;
+        without a proxy the browser connects directly.
+        """
         with self._lock:
             if self._browser is not None:
                 return
@@ -140,14 +175,29 @@ class BrowserEngine(BaseEngine):
             self._loop = loop
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
-            future = asyncio.run_coroutine_threadsafe(self._start(headless), loop)
+            future = asyncio.run_coroutine_threadsafe(
+                self._start(headless, proxy=proxy), loop
+            )
             self._browser = future.result(timeout=30)
 
-    async def _start(self, headless: bool) -> Any:
-
+    async def _start(self, headless: bool, proxy: str | None = None) -> Any:
         _ensure_xvfb(headless)
         _silence_browser()
-        browser = await self._start_browser(headless)
+
+        proxy_port: int | None = None
+        if proxy:
+            # Start relay first; browser args reference the port.
+            server, proxy_port = await _start_proxy_relay(proxy)
+            self._relay_server = server
+            self._relay_port = proxy_port
+            logger.debug("Proxy relay started on 127.0.0.1:%d", proxy_port)
+
+        browser = await self._start_browser(
+            headless,
+            extra_args=[f"--proxy-server=http://127.0.0.1:{proxy_port}"]
+            if proxy_port is not None
+            else None,
+        )
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
 
@@ -163,14 +213,20 @@ class BrowserEngine(BaseEngine):
             loop.call_soon_threadsafe(loop.stop)
 
     async def _shutdown(self) -> None:
+        await self._stop_relay()
         if self._browser is not None:
             self._browser.stop()
             self._browser = None
 
-    def _reset_browser(self, headless: bool, dead_browser: Any = None) -> None:
+    def _reset_browser(
+        self,
+        headless: bool,
+        dead_browser: Any = None,
+        proxy: str | None = None,
+    ) -> None:
         with self._lock:
             if dead_browser is not None and self._browser is not dead_browser:
-                return  # another thread already restarted
+                return
             if self._browser is not None:
                 try:
                     self._browser.stop()
@@ -178,6 +234,16 @@ class BrowserEngine(BaseEngine):
                     pass
                 self._browser = None
             self._tab_sem = None
+
+            # Tear down the old relay so a fresh one is created with the new loop.
+            if self._relay_server is not None:
+                try:
+                    self._relay_server.close()
+                except Exception:
+                    pass
+                self._relay_server = None
+                self._relay_port = None
+
             if self._loop is not None:
                 try:
                     self._loop.call_soon_threadsafe(self._loop.stop)
@@ -185,11 +251,14 @@ class BrowserEngine(BaseEngine):
                     pass
                 self._loop = None
             self._thread = None
+
             loop = _make_loop()
             self._loop = loop
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
-            future = asyncio.run_coroutine_threadsafe(self._start(headless), loop)
+            future = asyncio.run_coroutine_threadsafe(
+                self._start(headless, proxy=proxy), loop
+            )
             self._browser = future.result(timeout=30)
             console.success("Browser restarted successfully")
 
@@ -197,84 +266,41 @@ class BrowserEngine(BaseEngine):
         self,
         url: str,
         settle: float,
-        headless: bool,
-        proxy: str | None,
         snapshot: bool = False,
     ) -> tuple[bytes, int, bytes | None]:
         """
-        Fetches data from a specified URL asynchronously, allowing for the use of a proxy, headless browser,
-        and optional snapshot capture. Adjusts to settle time before retrieving the webpage content and status.
+        Open a new browser context (isolated tab), fetch *url*, then close
+        the context.  The caller is responsible for holding ``_tab_sem`` before
+        calling this coroutine so concurrency is capped at ``BROWSER_MAX_TABS``.
 
-        Parameters:
-            url (str): The URL to fetch data from.
-            settle (float): The amount of time to wait before retrieving content.
-            headless (bool): Whether to use a headless browser for the operation.
-            proxy (str | None): The proxy server to use for the request, or None to not use a proxy.
-            snapshot (bool): Optional; Defaults to False. Determines if a snapshot of the page should
-                be captured.
-
-        Returns:
-            tuple[bytes, int, bytes | None]: A tuple containing the HTML content of the page in bytes,
-            the HTTP status code as an integer, and optionally the snapshot data in bytes (or None
-            if no snapshot is taken).
+        Proxy credentials are already baked into the browser via the relay
+        started in ``_start()``, so no special handling is needed here.
         """
         html: Any = ""
         status: Any = 200
         shot: bytes | None = None
-        if proxy:
-            _silence_browser()
-            # Route through a local auth-injecting relay: Chrome honours the
-            # browser-level --proxy-server flag (which create_context() inherits),
-            # while the upstream credentials stay out of the browser. A per-context
-            # proxy_server pointing at the relay does NOT route reliably here, and
-            # create_context can't carry user:pass auth itself.
-            relay_server, listen_port = await _start_proxy_relay(proxy)
-            browser = await self._start_browser(
-                headless,
-                extra_args=[f"--proxy-server=http://127.0.0.1:{listen_port}"],
-            )
+
+        assert self._tab_sem is not None
+
+        async with self._tab_sem:
+            # create_context() opens an isolated browsing context (like an
+            # incognito window) — separate cookies/storage, same process.
+            page = await self._browser.get(url, new_tab=True)
             try:
-                initial_tab = browser.main_tab
-                tab = await browser.create_context()
-                try:
-                    await initial_tab.close()
-                except Exception:
-                    pass
-                await tab.get(_splash_url())
-                page = await tab.get(url)
                 await page.wait()
                 await _wait_for_content(page)
                 await asyncio.sleep(settle)
+
                 if await page.evaluate(_JS_IS_CHROME_ERROR):
                     raise StealthConnectionError(
                         f"Browser engine connection failed fetching {url!r}"
                     )
+
                 html = await page.evaluate(_JS_HTML)
                 status = await page.evaluate(_JS_STATUS)
                 if snapshot:
                     shot = await _cdp_snapshot(page)
             finally:
-                browser.stop()
-                relay_server.close()
-        else:
-            assert self._tab_sem is not None
-            async with self._tab_sem:
-                page = await self._browser.get(url, new_tab=True)
-                await page.wait()
-                await _wait_for_content(page)
-                await asyncio.sleep(settle)
-                if await page.evaluate(_JS_IS_CHROME_ERROR):
-                    try:
-                        await page.close()
-                    except Exception:
-                        pass
-                    raise StealthConnectionError(
-                        f"Browser engine connection failed fetching {url!r}"
-                    )
-                html = await page.evaluate(_JS_HTML)
-                status = await page.evaluate(_JS_STATUS)
-                if snapshot:
-                    shot = await _cdp_snapshot(page)
                 try:
                     await page.close()
                 except Exception:
@@ -299,58 +325,46 @@ class BrowserEngine(BaseEngine):
                 settle,
             )
 
+            # Ensure the single persistent browser is up (proxy-aware).
+            self._ensure_browser(headless=headless, proxy=ctx.proxy or None)
+
+            # Proactive restart every N requests to prevent Chrome memory bloat.
+            with self._count_lock:
+                self._request_count += 1
+                should_restart = self._request_count >= config.get(
+                    "BROWSER_RESTART_EVERY"
+                )
+                if should_restart:
+                    self._request_count = 0
+
+            if should_restart:
+                console.info(
+                    f"Proactively restarting browser after "
+                    f"{config.get('BROWSER_RESTART_EVERY')} requests"
+                )
+                self._reset_browser(headless, self._browser, proxy=ctx.proxy or None)
+
             body: bytes = b""
             status: int = 200
             shot: bytes | None = None
 
-            if ctx.proxy:
-                loop = _make_loop()
+            for attempt in range(2):
                 try:
-                    body, status, shot = loop.run_until_complete(
-                        self._do_fetch(request.url, settle, headless, ctx.proxy, snap)
+                    assert self._loop is not None
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._do_fetch(request.url, settle, snap),
+                        self._loop,
                     )
-                finally:
-                    pending = asyncio.all_tasks(loop)
-                    if pending:
-                        for task in pending:
-                            task.cancel()
-                        loop.run_until_complete(
-                            asyncio.gather(*pending, return_exceptions=True)
+                    body, status, shot = future.result(timeout=ctx.timeout)
+                    break
+                except (ConnectionRefusedError, RuntimeError) as exc:
+                    if attempt == 0 and _is_browser_crash(exc):
+                        console.warning(f"Browser crashed, restarting: {exc}")
+                        self._reset_browser(
+                            headless, self._browser, proxy=ctx.proxy or None
                         )
-                    loop.close()
-            else:
-                self._ensure_browser(headless=headless)
-
-                # Proactive restart every N requests to prevent Chrome memory bloat.
-                with self._count_lock:
-                    self._request_count += 1
-                    should_restart = self._request_count >= config.get(
-                        "BROWSER_RESTART_EVERY"
-                    )
-                    if should_restart:
-                        self._request_count = 0
-
-                if should_restart:
-                    console.info(
-                        f"Proactively restarting browser after {config.get('BROWSER_RESTART_EVERY')} requests"
-                    )
-                    self._reset_browser(headless, self._browser)
-
-                for attempt in range(2):
-                    try:
-                        assert self._loop is not None
-                        future = asyncio.run_coroutine_threadsafe(
-                            self._do_fetch(request.url, settle, headless, None, snap),
-                            self._loop,
-                        )
-                        body, status, shot = future.result(timeout=ctx.timeout)
-                        break
-                    except (ConnectionRefusedError, RuntimeError) as exc:
-                        if attempt == 0 and _is_browser_crash(exc):
-                            console.warning(f"Browser crashed, restarting: {exc}")
-                            self._reset_browser(headless, self._browser)
-                        else:
-                            raise
+                    else:
+                        raise
 
             logger.debug(
                 "Browser engine fetched %s  status=%s  size=%d bytes",
