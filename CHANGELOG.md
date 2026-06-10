@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.7] - 2026-06-10
+
+### Changed
+
+- **Browser engine — single persistent browser for both proxy and non-proxy modes**
+  Previously, proxy mode spawned a fresh Chrome process for every request and tore it down
+  immediately after, making concurrent proxy crawls extremely expensive. The engine now runs
+  one persistent browser regardless of whether a proxy is configured.
+  A local auth-injecting relay (`_start_proxy_relay`) is started once at browser initialisation
+  and the browser is launched with `--proxy-server=http://127.0.0.1:<relay_port>` baked in.
+  Each request opens an isolated tab (via `new_tab=True`) and closes it when done — identical
+  to non-proxy mode. Proxy credentials are injected at the TCP level by the relay and never
+  touch the browser.
+  Impact: one Chrome process per spider instead of one per request; dramatically lower memory
+  and startup overhead on proxy-enabled crawls.
+- **Browser engine — splash screen loaded once at startup, not per request**
+  The project logo / `chrome://welcome` splash was previously loaded in every request tab as a
+  warm-up step before navigating to the real target. It is now loaded once on `browser.main_tab`
+  immediately after the browser starts (`_start()`), warming up the renderer, stealth patches,
+  and (when proxied) the relay tunnel — before any spider request arrives. Request tabs navigate
+  directly to the target URL with no splash overhead.
+- **Browser engine — early return on non-2xx responses**
+  `_do_fetch` now reads the HTTP status code before waiting for page content. Responses in the
+  2xx range receive the full `_wait_for_content()` + settle delay as before. Non-2xx responses
+  (4xx, 5xx) skip the content wait and return immediately with whatever the browser has already
+  rendered, avoiding up to 10 seconds of unnecessary polling on error pages.
+
+### Added
+
+- **`_wait_for_status(page, timeout=8.0)` utility**
+  The Navigation Timing API (`performance.getEntriesByType('navigation')[0].responseStatus`)
+  is written asynchronously by Chrome and can return `0` immediately after `page.wait()`,
+  especially through a proxy or after redirects. The new helper polls every 250 ms until a
+  non-zero status is available, then returns it. If the entry never populates within 8 seconds
+  (rare SPA edge case) it falls back to `200` — the safest assumption when the page loaded but
+  left no timing entry. `_JS_STATUS` default changed from `?? 200` to `?? 0` to expose the
+  "not ready" state to the poller rather than masking it.
+
+### Fixed
+
+- **Browser engine — `ConnectionResetError` / `BrokenPipeError` log noise on Windows**
+  On Windows with Python 3.13+, closing a Chrome tab or stopping the browser triggers
+  `_ProactorBasePipeTransport._call_connection_lost()` which raises
+  `ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the
+  remote host`. This is harmless — the connection is already gone — but asyncio logged it as
+  an unhandled exception on every tab close. The loop exception handler now suppresses
+  `ConnectionResetError`, `BrokenPipeError`, and raw `OSError` with `winerror == 10054`
+  (the unwrapped variant seen on some Python 3.14 builds).
+- **Browser engine — relay and tab-semaphore torn down correctly on browser restart**
+  `_reset_browser()` now closes the proxy relay server and clears `_relay_server` /
+  `_relay_port` before spinning up a new event loop, so the restarted browser gets a fresh
+  relay rather than pointing at a dead port.
+
 ## [0.6.6] - 2026-06-08
 
 ### Added
@@ -28,15 +81,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `BrowserEngine` has been streamlined to focus on real Chrome behavior without aggressive JavaScript injection.
   Removed the `_STEALTH_JS` injection (which masked CDP fingerprints and spoofed Windows platform attributes)
   because anti-bot systems increasingly detect the injections themselves rather than the CDP presence.
-  
+
   The engine now:
-  - Removes all custom user-agent forcing (uses Chrome's default)
-  - Eliminates JavaScript navigator property overrides (`webdriver`, `platform`, `plugins`, `languages`, WebGL, UAv4)
-  - Simplifies browser arguments to essential flags only (disables only `AutomationControlled` blink feature)
-  - Maintains Xvfb support for non-headless Chrome on Linux without `$DISPLAY`
-  - Keeps persistent browser reuse for performance
-  - Works identically in headless and non-headless modes
-  
+    - Removes all custom user-agent forcing (uses Chrome's default)
+    - Eliminates JavaScript navigator property overrides (`webdriver`, `platform`, `plugins`, `languages`, WebGL, UAv4)
+    - Simplifies browser arguments to essential flags only (disables only `AutomationControlled` blink feature)
+    - Maintains Xvfb support for non-headless Chrome on Linux without `$DISPLAY`
+    - Keeps persistent browser reuse for performance
+    - Works identically in headless and non-headless modes
+
   Result: `headless=False` with real display/Xvfb now evades detection more effectively because
   the browser appears "normal" to anti-bot systems rather than heavily modified.
 
@@ -109,8 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Browser engine: handle tab/browser closed mid-request**
   Two new exception types are now caught and raised as `StealthConnectionError` instead of
   logging as unhandled errors:
-  - `ConnectionClosedError` — WebSocket dropped (tab closed while loading)
-  - `ProtocolException` — CDP target no longer found (tab/context destroyed)
+    - `ConnectionClosedError` — WebSocket dropped (tab closed while loading)
+    - `ProtocolException` — CDP target no longer found (tab/context destroyed)
 
 ---
 
@@ -199,7 +252,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bypassing Scrapy's retry middleware. Three typed exceptions now replace raw library errors:
 
   | Exception                     | Inherits from                 | Retried by Scrapy                           | Raised by                                                                             |
-  |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
+        |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
   | `StealthTimeoutError`         | `DownloadTimeoutError`        | ✅ (in default `RETRY_EXCEPTIONS`)           | All engines on request timeout                                                        |
   | `StealthConnectionError`      | `ConnectionError` → `OSError` | ✅ (`OSError` in default `RETRY_EXCEPTIONS`) | `BasicEngine` / `TurboEngine` on DNS or network failure; `BrowserEngine` on `OSError` |
   | `StealthBrowserNotFoundError` | `StealthException` only       | ❌ (config error, retrying is pointless)     | `BrowserEngine` when Chrome/Chromium binary is missing                                |
@@ -256,15 +309,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Zyte (ScrapyCloud) — `ValueError: invalid literal for int()` on `download_latency`**
-  `BaseEngine._execute_timed` stored download latency as a formatted string (`"0.18s"`) instead of a numeric value. Zyte's `sh_scrapy` pipe writer calls `int(duration)` and expects a plain number; the string caused a `ValueError` at response write time, and the string was repeated across concurrent/retried requests making it unreadable.
+  `BaseEngine._execute_timed` stored download latency as a formatted string (`"0.18s"`) instead of a numeric value. Zyte's `sh_scrapy`
+  pipe writer calls `int(duration)` and expects a plain number; the string caused a `ValueError` at response write time, and the string
+  was repeated across concurrent/retried requests making it unreadable.
   `download_latency` is now stored as a plain `float` (e.g. `0.18`), consistent with Scrapy's own HTTP downloader.
 
 ### Added
 
 - **`utils/meta_info.py` — `PackageMetadata` utility**
-  Frozen dataclass that reads `name`, `version`, `author`, `email`, `license`, `summary`, and `homepage` from the installed distribution metadata via `importlib.metadata`.
-  Parses `"Name <email>"` author strings with a regex, picks the first available URL field, and falls back to compile-time defaults when the package is not installed (e.g. running from source without `pip install -e .`).
-  A module-level singleton `_pkg_meta` is resolved once at import time; `__init__.py` now derives `__version__`, `__author__`, and `__license__` from it. `PackageMetadata` is exported in `__all__`.
+  Frozen dataclass that reads `name`, `version`, `author`, `email`, `license`, `summary`, and `homepage` from the installed
+  distribution metadata via `importlib.metadata`.
+  Parses `"Name <email>"` author strings with a regex, picks the first available URL field, and falls back to compile-time defaults
+  when the package is not installed (e.g. running from source without `pip install -e .`).
+  A module-level singleton `_pkg_meta` is resolved once at import time; `__init__.py` now derives `__version__`, `__author__`, and
+  `__license__` from it. `PackageMetadata` is exported in `__all__`.
 
 ---
 
@@ -273,40 +331,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Browser engine — `StopIteration` / `RuntimeError` crash under concurrent load**
-  `browser.get(url)` without `new_tab=True` reused the persistent main tab; after `page.close()` the main tab was destroyed, so the next call to `browser.get()` found no `"page"` targets and raised `StopIteration` inside a coroutine (→ `RuntimeError: coroutine raised StopIteration`).
-  All fetches now use `browser.get(url, new_tab=True)` — each request gets its own isolated tab, the main tab stays alive permanently, and `StopIteration` can never occur.
+  `browser.get(url)` without `new_tab=True` reused the persistent main tab; after `page.close()` the main tab was destroyed, so the
+  next call to `browser.get()` found no `"page"` targets and raised `StopIteration` inside a coroutine (→
+  `RuntimeError: coroutine raised StopIteration`).
+  All fetches now use `browser.get(url, new_tab=True)` — each request gets its own isolated tab, the main tab stays alive permanently,
+  and `StopIteration` can never occur.
 
 - **Browser engine — noisy `[asyncio] ERROR: Task exception was never retrieved` spam**
-  nodriver fires background `update_targets()` tasks on a timer; when Chrome restarts these tasks raise `ConnectionRefusedError` which asyncio logs as unhandled task exceptions.
+  nodriver fires background `update_targets()` tasks on a timer; when Chrome restarts these tasks raise `ConnectionRefusedError` which
+  asyncio logs as unhandled task exceptions.
   A custom loop exception handler now suppresses `ConnectionRefusedError` from the browser event loop, eliminating the log noise.
 
 - **Browser engine — automatic crash recovery**
-  On `ConnectionRefusedError` (Chrome process died) the engine now restarts the browser and retries the current request once before giving up.
-  A dead-browser guard (`dead_browser` parameter on `_reset_browser`) prevents multiple concurrent threads from each triggering a redundant restart.
+  On `ConnectionRefusedError` (Chrome process died) the engine now restarts the browser and retries the current request once before
+  giving up.
+  A dead-browser guard (`dead_browser` parameter on `_reset_browser`) prevents multiple concurrent threads from each triggering a
+  redundant restart.
 
 ### Added
 
-- **`BROWSER_MAX_TABS`** (default `10`) — caps the number of Chrome tabs open simultaneously via an asyncio `Semaphore`, preventing Chrome from being overwhelmed when Scrapy fires many concurrent requests.
+- **`BROWSER_MAX_TABS`** (default `10`) — caps the number of Chrome tabs open simultaneously via an asyncio `Semaphore`, preventing
+  Chrome from being overwhelmed when Scrapy fires many concurrent requests.
   Configurable via `config.BROWSER_MAX_TABS` or `constants.BROWSER_MAX_TABS`.
 
-- **`BROWSER_RESTART_EVERY`** (default `200`) — proactively restarts Chrome every N requests to prevent memory bloat on long high-volume runs.
+- **`BROWSER_RESTART_EVERY`** (default `200`) — proactively restarts Chrome every N requests to prevent memory bloat on long
+  high-volume runs.
   Configurable via `config.BROWSER_RESTART_EVERY` or `constants.BROWSER_RESTART_EVERY`.
 
 - **`utils/session.py` — `SessionCache[K, V]`** — generic lazy per-thread cache backed by a factory callable.
-  Each Twisted thread pool thread maintains its own isolated dict; the factory is called once per key per thread and the result is reused on every subsequent call from that thread.
-  Eliminates the boilerplate `threading.local()` + `hasattr` + dict pattern that both `BasicEngine` and `TurboEngine` previously duplicated.
+  Each Twisted thread pool thread maintains its own isolated dict; the factory is called once per key per thread and the result is
+  reused on every subsequent call from that thread.
+  Eliminates the boilerplate `threading.local()` + `hasattr` + dict pattern that both `BasicEngine` and `TurboEngine` previously
+  duplicated.
 
 ### Changed
 
 - **`TurboEngine` — persistent thread-local sessions** (performance)
   Previously a fresh `Session` was created and destroyed for every request, incurring a full TLS handshake cost each time.
-  Sessions are now cached per `(thread, impersonation-profile)` via `SessionCache`, enabling TCP connection reuse and TLS session resumption within each Twisted thread pool thread.
+  Sessions are now cached per `(thread, impersonation-profile)` via `SessionCache`, enabling TCP connection reuse and TLS session
+  resumption within each Twisted thread pool thread.
 
 - **`BasicEngine` — thread-local clients** (correctness + performance)
-  The previous `self._clients: dict[bool, Client]` was shared across all Scrapy threads, creating a potential concurrent-write race on first use and preventing per-thread connection pooling.
+  The previous `self._clients: dict[bool, Client]` was shared across all Scrapy threads, creating a potential concurrent-write race on
+  first use and preventing per-thread connection pooling.
   Replaced with `SessionCache` — each thread gets its own `wreq.Client` per http2 setting.
 
-- **`BROWSER_MAX_TABS` and `BROWSER_RESTART_EVERY`** added to `constants.py` and registered as `StealthConfig` attributes so they are accessible via `config.get()` like all other browser settings.
+- **`BROWSER_MAX_TABS` and `BROWSER_RESTART_EVERY`** added to `constants.py` and registered as `StealthConfig` attributes so they are
+  accessible via `config.get()` like all other browser settings.
 
 ---
 
@@ -320,9 +391,12 @@ A third stealth driver powered by a real Chrome instance via the Chrome DevTools
 Designed for Cloudflare-protected pages, heavy JavaScript SPAs, and any site that defeats HTTP-level impersonation.
 
 Key characteristics:
+
 - **No WebDriver** — communicates over CDP directly; `navigator.webdriver` is never set
-- **Persistent browser, tab-per-request** — one Chrome process is reused across requests; each request opens a new tab and closes it when done, keeping memory overhead low
-- **Proxy isolation** — when a proxy is set, a fresh browser is started per request so every request exits from a different IP with no shared state
+- **Persistent browser, tab-per-request** — one Chrome process is reused across requests; each request opens a new tab and closes it
+  when done, keeping memory overhead low
+- **Proxy isolation** — when a proxy is set, a fresh browser is started per request so every request exits from a different IP with no
+  shared state
 - **Splash screen** — loads the project logo before the target URL when using a proxy, warming up the browser context
 - **Configurable globally** via `config.BROWSER_HEADLESS` (default `True`) and `config.BROWSER_SETTLE_S` (default `4.0`)
 - **Per-request overrides** via `meta["stealth"]["headless"]` and `meta["stealth"]["settle"]`
@@ -374,35 +448,49 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 ### Added
 
 - Dual-driver architecture under `engine="stealth"`: `driver="basic"` (default) and `driver="turbo"` (deeper TLS fingerprinting)
-- `TurboEngine` — new stealth engine driver using new techs for impersonation; strips Scrapy fingerprint headers before passing to the driver so its own TLS profile is not overridden
+- `TurboEngine` — new stealth engine driver using new techs for impersonation; strips Scrapy fingerprint headers before passing to the
+  driver so its own TLS profile is not overridden
 - `config.STEALTH_DRIVER` — global default driver (`"basic"` or `"turbo"`); overridable per-request via `request.meta["driver"]`
 - `request.meta["driver"]` — per-request driver override (`"basic"` or `"turbo"`)
-- Generic profile resolver in `utils/profiles.py` — `resolve_browser(profile, backend)` returns a basic `Profile` for `"basic"` or a turbo impersonation string for `"turbo"`;
-- `response.meta["download_latency"]` — stealth engines automatically inject download latency (formatted as `"1.02s"`) into the response meta,
-- `BaseEngine._execute_timed` — internal wrapper that times every `_execute` call and writes `download_latency` into the response meta; all current and future engines inherit this for free
-- `StealthResponse._meta` parameter — accepts an optional dict merged into a copy of `request.meta` before building the response, allowing engines to inject stealth-specific keys without mutating the original request
+- Generic profile resolver in `utils/profiles.py` — `resolve_browser(profile, backend)` returns a basic `Profile` for `"basic"` or a
+  turbo impersonation string for `"turbo"`;
+- `response.meta["download_latency"]` — stealth engines automatically inject download latency (formatted as `"1.02s"`) into the
+  response meta,
+- `BaseEngine._execute_timed` — internal wrapper that times every `_execute` call and writes `download_latency` into the response meta;
+  all current and future engines inherit this for free
+- `StealthResponse._meta` parameter — accepts an optional dict merged into a copy of `request.meta` before building the response,
+  allowing engines to inject stealth-specific keys without mutating the original request
 - Python 3.14 support — added `Programming Language :: Python :: 3.14` classifier to `pyproject.toml`
-- CI matrix extended with Python 3.14 and OS compatibility jobs for Windows and macOS (Python 3.14 only); all Python versions continue to run on Ubuntu
+- CI matrix extended with Python 3.14 and OS compatibility jobs for Windows and macOS (Python 3.14 only); all Python versions continue
+  to run on Ubuntu
 
 ### Changed
 
-- `engines/basic.py` (renamed from `engines/browser.py`) — `BasicEngine` replaces `BrowserEngine`; imports updated to `utils/profiles.py`
-- `utils/profiles.py` (renamed from `utils/browsers.py`) — profile resolution is now backend-aware; both drivers share the same profile name space
+- `engines/basic.py` (renamed from `engines/browser.py`) — `BasicEngine` replaces `BrowserEngine`; imports updated to
+  `utils/profiles.py`
+- `utils/profiles.py` (renamed from `utils/browsers.py`) — profile resolution is now backend-aware; both drivers share the same profile
+  name space
 - `EngineManager` — updated to instantiate and cache both `BasicEngine` and `TurboEngine`; unknown driver falls back to `BasicEngine`
 - `StealthDownloaderMiddleware` — reads `meta["driver"]` and passes it to `EngineManager.get(engine_name, driver)`
 - `utils/meta.py` — `"driver"` added to `_STEALTH_ONLY_KEYS` so misuse warnings are emitted when it is set without `engine="stealth"`
-- `StealthResponse.encoding` is now dynamic — `TurboEngine` passes `resp.encoding` from response; `BasicEngine` passes `None` so Scrapy auto-detects from headers and body; hardcoded `"utf-8"` fallback removed
-- `BaseEngine.fetch` — now delegates to `_execute_timed` instead of `_execute` directly so latency tracking is transparent to all subclasses
+- `StealthResponse.encoding` is now dynamic — `TurboEngine` passes `resp.encoding` from response; `BasicEngine` passes `None` so Scrapy
+  auto-detects from headers and body; hardcoded `"utf-8"` fallback removed
+- `BaseEngine.fetch` — now delegates to `_execute_timed` instead of `_execute` directly so latency tracking is transparent to all
+  subclasses
 - Downloads badge in README switched from `shields.io` to `pepy.tech` to avoid upstream rate-limit errors
 - Dependencies: `NL` added to `pyproject.toml`
 
 ### Fixed
 
-- `ScrapyEngine` — implemented the `_execute` abstract method (was raising `TypeError: Can't instantiate abstract class ScrapyEngine without an implementation for abstract method '_execute'` at spider startup)
+- `ScrapyEngine` — implemented the `_execute` abstract method (was raising
+  `TypeError: Can't instantiate abstract class ScrapyEngine without an implementation for abstract method '_execute'` at spider
+  startup)
 
 ### Tests
 
-- Added 13-test suite for `TurboEngine` covering: response type, HTTP/1.1 and HTTP/2 version selection, fingerprint header stripping, proxy passthrough, body passthrough on POST, turbo profile resolution, exception handling, `TimeoutError` re-raise, and `content-encoding` header removal
+- Added 13-test suite for `TurboEngine` covering: response type, HTTP/1.1 and HTTP/2 version selection, fingerprint header stripping,
+  proxy passthrough, body passthrough on POST, turbo profile resolution, exception handling, `TimeoutError` re-raise, and
+  `content-encoding` header removal
 
 ---
 
@@ -410,12 +498,15 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 
 ### Added
 
-- HTTP/2 support for the stealth engine — enabled by default (`HTTP2 = True` in `StealthConfig`); disable globally via `config.HTTP2 = False` or per-request via `request.meta["http2"] = False`
-- `BasicEngine._get_client` — lazy per-protocol client cache; separate `Client` instances are created for HTTP/1.1 and HTTP/2 on first use
+- HTTP/2 support for the stealth engine — enabled by default (`HTTP2 = True` in `StealthConfig`); disable globally via
+  `config.HTTP2 = False` or per-request via `request.meta["http2"] = False`
+- `BasicEngine._get_client` — lazy per-protocol client cache; separate `Client` instances are created for HTTP/1.1 and HTTP/2 on first
+  use
 
 ### Changed
 
-- `BasicEngine` — improved stealth client creation log from generic bracket notation to structured `key=value` format: `"Initializing stealth HTTP client (protocol=%s)"`
+- `BasicEngine` — improved stealth client creation log from generic bracket notation to structured `key=value` format:
+  `"Initializing stealth HTTP client (protocol=%s)"`
 - `StealthConfig.LOGGER_NAME` — annotated as `Final[str]` to signal immutability; type checkers will flag any attempt to reassign it
 
 ---
@@ -424,15 +515,21 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 
 ### Fixed
 
-- `BasicEngine.__init__` — `profile` and `timeout` parameters now default to `None` (sentinel) and resolve from `config` at call time, fixing the Python mutable-default anti-pattern that caused runtime `config` changes to be ignored
-- `BasicEngine._execute` — removed duplicate `config.get("DEFAULT_PROFILE")` lookup; now uses `self._default_profile` as the single source of truth; `resolve_browser` is skipped when the per-request profile matches the engine default
-- `resolve_browser` — removed `None` handling from the function signature (`str | Profile | None` → `str | Profile`); callers are now responsible for resolving defaults before calling, eliminating an implicit config dependency inside the utility
+- `BasicEngine.__init__` — `profile` and `timeout` parameters now default to `None` (sentinel) and resolve from `config` at call time,
+  fixing the Python mutable-default anti-pattern that caused runtime `config` changes to be ignored
+- `BasicEngine._execute` — removed duplicate `config.get("DEFAULT_PROFILE")` lookup; now uses `self._default_profile` as the single
+  source of truth; `resolve_browser` is skipped when the per-request profile matches the engine default
+- `resolve_browser` — removed `None` handling from the function signature (`str | Profile | None` → `str | Profile`); callers are now
+  responsible for resolving defaults before calling, eliminating an implicit config dependency inside the utility
 
 ### Changed
 
-- `StealthConfig` test coverage extended to include `BLOCK_CODES`, `BLOCK_KEYWORDS`, `LOGGER_NAME`, `get()` method, and the `config` singleton
-- All config-driven values in tests (`DEFAULT_ENGINE`, `DEFAULT_PROFILE`, block codes, etc.) now reference `config.get()` instead of hardcoded strings, so tests stay correct if defaults change
-- README: added **Global Configuration** section documenting the `config` singleton, all `StealthConfig` attributes with types and defaults, and `config.get()` usage
+- `StealthConfig` test coverage extended to include `BLOCK_CODES`, `BLOCK_KEYWORDS`, `LOGGER_NAME`, `get()` method, and the `config`
+  singleton
+- All config-driven values in tests (`DEFAULT_ENGINE`, `DEFAULT_PROFILE`, block codes, etc.) now reference `config.get()` instead of
+  hardcoded strings, so tests stay correct if defaults change
+- README: added **Global Configuration** section documenting the `config` singleton, all `StealthConfig` attributes with types and
+  defaults, and `config.get()` usage
 
 ---
 
@@ -471,11 +568,19 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 ---
 
 [0.6.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.1
+
 [0.6.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.0
+
 [0.5.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.5.0
+
 [0.4.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.4.0
+
 [0.3.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.3.0
+
 [0.2.2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.2
+
 [0.2.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.1
+
 [0.2.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.2.0
+
 [0.1.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.1.0
