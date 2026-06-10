@@ -126,7 +126,14 @@ class BrowserEngine(BaseEngine):
 
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
-        if isinstance(context.get("exception"), ConnectionRefusedError):
+        exc = context.get("exception")
+        if isinstance(
+            exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)
+        ):
+            return
+        # Also catch the WinError 10054 variant that surfaces as OSError on some
+        # Python 3.13/3.14 builds before it is narrowed to ConnectionResetError.
+        if isinstance(exc, OSError) and getattr(exc, "winerror", None) == 10054:
             return
         loop.default_exception_handler(context)
 
