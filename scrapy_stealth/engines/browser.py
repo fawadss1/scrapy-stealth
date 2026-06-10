@@ -17,7 +17,6 @@ from ..utils.browser import (
     _BROWSER_ARGS,
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
-    _JS_STATUS,
     _cdp_snapshot,
     _ensure_xvfb,
     _is_browser_crash,
@@ -26,6 +25,7 @@ from ..utils.browser import (
     _splash_url,
     _start_proxy_relay,
     _wait_for_content,
+    _wait_for_status,
 )
 from ..utils.console import console
 from ..utils.logger import get_logger
@@ -127,6 +127,11 @@ class BrowserEngine(BaseEngine):
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
         exc = context.get("exception")
+        # Suppress noisy Windows pipe-teardown errors that fire when Chrome tabs
+        # or the browser process are closed while the Proactor event loop still
+        # holds a reference to the underlying socket/pipe.  These originate from
+        # _ProactorBasePipeTransport._call_connection_lost() and are harmless —
+        # the connection is already gone by the time the callback runs.
         if isinstance(
             exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)
         ):
@@ -205,6 +210,16 @@ class BrowserEngine(BaseEngine):
             if proxy_port is not None
             else None,
         )
+        # Load the splash on the default tab Chrome opens at startup.
+        # This warms up the renderer, applies stealth patches, and (when
+        # proxied) establishes the first tunnel through the relay — all
+        # before any real request arrives.  Done once here so _do_fetch
+        # never has to touch the splash again.
+        try:
+            await browser.main_tab.get(_splash_url())
+            await browser.main_tab.wait()
+        except Exception:
+            pass
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
 
@@ -290,21 +305,32 @@ class BrowserEngine(BaseEngine):
         assert self._tab_sem is not None
 
         async with self._tab_sem:
-            # create_context() opens an isolated browsing context (like an
-            # incognito window) — separate cookies/storage, same process.
+            # Open a new tab directly to the target URL.  The splash warm-up
+            # already happened once at browser startup in _start(), so there
+            # is no need to repeat it on every request.
             page = await self._browser.get(url, new_tab=True)
             try:
                 await page.wait()
-                await _wait_for_content(page)
-                await asyncio.sleep(settle)
 
                 if await page.evaluate(_JS_IS_CHROME_ERROR):
                     raise StealthConnectionError(
                         f"Browser engine connection failed fetching {url!r}"
                     )
 
+                # Poll until the Navigation Timing API exposes a real (non-zero)
+                # status.  page.wait() only signals DOM-ready; the responseStatus
+                # field is written asynchronously and can still be 0 immediately
+                # after, especially through a proxy or on redirecting sites.
+                status = await _wait_for_status(page)
+
+                # Only wait for content on successful responses (2xx).  Error pages
+                # (4xx/5xx) are returned immediately with whatever the browser has
+                # already rendered — no point burning settle time on an error page.
+                if 200 <= status < 300:
+                    await _wait_for_content(page)
+                    await asyncio.sleep(settle)
+
                 html = await page.evaluate(_JS_HTML)
-                status = await page.evaluate(_JS_STATUS)
                 if snapshot:
                     shot = await _cdp_snapshot(page)
             finally:

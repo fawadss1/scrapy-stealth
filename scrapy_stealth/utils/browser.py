@@ -19,7 +19,7 @@ _BROWSER_ARGS: list[str] = [
     "--disable-blink-features=AutomationControlled",
 ]
 _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.innerText : document.documentElement.innerHTML"
-_JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 200"
+_JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
 _xvfb_proc: Any = None  # module-level so only one Xvfb is started per process
@@ -114,6 +114,44 @@ def _ensure_xvfb(headless: bool = False) -> None:
             break
         time.sleep(0.1)
     logger.debug("Xvfb started on :99 — browser will run non-headless")
+
+
+async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
+    """
+    Poll ``performance.getEntriesByType('navigation')[0].responseStatus`` until
+    it returns a non-zero value, then return it.
+
+    Background
+    ----------
+    Chrome writes the Navigation Timing entry asynchronously — it can still be
+    absent (empty array) or carry ``responseStatus: 0`` immediately after
+    ``page.wait()`` returns, particularly when a proxy is in use or the page
+    involved one or more redirects.  Returning ``0`` from this function would
+    cause the caller to mis-classify every response as a success (``200 <= 0``
+    is False, so the wait-for-content step would be skipped on pages that
+    actually loaded fine).
+
+    The fallback of ``200`` is intentional: if Chrome never exposes a status
+    within *timeout* seconds (e.g. the page is a pure client-side SPA that
+    replaces the navigation entry), treating it as success is the safest
+    assumption — the caller will still wait for content as normal.
+    """
+
+    async def _poll() -> int:
+        while True:
+            raw = await page.evaluate(_JS_STATUS)
+            value = int(raw) if raw else 0
+            if value != 0:
+                return value
+            await asyncio.sleep(0.25)
+
+    try:
+        return await asyncio.wait_for(_poll(), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.debug(
+            "_wait_for_status timed out after %.1fs — defaulting to 200", timeout
+        )
+        return 200
 
 
 async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
