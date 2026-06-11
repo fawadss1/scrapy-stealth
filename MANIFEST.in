@@ -1,0 +1,15 @@
+# Include core project text files at the root
+include AUTHORS
+include LICENSE
+include README.md
+
+# Include documentation or graphics if they exist
+graft docs
+
+# Exclude testing and local configuration footprints
+prune tests
+prune .github
+exclude .gitignore
+
+# Global exclusions to prevent Python bytecode and OS junk from entering the build
+global-exclude *.py[cod] __pycache__ *.so *.dylib .DS_Store
