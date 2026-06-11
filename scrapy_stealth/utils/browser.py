@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+import random
 import subprocess
 import sys
 import time
@@ -14,15 +15,55 @@ from ..utils.logger import get_logger
 logger = get_logger()
 
 _BROWSER_ARGS: list[str] = [
-    "--window-size=1366,768",
     "--window-position=0,0",
     "--disable-blink-features=AutomationControlled",
 ]
+
+_FP_WINDOW_SIZES: list[str] = [
+    "1366,768",
+    "1440,900",
+    "1536,864",
+    "1600,900",
+    "1920,1080",
+    "1280,800",
+    "1280,1024",
+    "1360,768",
+]
+
+_FP_LANGUAGES: list[str] = [
+    "en-GB,en;q=0.9",
+    "en-US,en;q=0.9",
+    "en-US,en;q=0.9,en-GB;q=0.8",
+    "en-GB,en;q=0.9,en-US;q=0.8",
+    "en-US,en;q=0.8",
+    "en-AU,en;q=0.9",
+    "en-CA,en;q=0.9",
+]
+
 _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.innerText : document.documentElement.innerHTML"
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
 _xvfb_proc: Any = None  # module-level so only one Xvfb is started per process
+
+
+def _random_fingerprint_args() -> list[str]:
+    """
+    Return Chrome launch args that vary per browser startup to present a
+    distinct fingerprint on each session.
+
+    All args are appended after ``_BROWSER_ARGS`` by
+    ``BrowserEngine._build_args()`` so they always win over base defaults.
+    Called once per ``_start()`` / ``_reset_browser()`` so each browser
+    lifetime gets a stable but unique identity.
+    """
+    size = random.choice(_FP_WINDOW_SIZES)
+    lang = random.choice(_FP_LANGUAGES)
+    logger.debug("Browser fingerprint — size=%s  lang=%s  ua=%.60s…", size, lang)
+    return [
+        f"--window-size={size}",
+        f"--lang={lang}",
+    ]
 
 
 def _make_loop() -> asyncio.AbstractEventLoop:

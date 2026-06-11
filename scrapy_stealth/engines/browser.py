@@ -21,6 +21,7 @@ from ..utils.browser import (
     _ensure_xvfb,
     _is_browser_crash,
     _make_loop,
+    _random_fingerprint_args,
     _silence_browser,
     _splash_url,
     _start_proxy_relay,
@@ -43,12 +44,9 @@ class BrowserEngine(BaseEngine):
     """
     Chrome engine via DevTools Protocol (no WebDriver overhead).
 
-    - No proxy: one persistent browser; each request opens a new tab (context)
-      then closes it.
-    - With proxy: one persistent browser started with ``--proxy-server`` pointing
-      at a local auth-injecting relay; each request opens a fresh browser context
-      (isolated session) then closes it.  This replaces the old per-request
-      browser-spawn behaviour so only one Chrome process is ever running.
+    - No proxy: one persistent browser; each request opens a new tab then closes it.
+    - With proxy: one persistent browser started with ``--proxy-server`` pointing at a
+      local auth-injecting relay; each request opens a new tab then closes it.
     """
 
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
@@ -61,14 +59,20 @@ class BrowserEngine(BaseEngine):
         self._request_count: int = 0
         self._count_lock = threading.Lock()
 
-        # Proxy-relay state — created once when the first proxied request arrives.
-        self._relay_server: Any = None  # asyncio.AbstractServer
+        # Proxy-relay state — created once on first proxied request.
+        self._relay_server: Any = None
         self._relay_port: int | None = None
         self._relay_lock = threading.Lock()
 
-    def _build_args(self, headless: bool, proxy_port: int | None = None) -> list[str]:
+    def _build_args(
+        self,
+        headless: bool,
+        proxy_port: int | None = None,
+        fingerprint_args: list[str] | None = None,
+    ) -> list[str]:
         import os
 
+        # _BROWSER_ARGS has no --window-size; _random_fingerprint_args() supplies it.
         args = list(_BROWSER_ARGS)
         if headless:
             args.append("--headless=new")
@@ -85,6 +89,8 @@ class BrowserEngine(BaseEngine):
             args.append("--disable-dev-shm-usage")
         if proxy_port is not None:
             args.append(f"--proxy-server=http://127.0.0.1:{proxy_port}")
+        # Append fingerprint args last so they always win over any conflicting base arg.
+        args.extend(fingerprint_args or _random_fingerprint_args())
         return args
 
     def _is_root(self) -> bool:
@@ -93,7 +99,10 @@ class BrowserEngine(BaseEngine):
         return hasattr(os, "getuid") and os.getuid() == 0
 
     async def _start_browser(
-        self, headless: bool, extra_args: list[str] | None = None
+        self,
+        headless: bool,
+        proxy_port: int | None = None,
+        fingerprint_args: list[str] | None = None,
     ) -> Any:
         """Start a browser instance with proper error handling for executable path."""
         import nodriver as _nd
@@ -103,7 +112,11 @@ class BrowserEngine(BaseEngine):
         executable_path: str | None = config.get("BROWSER_EXECUTABLE_PATH")
         try:
             kwargs: dict[str, Any] = {
-                "browser_args": self._build_args(headless) + (extra_args or []),
+                "browser_args": self._build_args(
+                    headless,
+                    proxy_port=proxy_port,
+                    fingerprint_args=fingerprint_args,
+                ),
                 "headless": headless,
                 "sandbox": not self._is_root(),
             }
@@ -127,17 +140,11 @@ class BrowserEngine(BaseEngine):
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
         exc = context.get("exception")
-        # Suppress noisy Windows pipe-teardown errors that fire when Chrome tabs
-        # or the browser process are closed while the Proactor event loop still
-        # holds a reference to the underlying socket/pipe.  These originate from
-        # _ProactorBasePipeTransport._call_connection_lost() and are harmless —
-        # the connection is already gone by the time the callback runs.
+        # Suppress Windows Proactor pipe-teardown noise on tab/browser close.
         if isinstance(
             exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)
         ):
             return
-        # Also catch the WinError 10054 variant that surfaces as OSError on some
-        # Python 3.13/3.14 builds before it is narrowed to ConnectionResetError.
         if isinstance(exc, OSError) and getattr(exc, "winerror", None) == 10054:
             return
         loop.default_exception_handler(context)
@@ -147,32 +154,6 @@ class BrowserEngine(BaseEngine):
         asyncio.set_event_loop(self._loop)
         self._loop.set_exception_handler(self._loop_exception_handler)
         self._loop.run_forever()
-
-    def _ensure_relay(self, proxy: str) -> int:
-        """
-        Start the auth-injecting relay once and return its listen port.
-        Subsequent calls return the cached port without restarting.
-        The relay runs on the engine's own event loop so it stays alive
-        for the lifetime of the browser.
-        """
-        with self._relay_lock:
-            if self._relay_port is not None:
-                return self._relay_port
-            assert self._loop is not None
-            future = asyncio.run_coroutine_threadsafe(
-                _start_proxy_relay(proxy), self._loop
-            )
-            server, port = future.result(timeout=10)
-            self._relay_server = server
-            self._relay_port = port
-            logger.debug("Proxy relay started on 127.0.0.1:%d", port)
-            return port
-
-    async def _stop_relay(self) -> None:
-        if self._relay_server is not None:
-            self._relay_server.close()
-            self._relay_server = None
-            self._relay_port = None
 
     def _ensure_browser(self, headless: bool, proxy: str | None = None) -> None:
         """
@@ -198,28 +179,23 @@ class BrowserEngine(BaseEngine):
 
         proxy_port: int | None = None
         if proxy:
-            # Start relay first; browser args reference the port.
             server, proxy_port = await _start_proxy_relay(proxy)
             self._relay_server = server
             self._relay_port = proxy_port
             logger.debug("Proxy relay started on 127.0.0.1:%d", proxy_port)
 
-        browser = await self._start_browser(
-            headless,
-            extra_args=[f"--proxy-server=http://127.0.0.1:{proxy_port}"]
-            if proxy_port is not None
-            else None,
-        )
-        # Load the splash on the default tab Chrome opens at startup.
-        # This warms up the renderer, applies stealth patches, and (when
-        # proxied) establishes the first tunnel through the relay — all
-        # before any real request arrives.  Done once here so _do_fetch
-        # never has to touch the splash again.
+        # Draw a fresh fingerprint for this browser lifetime.  _start_browser
+        # passes it to _build_args so the same values end up in the process
+        # args — no second random draw happens inside _build_args.
+        browser = await self._start_browser(headless, proxy_port=proxy_port)
+
+        # Warm up the renderer on the default tab Chrome opens at startup.
         try:
             await browser.main_tab.get(_splash_url())
             await browser.main_tab.wait()
         except Exception:
             pass
+
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
 
@@ -235,7 +211,10 @@ class BrowserEngine(BaseEngine):
             loop.call_soon_threadsafe(loop.stop)
 
     async def _shutdown(self) -> None:
-        await self._stop_relay()
+        if self._relay_server is not None:
+            self._relay_server.close()
+            self._relay_server = None
+            self._relay_port = None
         if self._browser is not None:
             self._browser.stop()
             self._browser = None
@@ -305,9 +284,6 @@ class BrowserEngine(BaseEngine):
         assert self._tab_sem is not None
 
         async with self._tab_sem:
-            # Open a new tab directly to the target URL.  The splash warm-up
-            # already happened once at browser startup in _start(), so there
-            # is no need to repeat it on every request.
             page = await self._browser.get(url, new_tab=True)
             try:
                 await page.wait()
@@ -317,15 +293,10 @@ class BrowserEngine(BaseEngine):
                         f"Browser engine connection failed fetching {url!r}"
                     )
 
-                # Poll until the Navigation Timing API exposes a real (non-zero)
-                # status.  page.wait() only signals DOM-ready; the responseStatus
-                # field is written asynchronously and can still be 0 immediately
-                # after, especially through a proxy or on redirecting sites.
+                # Poll until Navigation Timing exposes a real (non-zero) status.
                 status = await _wait_for_status(page)
 
-                # Only wait for content on successful responses (2xx).  Error pages
-                # (4xx/5xx) are returned immediately with whatever the browser has
-                # already rendered — no point burning settle time on an error page.
+                # Skip content wait on error responses — return immediately.
                 if 200 <= status < 300:
                     await _wait_for_content(page)
                     await asyncio.sleep(settle)
