@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.8a1] - 2026-06-12
+
+### Added
+
+- **Intelligent content wait (`_smart_wait`)**
+  The browser engine now detects if a page is a JS challenge, CAPTCHA, or script-heavy stub
+  (e.g., Cloudflare, DataDome) and automatically waits for the real content to populate.
+  It uses a heuristic based on body length and tag structure to decide whether to wait,
+  significantly improving success rates on protected sites while maintaining speed on
+  normal pages.
+- **JS challenge detection (`_JS_IS_CHALLENGE`)**
+  A comprehensive JavaScript-based detector that identifies common anti-bot platforms
+  (Cloudflare, DataDome, Akamai, Kasada) and challenge states (Ray ID, "Checking your browser")
+  by scanning the DOM and window title.
+- **Randomized browser fingerprinting**
+  Chrome is now launched with randomized `--window-size` and `--lang` arguments selected from
+  a curated list of common configurations. This ensures that every browser session (and
+  every proxy-rotated request) presents a unique, realistic identity to anti-bot systems.
+
+### Changed
+
+- **Refactored test cases**
+  Simplified fetch mocks in tests by removing the unnecessary proxy argument and
+  streamlining assertions.
+
+### Fixed
+
+- **Browser engine — improved response handling**
+  Integrated `_smart_wait` into the fetch pipeline, ensuring 2xx responses are fully
+  rendered before returning.
+
 ## [0.6.7] - 2026-06-10
 
 ### Changed
@@ -566,6 +597,10 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.8]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.8
+
+[0.6.7]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.7
 
 [0.6.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.1
 
