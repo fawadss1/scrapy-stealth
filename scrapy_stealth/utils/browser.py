@@ -10,7 +10,8 @@ import time
 from typing import Any
 from urllib.parse import urlparse
 
-from ..utils.logger import get_logger
+from .js_challenge import _JS_IS_CHALLENGE
+from .logger import get_logger
 
 logger = get_logger()
 
@@ -44,6 +45,9 @@ _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
+
+_CONTENT_SHORT_THRESHOLD = 2500
+
 _xvfb_proc: Any = None  # module-level so only one Xvfb is started per process
 
 
@@ -59,7 +63,7 @@ def _random_fingerprint_args() -> list[str]:
     """
     size = random.choice(_FP_WINDOW_SIZES)
     lang = random.choice(_FP_LANGUAGES)
-    logger.debug("Browser fingerprint — size=%s  lang=%s  ua=%.60s…", size, lang)
+    logger.debug("Browser fingerprint — size=%s  lang=%s", size, lang)
     return [
         f"--window-size={size}",
         f"--lang={lang}",
@@ -195,19 +199,46 @@ async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
         return 200
 
 
-async def _wait_for_content(page: Any, timeout: float = 10.0) -> None:
-    """Poll until visible body text is substantial; silently continue on timeout."""
+async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
+    """
+    Intelligently wait for page content to load, skipping the wait entirely
+    when the page is already fully rendered, but robustly catching anti-bot stubs.
+    """
+    # Safeguard: wait a split second for the initial DOM frame to touch down
+    await asyncio.sleep(0.2)
+
+    body_len = int(await page.evaluate(_JS_BODY_LEN))
+
+    if body_len >= _CONTENT_SHORT_THRESHOLD:
+        return
+
+    if not bool(await page.evaluate(_JS_IS_CHALLENGE)):
+        return
+
+    logger.debug(
+        "_smart_wait: Challenge or script stub detected. Waiting for content to populate..."
+    )
 
     async def _poll() -> None:
         while True:
-            if int(await page.evaluate(_JS_BODY_LEN)) > 2500:
+            current_len = int(await page.evaluate(_JS_BODY_LEN))
+
+            # Re-evaluate challenge status. If the script injected a new challenge UI
+            # or if the body length has cleared the threshold, we keep moving.
+            is_still_stub = await page.evaluate(
+                "(() => { const b=document.body; return b && b.children.length === 1 && b.children[0].tagName === 'SCRIPT'; })()"
+            )
+
+            if current_len >= _CONTENT_SHORT_THRESHOLD and not is_still_stub:
                 return
             await asyncio.sleep(0.5)
 
     try:
         await asyncio.wait_for(_poll(), timeout=timeout)
     except asyncio.TimeoutError:
-        pass
+        logger.warning("_smart_wait: timed out waiting for challenge to resolve")
+
+    await asyncio.sleep(settle)
 
 
 async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, int]:

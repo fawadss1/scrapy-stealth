@@ -23,9 +23,9 @@ from ..utils.browser import (
     _make_loop,
     _random_fingerprint_args,
     _silence_browser,
+    _smart_wait,
     _splash_url,
     _start_proxy_relay,
-    _wait_for_content,
     _wait_for_status,
 )
 from ..utils.console import console
@@ -298,8 +298,7 @@ class BrowserEngine(BaseEngine):
 
                 # Skip content wait on error responses — return immediately.
                 if 200 <= status < 300:
-                    await _wait_for_content(page)
-                    await asyncio.sleep(settle)
+                    await _smart_wait(page, settle)
 
                 html = await page.evaluate(_JS_HTML)
                 if snapshot:
