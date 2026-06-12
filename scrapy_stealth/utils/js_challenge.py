@@ -1,0 +1,56 @@
+# Detects JS challenge / CAPTCHA pages by scanning the raw HTML for known
+_JS_IS_CHALLENGE = (
+    "(()=>{"
+    "const h=document.documentElement.innerHTML.toLowerCase();"
+    "const t=(document.title||'').toLowerCase();"
+    # 1. Known challenge keywords in HTML body
+    "const has_keywords = ["
+    "'ray id','cf-challenge','cf_chl','challenge-platform',"
+    "'verifying you are human','enable javascript',"
+    "'checking your browser','please wait.',"
+    "'captcha','recaptcha','hcaptcha','px-captcha',"
+    "'datadome','ak-challenge','akamai','kasada'"
+    "].some(k=>h.includes(k));"
+    "if (has_keywords) return true;"
+    ""
+    # 2. Known challenge keywords in <title>
+    "const title_kw = ["
+    "'just a moment','access denied','attention required',"
+    "'are you a human','are you human','one more step',"
+    "'security check','please verify'"
+    "].some(k=>t.includes(k));"
+    "if (title_kw) return true;"
+    ""
+    "const b=document.body;"
+    "if (!b) return false;"
+    ""
+    # 3. Body is completely empty
+    "if (b.children.length === 0 && b.innerText.trim().length === 0) {"
+    "    return true;"
+    "}"
+    ""
+    # 4. Body contains ONLY <script> tag(s) — single or multiple
+    "const kids = Array.from(b.children);"
+    "if (kids.length > 0 && kids.every(el => el.tagName === 'SCRIPT')) {"
+    "    return true;"
+    "}"
+    ""
+    # 5. Body contains ONLY a <noscript> tag
+    "if (kids.length === 1 && kids[0].tagName === 'NOSCRIPT') {"
+    "    return true;"
+    "}"
+    ""
+    # 6. Meta refresh redirect
+    "const metas=Array.from(document.getElementsByTagName('meta'));"
+    "if (metas.some(m=>(m.getAttribute('http-equiv')||'').toLowerCase()==='refresh')) {"
+    "    return true;"
+    "}"
+    ""
+    # 7. Body contains ONLY a single <iframe>
+    "if (kids.length === 1 && kids[0].tagName === 'IFRAME') {"
+    "    return true;"
+    "}"
+    ""
+    "return false;"
+    "})()"
+)
