@@ -8,6 +8,7 @@ from typing import Any
 from scrapy.http import Request, Response
 
 from ..config import config
+from ..detectors.antibot import AntiBotDetector
 from ..exceptions import (
     StealthBrowserNotFoundError,
     StealthConnectionError,
@@ -17,6 +18,7 @@ from ..utils.browser import (
     _BROWSER_ARGS,
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
+    BanStreakTracker,
     _cdp_snapshot,
     _ensure_xvfb,
     _is_browser_crash,
@@ -26,6 +28,7 @@ from ..utils.browser import (
     _smart_wait,
     _splash_url,
     _start_proxy_relay,
+    _stop_loop,
     _wait_for_status,
 )
 from ..utils.console import console
@@ -56,8 +59,9 @@ class BrowserEngine(BaseEngine):
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._tab_sem: asyncio.Semaphore | None = None
-        self._request_count: int = 0
-        self._count_lock = threading.Lock()
+        # Restarts Chrome (fresh fingerprint/cookies/CDP session) after N
+        # consecutive banned/challenged responses; resets on any clean response.
+        self._bans = BanStreakTracker()
 
         # Proxy-relay state — created once on first proxied request.
         self._relay_server: Any = None
@@ -202,13 +206,13 @@ class BrowserEngine(BaseEngine):
     def close(self) -> None:
         if self._loop is None:
             return
-        loop = self._loop
         try:
-            asyncio.run_coroutine_threadsafe(self._shutdown(), loop).result(timeout=10)
+            asyncio.run_coroutine_threadsafe(self._shutdown(), self._loop).result(
+                timeout=10
+            )
         except Exception:
             pass
-        finally:
-            loop.call_soon_threadsafe(loop.stop)
+        _stop_loop(self._loop, self._thread)
 
     async def _shutdown(self) -> None:
         if self._relay_server is not None:
@@ -245,13 +249,10 @@ class BrowserEngine(BaseEngine):
                 self._relay_server = None
                 self._relay_port = None
 
-            if self._loop is not None:
-                try:
-                    self._loop.call_soon_threadsafe(self._loop.stop)
-                except Exception:
-                    pass
-                self._loop = None
-            self._thread = None
+            # Join the old loop/thread before starting a new one — otherwise it
+            # keeps polling its selector after the new loop exists and can crash
+            # on in-flight I/O (see _stop_loop docstring).
+            _stop_loop(self._loop, self._thread)
 
             loop = _make_loop()
             self._loop = loop
@@ -311,6 +312,21 @@ class BrowserEngine(BaseEngine):
 
         return str(html).encode(errors="replace"), int(status), shot
 
+    def _maybe_restart(
+        self, headless: bool, proxy: str | None, response: Response | None
+    ) -> None:
+        """Restart Chrome once BanStreakTracker reports N consecutive bans."""
+        banned = response is not None and (
+            AntiBotDetector.is_blocked(response)
+            or AntiBotDetector.is_js_challenge(response)
+        )
+        if self._bans.record(banned):
+            console.info(
+                f"Restarting browser after "
+                f"{config.get('BROWSER_RESTART_AFTER_BANS')} consecutive bans"
+            )
+            self._reset_browser(headless, self._browser, proxy=proxy)
+
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
         try:
@@ -330,22 +346,6 @@ class BrowserEngine(BaseEngine):
 
             # Ensure the single persistent browser is up (proxy-aware).
             self._ensure_browser(headless=headless, proxy=ctx.proxy or None)
-
-            # Proactive restart every N requests to prevent Chrome memory bloat.
-            with self._count_lock:
-                self._request_count += 1
-                should_restart = self._request_count >= config.get(
-                    "BROWSER_RESTART_EVERY"
-                )
-                if should_restart:
-                    self._request_count = 0
-
-            if should_restart:
-                console.info(
-                    f"Proactively restarting browser after "
-                    f"{config.get('BROWSER_RESTART_EVERY')} requests"
-                )
-                self._reset_browser(headless, self._browser, proxy=ctx.proxy or None)
 
             body: bytes = b""
             status: int = 200
@@ -375,7 +375,7 @@ class BrowserEngine(BaseEngine):
                 status,
                 len(body),
             )
-            return StealthResponse(
+            response = StealthResponse(
                 request=request,
                 status=status,
                 headers={"content-type": "text/html; charset=utf-8"},
@@ -383,6 +383,11 @@ class BrowserEngine(BaseEngine):
                 _meta={"snapshot_content": shot} if shot is not None else None,
                 _flags=["browser"],
             )
+
+            # Restart Chrome after BROWSER_RESTART_AFTER_BANS consecutive bans.
+            self._maybe_restart(headless, ctx.proxy or None, response)
+
+            return response
 
         except TimeoutError as exc:
             raise StealthTimeoutError(

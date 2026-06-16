@@ -6,6 +6,7 @@ import os
 import random
 import subprocess
 import sys
+import threading
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -75,6 +76,31 @@ def _make_loop() -> asyncio.AbstractEventLoop:
     if sys.platform == "win32":
         return asyncio.ProactorEventLoop()
     return asyncio.new_event_loop()
+
+
+def _stop_loop(
+    loop: asyncio.AbstractEventLoop | None,
+    thread: threading.Thread | None,
+    timeout: float = 5.0,
+) -> None:
+    """
+    Stop *loop* and join *thread*, waiting for the loop to actually finish
+    running before returning.
+
+    Discarding a running loop/thread pair without joining lets the old thread
+    keep polling the (Proactor, on Windows) selector after the new loop/thread
+    has already started — in-flight I/O gets aborted mid-callback and raises
+    into a thread nobody is watching, surfacing as unretrieved task exceptions
+    or an ``InvalidStateError`` crash. Joining first eliminates that overlap.
+    """
+    if loop is None:
+        return
+    try:
+        loop.call_soon_threadsafe(loop.stop)
+    except RuntimeError:
+        pass
+    if thread is not None:
+        thread.join(timeout=timeout)
 
 
 def _splash_url() -> str:
@@ -318,3 +344,29 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, in
     server = await asyncio.start_server(handle, "127.0.0.1", 0)
     listen_port = server.sockets[0].getsockname()[1]
     return server, listen_port
+
+
+class BanStreakTracker:
+    """
+    Counts *consecutive* banned/challenged responses and signals a restart once
+    the streak reaches ``BROWSER_RESTART_AFTER_BANS``. Any clean response resets
+    the streak to zero, so a browser sailing through cleanly is never restarted.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._streak = 0
+
+    def record(self, banned: bool) -> bool:
+        """Record one outcome; returns True if the browser should restart."""
+        from ..config import config
+
+        with self._lock:
+            if not banned:
+                self._streak = 0
+                return False
+            self._streak += 1
+            if self._streak >= config.get("BROWSER_RESTART_AFTER_BANS"):
+                self._streak = 0
+                return True
+            return False
