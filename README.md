@@ -72,11 +72,12 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🔌 Pluggable engine system (`scrapy`, `stealth`)
 * 🧠 Per-request engine selection via `request.meta`
 * 🌐 Proxy support and rotation
-* 🧬 Browser fingerprint rotation
+* 🧬 Browser fingerprint rotation (window size + language per browser restart)
 * 🔁 Smart retry logic
-* 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
+* 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai, DataDome, Kasada)
 * ⚡  Thread-safe async integration
-* 🖥️ Real-browser engine (CDP) for JS-heavy pages
+* 🖥️ Real-browser engine (CDP) for JS-heavy pages — single persistent Chrome process
+* 🧠 Smart content waiting — polls only when a JS challenge is detected, returns immediately for normal pages
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -273,9 +274,9 @@ yield scrapy.Request(
 
 ## 🖥️ Browser Engine
 
-For sites protected by Cloudflare JS challenges or heavy JavaScript rendering, use the `browser` driver.
-It runs a real Chrome instance via the DevTools Protocol (no WebDriver), keeping one persistent browser
-and opening a new tab per request.
+For sites protected by Cloudflare JS challenges, Akamai Bot Manager, or heavy JavaScript rendering, use the `browser` driver.
+It runs a real Chrome instance via the DevTools Protocol (no WebDriver), keeping **one persistent browser**
+and opening a new tab per request — for both proxy and non-proxy mode.
 
 **Per-request (most common):**
 
@@ -292,7 +293,7 @@ yield scrapy.Request(
 )
 ```
 
-**Heavy Cloudflare sites — increase settle time:**
+**Heavy Cloudflare / Akamai sites — increase settle time:**
 
 ```python
 meta={"stealth": {"driver": "browser", "headless": False, "settle": 12}}
@@ -341,6 +342,21 @@ Or via `config`:
 config.BROWSER_NO_SANDBOX = True
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/chromium"
 ```
+
+### Smart Content Waiting
+
+The browser engine detects JS challenges automatically and only waits when it needs to. For normal pages
+(product pages, IP lookups, JSON APIs, etc.) it returns as soon as the DOM is ready — no unnecessary delay.
+For challenge pages (Cloudflare, Akamai, DataDome, hCaptcha, reCaptcha, Kasada) it polls until the
+challenge resolves and real content appears, then applies the settle delay.
+
+Detection covers:
+- Known challenge keywords in HTML and page title (`ray id`, `cf-challenge`, `verifying you are human`, `datadome`, `akamai`, `kasada`, …)
+- Script-only body stubs (Akamai sensor loader pattern — one or more `<script>` tags, nothing else)
+- Empty body (challenge running entirely from `<head>`)
+- `<noscript>`-only body (JS-gated content)
+- `<meta http-equiv="refresh">` redirect interstitials
+- Single `<iframe>` body (hCaptcha / Turnstile widget wrapper)
 
 > **Performance note**: the browser engine is slower than `basic`/`turbo` (~5-15s per page vs <2s).
 > Use it selectively — route only JS-protected URLs to `"browser"` and keep everything else on `"turbo"`.
@@ -505,6 +521,14 @@ import scrapy
 class ExampleSpider(scrapy.Spider):
     name = "example"
 
+    custom_settings = {
+        "DOWNLOADER_MIDDLEWARES": {
+            "scrapy_stealth.middlewares.StealthDownloaderMiddleware": 950,
+        },
+        "STEALTH_DRIVER": "browser",
+        "BROWSER_HEADLESS": False,
+    }
+
     def start_requests(self):
         yield scrapy.Request(
             "https://example.com",
@@ -512,6 +536,7 @@ class ExampleSpider(scrapy.Spider):
                 "stealth": {
                     "rotate_proxy": True,
                     "rotate_profile": True,
+                    "settle": 6.0,
                 }
             },
         )
@@ -532,6 +557,12 @@ Using stealth selectively:
 * ⚡ Faster crawling (Scrapy for simple pages)
 * 💰 Lower proxy cost
 * 🛡️ Better success rate on protected pages
+
+**Browser engine tips:**
+
+* Use `headless=False` for sites with strong bot detection (Akamai, Cloudflare) — real window mode is significantly harder to fingerprint
+* Route only JS-protected pages to `"browser"` and keep everything else on `"turbo"` or `"basic"`
+* Increase `settle` for heavy SPAs or Akamai/Cloudflare challenge pages that take longer to resolve
 
 ---
 
