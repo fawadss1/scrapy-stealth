@@ -633,3 +633,50 @@ class TestBrowserEngine:
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
             engine._execute(Request("https://example.com"))
         assert captured[0] == config.get("BROWSER_SETTLE_S")
+
+    # -----------------------------------------------------------------
+    # Restart after N consecutive bans
+    # -----------------------------------------------------------------
+
+    def test_no_restart_when_responses_are_clean(self, engine):
+        with patch.object(engine, "_reset_browser") as mock_reset:
+            for _ in range(50):
+                engine._execute(Request("https://example.com"))
+        mock_reset.assert_not_called()
+
+    def _set_status(self, mock_tab, status: int) -> None:
+        mock_tab.evaluate = AsyncMock(
+            side_effect=lambda js: (
+                status
+                if "responseStatus" in js
+                else (
+                    False
+                    if "chrome-error" in js
+                    else (10000 if "trim().length" in js else "<html></html>")
+                )
+            )
+        )
+
+    def test_restart_after_n_consecutive_bans(self, monkeypatch, engine, mock_tab):
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 5)
+        self._set_status(mock_tab, 403)
+        with patch.object(engine, "_reset_browser") as mock_reset:
+            for _ in range(4):
+                engine._execute(Request("https://example.com"))
+            mock_reset.assert_not_called()
+            engine._execute(Request("https://example.com"))
+        mock_reset.assert_called_once()
+
+    def test_clean_response_resets_ban_streak(self, monkeypatch, engine, mock_tab):
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 3)
+        with patch.object(engine, "_reset_browser") as mock_reset:
+            self._set_status(mock_tab, 403)
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            self._set_status(mock_tab, 200)
+            engine._execute(Request("https://example.com"))  # resets streak
+            self._set_status(mock_tab, 403)
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            mock_reset.assert_not_called()
+
