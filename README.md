@@ -72,12 +72,12 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🔌 Pluggable engine system (`scrapy`, `stealth`)
 * 🧠 Per-request engine selection via `request.meta`
 * 🌐 Proxy support and rotation
-* 🧬 Browser fingerprint rotation (window size + language per browser restart)
+* 🧬 Browser fingerprint rotation
 * 🔁 Smart retry logic
-* 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai, DataDome, Kasada)
+* 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
 * ⚡  Thread-safe async integration
-* 🖥️ Real-browser engine (CDP) for JS-heavy pages — single persistent Chrome process
-* 🧠 Smart content waiting — polls only when a JS challenge is detected, returns immediately for normal pages
+* 🖥️ Real-browser engine (CDP) for JS-heavy pages
+* 🔄 Intelligent browser restart — restarts on consecutive bans, not a fixed request count
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -193,6 +193,7 @@ config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
 config.BROWSER_HEADLESS = True          # browser driver: headless mode (False = visible window, more stealthy)
 config.BROWSER_SETTLE_S = 4.0          # browser driver: seconds to wait after navigation for JS to finish
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
+config.BROWSER_RESTART_AFTER_BANS = 5   # restart Chrome (fresh fingerprint) after 5 consecutive bans
 
 
 class MySpider(scrapy.Spider):
@@ -228,6 +229,8 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BROWSER_SETTLE_S`        | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                              |
 | `BROWSER_NO_SANDBOX`      | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                 |
 | `BROWSER_EXECUTABLE_PATH` | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`) |
+| `BROWSER_MAX_TABS`        | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                      |
+| `BROWSER_RESTART_AFTER_BANS`  | `int`   | `5`    | Browser driver: restart Chrome (fresh fingerprint/cookies/CDP session) after this many *consecutive* banned/challenged responses. Any clean response resets the count |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
@@ -274,9 +277,9 @@ yield scrapy.Request(
 
 ## 🖥️ Browser Engine
 
-For sites protected by Cloudflare JS challenges, Akamai Bot Manager, or heavy JavaScript rendering, use the `browser` driver.
-It runs a real Chrome instance via the DevTools Protocol (no WebDriver), keeping **one persistent browser**
-and opening a new tab per request — for both proxy and non-proxy mode.
+For sites protected by Cloudflare JS challenges or heavy JavaScript rendering, use the `browser` driver.
+It runs a real Chrome instance via the DevTools Protocol (no WebDriver), keeping one persistent browser
+and opening a new tab per request.
 
 **Per-request (most common):**
 
@@ -293,7 +296,7 @@ yield scrapy.Request(
 )
 ```
 
-**Heavy Cloudflare / Akamai sites — increase settle time:**
+**Heavy Cloudflare sites — increase settle time:**
 
 ```python
 meta={"stealth": {"driver": "browser", "headless": False, "settle": 12}}
@@ -326,6 +329,20 @@ BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
 
 > When `BROWSER_EXECUTABLE_PATH` is `None` (the default), `scrapy-stealth` auto-detects Google Chrome or Chromium from standard system paths. Set it explicitly when using Brave or a non-standard Chrome installation — a clear error is raised if the path does not exist.
 
+**Intelligent restart:**
+
+The browser engine restarts Chrome intelligently rather than on a fixed schedule — it only restarts
+(getting a fresh fingerprint, cookies, and CDP session) after `BROWSER_RESTART_AFTER_BANS` consecutive
+banned/challenged responses, as classified by the Anti-Bot Detection module (see below).
+A single clean response resets the streak, so a browser that's sailing through cleanly is left running
+indefinitely — it's never restarted just because it has served a lot of requests.
+
+```python
+from scrapy_stealth.config import config
+
+config.BROWSER_RESTART_AFTER_BANS = 5  # restart after 5 consecutive bans (default)
+```
+
 **Docker (running as root):**
 
 Chrome requires `--no-sandbox` when the process runs as root. `scrapy-stealth` detects this automatically,
@@ -342,21 +359,6 @@ Or via `config`:
 config.BROWSER_NO_SANDBOX = True
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/chromium"
 ```
-
-### Smart Content Waiting
-
-The browser engine detects JS challenges automatically and only waits when it needs to. For normal pages
-(product pages, IP lookups, JSON APIs, etc.) it returns as soon as the DOM is ready — no unnecessary delay.
-For challenge pages (Cloudflare, Akamai, DataDome, hCaptcha, reCaptcha, Kasada) it polls until the
-challenge resolves and real content appears, then applies the settle delay.
-
-Detection covers:
-- Known challenge keywords in HTML and page title (`ray id`, `cf-challenge`, `verifying you are human`, `datadome`, `akamai`, `kasada`, …)
-- Script-only body stubs (Akamai sensor loader pattern — one or more `<script>` tags, nothing else)
-- Empty body (challenge running entirely from `<head>`)
-- `<noscript>`-only body (JS-gated content)
-- `<meta http-equiv="refresh">` redirect interstitials
-- Single `<iframe>` body (hCaptcha / Turnstile widget wrapper)
 
 > **Performance note**: the browser engine is slower than `basic`/`turbo` (~5-15s per page vs <2s).
 > Use it selectively — route only JS-protected URLs to `"browser"` and keep everything else on `"turbo"`.
@@ -521,14 +523,6 @@ import scrapy
 class ExampleSpider(scrapy.Spider):
     name = "example"
 
-    custom_settings = {
-        "DOWNLOADER_MIDDLEWARES": {
-            "scrapy_stealth.middlewares.StealthDownloaderMiddleware": 950,
-        },
-        "STEALTH_DRIVER": "browser",
-        "BROWSER_HEADLESS": False,
-    }
-
     def start_requests(self):
         yield scrapy.Request(
             "https://example.com",
@@ -536,7 +530,6 @@ class ExampleSpider(scrapy.Spider):
                 "stealth": {
                     "rotate_proxy": True,
                     "rotate_profile": True,
-                    "settle": 6.0,
                 }
             },
         )
@@ -557,12 +550,6 @@ Using stealth selectively:
 * ⚡ Faster crawling (Scrapy for simple pages)
 * 💰 Lower proxy cost
 * 🛡️ Better success rate on protected pages
-
-**Browser engine tips:**
-
-* Use `headless=False` for sites with strong bot detection (Akamai, Cloudflare) — real window mode is significantly harder to fingerprint
-* Route only JS-protected pages to `"browser"` and keep everything else on `"turbo"` or `"basic"`
-* Increase `settle` for heavy SPAs or Akamai/Cloudflare challenge pages that take longer to resolve
 
 ---
 
