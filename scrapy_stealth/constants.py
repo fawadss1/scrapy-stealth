@@ -53,8 +53,10 @@ BROWSER_SETTLE_S: float = 4.0
 # Browser engine: max Chrome tabs open simultaneously across concurrent requests.
 BROWSER_MAX_TABS: int = 10
 
-# Browser engine: restart Chrome after this many requests to prevent memory bloat.
-BROWSER_RESTART_EVERY: int = 200
+# Browser engine: restart Chrome (fresh fingerprint, cookies, CDP session) after
+# this many *consecutive* banned/challenged responses. A single clean response
+# resets the counter, so a browser sailing through cleanly is never restarted.
+BROWSER_RESTART_AFTER_BANS: int = 5
 
 # Browser engine: disable Chrome sandbox (required when running as root, e.g. Docker).
 # None = auto-detect: sandbox is disabled automatically when the process runs as root on Linux.
