@@ -77,6 +77,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
 * ⚡  Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
+* 🔄 Intelligent browser restart — restarts on consecutive bans, not a fixed request count
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -192,6 +193,7 @@ config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
 config.BROWSER_HEADLESS = True          # browser driver: headless mode (False = visible window, more stealthy)
 config.BROWSER_SETTLE_S = 4.0          # browser driver: seconds to wait after navigation for JS to finish
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
+config.BROWSER_RESTART_AFTER_BANS = 5   # restart Chrome (fresh fingerprint) after 5 consecutive bans
 
 
 class MySpider(scrapy.Spider):
@@ -227,6 +229,8 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BROWSER_SETTLE_S`        | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                              |
 | `BROWSER_NO_SANDBOX`      | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                 |
 | `BROWSER_EXECUTABLE_PATH` | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`) |
+| `BROWSER_MAX_TABS`        | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                      |
+| `BROWSER_RESTART_AFTER_BANS`  | `int`   | `5`    | Browser driver: restart Chrome (fresh fingerprint/cookies/CDP session) after this many *consecutive* banned/challenged responses. Any clean response resets the count |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
 
@@ -324,6 +328,20 @@ BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
 ```
 
 > When `BROWSER_EXECUTABLE_PATH` is `None` (the default), `scrapy-stealth` auto-detects Google Chrome or Chromium from standard system paths. Set it explicitly when using Brave or a non-standard Chrome installation — a clear error is raised if the path does not exist.
+
+**Intelligent restart:**
+
+The browser engine restarts Chrome intelligently rather than on a fixed schedule — it only restarts
+(getting a fresh fingerprint, cookies, and CDP session) after `BROWSER_RESTART_AFTER_BANS` consecutive
+banned/challenged responses, as classified by the Anti-Bot Detection module (see below).
+A single clean response resets the streak, so a browser that's sailing through cleanly is left running
+indefinitely — it's never restarted just because it has served a lot of requests.
+
+```python
+from scrapy_stealth.config import config
+
+config.BROWSER_RESTART_AFTER_BANS = 5  # restart after 5 consecutive bans (default)
+```
 
 **Docker (running as root):**
 

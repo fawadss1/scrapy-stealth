@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.8b1] - 2026-06-16
+
+### Added
+
+- **Intelligent browser restart (`BROWSER_RESTART_AFTER_BANS`)**
+  The browser engine now restarts Chrome (fresh fingerprint, cookies, and CDP session) only
+  when it actually needs to — after `BROWSER_RESTART_AFTER_BANS` (default `5`) *consecutive*
+  responses are classified as banned or challenged by `AntiBotDetector`. A single clean
+  response resets the streak to zero, so a browser sailing through cleanly is never restarted,
+  no matter how many requests it has served. Replaces the previous fixed-count
+  `BROWSER_RESTART_EVERY` restart, which fired blindly every N requests regardless of whether
+  anything was actually going wrong.
+  Implemented via a small `BanStreakTracker` helper in `utils/browser.py`.
+
+### Fixed
+
+- **Browser engine — restart/teardown race on Windows**
+  `_reset_browser()` now waits for the old event loop's thread to fully stop (`_stop_loop()`)
+  before starting a new loop and thread. Previously the old `ProactorEventLoop` could keep
+  polling its selector after the replacement loop was already running, surfacing as an
+  `InvalidStateError` crash or unretrieved `OSError` task exceptions on Windows.
+
 ## [0.6.8a1] - 2026-06-12
 
 ### Added
