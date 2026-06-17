@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from curl_cffi import CurlHttpVersion
-from curl_cffi.requests import Session
 from scrapy.http import Request, Response
+
+from ..exceptions import StealthDependencyError
+
+try:
+    from curl_cffi import CurlHttpVersion
+    from curl_cffi.requests import Session
+except ImportError as exc:
+    StealthDependencyError.check("curl_cffi", exc)
 
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError

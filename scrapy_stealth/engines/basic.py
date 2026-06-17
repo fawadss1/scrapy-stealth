@@ -4,8 +4,14 @@ from datetime import timedelta
 from typing import Any
 
 from scrapy.http import Request, Response
-from wreq.blocking import Client
-from wreq.proxy import Proxy
+
+from ..exceptions import StealthDependencyError
+
+try:
+    from wreq.blocking import Client
+    from wreq.proxy import Proxy
+except ImportError as exc:
+    StealthDependencyError.check("wreq", exc)
 
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError

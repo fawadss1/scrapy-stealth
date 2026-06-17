@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from wreq.emulation import Emulation, Profile
+from ..exceptions import StealthDependencyError
+
+try:
+    from wreq.emulation import Emulation, Profile
+
+    _WREQ_AVAILABLE = True
+    _wreq_import_error: ImportError | None = None
+except ImportError as _wreq_err:
+    _WREQ_AVAILABLE = False
+    _wreq_import_error = _wreq_err
+    Emulation = None  # type: ignore[assignment]
+    Profile = None  # type: ignore[assignment]
 
 from ..config import config
 from .console import console
@@ -37,7 +48,15 @@ _TURBO_PREFIXES: list[tuple[str, str]] = [
 ]
 
 
-def _build_browser_map() -> dict[str, Profile]:
+def _require_wreq() -> None:
+    """Raise StealthDependencyError if wreq failed to load."""
+    if not _WREQ_AVAILABLE:
+        StealthDependencyError.check("wreq", _wreq_import_error)
+
+
+def _build_browser_map() -> dict[str, "Profile"]:
+    if not _WREQ_AVAILABLE:
+        return {}
     result: dict[str, Profile] = {}
     for attr in dir(Emulation):
         if attr.startswith("_"):
@@ -47,7 +66,7 @@ def _build_browser_map() -> dict[str, Profile]:
             continue
         for prefix, key_prefix in _PREFIXES:
             if attr.startswith(prefix):
-                version = attr[len(prefix) :]
+                version = attr[len(prefix):]
                 result[f"{key_prefix}_{version.lower()}"] = value
                 break
     for alias, target in _ALIASES.items():
@@ -56,10 +75,11 @@ def _build_browser_map() -> dict[str, Profile]:
     return result
 
 
-_BROWSER_MAP: dict[str, Profile] = _build_browser_map()
+_BROWSER_MAP: dict[str, "Profile"] = _build_browser_map()
 
 
-def _resolve_basic(profile: str | Profile) -> Profile:
+def _resolve_basic(profile: "str | Profile") -> "Profile":
+    _require_wreq()
     if isinstance(profile, Profile):
         return profile
     resolved = _BROWSER_MAP.get(profile)
@@ -72,7 +92,7 @@ def _resolve_basic(profile: str | Profile) -> Profile:
     return resolved
 
 
-def _resolve_turbo(profile: str | Profile) -> str:
+def _resolve_turbo(profile: "str | Profile") -> str:
     name = profile if isinstance(profile, str) else config.get("DEFAULT_PROFILE")
     name_lower = name.lower()
     for prefix, target in _TURBO_PREFIXES:
@@ -84,7 +104,7 @@ def _resolve_turbo(profile: str | Profile) -> str:
     return "chrome131"
 
 
-def resolve_browser(profile: str | Profile, backend: str = "basic") -> Profile | str:
+def resolve_browser(profile: "str | Profile", backend: str = "basic") -> "Profile | str":
     if backend == "turbo":
         return _resolve_turbo(profile)
     return _resolve_basic(profile)
