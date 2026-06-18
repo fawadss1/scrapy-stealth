@@ -890,9 +890,7 @@ class TestLoopExceptionHandler:
             ConnectionResetError(),
             BrokenPipeError(),
         ):
-            assert (
-                self._handle(exc).default_exception_handler.called is False
-            )
+            assert self._handle(exc).default_exception_handler.called is False
 
     def test_passes_through_unrelated_errors(self):
         loop = self._handle(ValueError("boom"))

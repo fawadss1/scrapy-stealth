@@ -165,8 +165,7 @@ class BrowserEngine(BaseEngine):
             return
         if (
             isinstance(exc, OSError)
-            and getattr(exc, "winerror", None)
-            in BrowserEngine._BENIGN_WINERRORS
+            and getattr(exc, "winerror", None) in BrowserEngine._BENIGN_WINERRORS
         ):
             return
         loop.default_exception_handler(context)
