@@ -738,6 +738,27 @@ class TestBrowserEngine:
         finally:
             config.BROWSER_STATIC_ASSETS_BLOCK = False
 
+    # -----------------------------------------------------------------
+    # proxy bypass list
+    # -----------------------------------------------------------------
+
+    def test_proxy_bypass_flag_added_with_proxy(self, monkeypatch, engine):
+        monkeypatch.setattr(
+            config, "BROWSER_PROXY_BYPASS_LIST", ["example.com", "*.internal"]
+        )
+        args = engine._build_args(headless=True, proxy_port=8123)
+        assert "--proxy-bypass-list=example.com;*.internal" in args
+
+    def test_proxy_bypass_flag_absent_without_proxy(self, monkeypatch, engine):
+        monkeypatch.setattr(config, "BROWSER_PROXY_BYPASS_LIST", ["example.com"])
+        args = engine._build_args(headless=True, proxy_port=None)
+        assert not any(a.startswith("--proxy-bypass-list") for a in args)
+
+    def test_proxy_bypass_flag_absent_when_list_empty(self, monkeypatch, engine):
+        monkeypatch.setattr(config, "BROWSER_PROXY_BYPASS_LIST", [])
+        args = engine._build_args(headless=True, proxy_port=8123)
+        assert not any(a.startswith("--proxy-bypass-list") for a in args)
+
 
 # ---------------------------------------------------------------------------
 # _block_static_assets (CDP Fetch-domain resource blocking)
@@ -802,3 +823,38 @@ class TestBlockStaticAssets:
 
         asyncio.run(self._trigger(fake_page, "Image"))
         assert cdp_fetch.RequestPaused not in fake_page.handlers
+
+
+# ---------------------------------------------------------------------------
+# _proxy_bypass_args (Chrome --proxy-bypass-list launch flag)
+# ---------------------------------------------------------------------------
+
+
+class TestProxyBypassArgs:
+    def test_builds_flag_joined_with_semicolons(self):
+        from scrapy_stealth.utils.browser import _proxy_bypass_args
+
+        assert _proxy_bypass_args(["example.com", "*.internal", "<local>"]) == [
+            "--proxy-bypass-list=example.com;*.internal;<local>"
+        ]
+
+    def test_single_entry(self):
+        from scrapy_stealth.utils.browser import _proxy_bypass_args
+
+        assert _proxy_bypass_args(["example.com"]) == [
+            "--proxy-bypass-list=example.com"
+        ]
+
+    def test_strips_whitespace_and_drops_empties(self):
+        from scrapy_stealth.utils.browser import _proxy_bypass_args
+
+        assert _proxy_bypass_args(["  example.com  ", "", "  ", None, "x.io"]) == [
+            "--proxy-bypass-list=example.com;x.io"
+        ]
+
+    def test_empty_inputs_return_no_flag(self):
+        from scrapy_stealth.utils.browser import _proxy_bypass_args
+
+        assert _proxy_bypass_args(None) == []
+        assert _proxy_bypass_args([]) == []
+        assert _proxy_bypass_args(["", "  ", None]) == []
