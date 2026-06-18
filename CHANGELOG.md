@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.9a2] - 2026-06-18
+
+### Fixed
+
+* **Windows browser-restart log noise (`WinError 995`)**
+  Suppressed benign Windows Proactor teardown errors logged when the event loop and proxy relay are torn down during a browser restart.
+  The loop exception handler now ignores `WinError 995` (`ERROR_OPERATION_ABORTED`) and `WinError 64` (`ERROR_NETNAME_DELETED`)
+  alongside the existing `10054` (`WSAECONNRESET`); genuine errors are still surfaced. The restart itself was always succeeding — only
+  the spurious `ERROR` tracebacks are gone.
+
+----
+
 ## [0.6.9a1] - 2026-06-18
 
 ### Added
@@ -67,8 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Static asset blocking can significantly decrease network usage and page load times when visual assets are not required.
 * **Improved browser stability**
   Smarter restart behavior reduces browser churn while maintaining long-running crawl reliability.
-
----
 
 ## [0.6.8b2] - 2026-06-18
 
