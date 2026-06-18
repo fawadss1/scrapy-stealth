@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -858,3 +859,48 @@ class TestProxyBypassArgs:
         assert _proxy_bypass_args(None) == []
         assert _proxy_bypass_args([]) == []
         assert _proxy_bypass_args(["", "  ", None]) == []
+
+
+# ---------------------------------------------------------------------------
+# _loop_exception_handler (Windows Proactor teardown noise suppression)
+# ---------------------------------------------------------------------------
+
+
+class TestLoopExceptionHandler:
+    @staticmethod
+    def _handle(exc):
+        loop = MagicMock()
+        BrowserEngine._loop_exception_handler(
+            loop, {"message": "Accept failed on a socket", "exception": exc}
+        )
+        return loop
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="winerror is only set on Windows"
+    )
+    @pytest.mark.parametrize("winerror", [10054, 995, 64])
+    def test_suppresses_benign_winerrors(self, winerror):
+        # 4-arg OSError(errno, strerror, filename, winerror) sets .winerror.
+        loop = self._handle(OSError(22, "aborted", None, winerror))
+        loop.default_exception_handler.assert_not_called()
+
+    def test_suppresses_connection_errors(self):
+        for exc in (
+            ConnectionRefusedError(),
+            ConnectionResetError(),
+            BrokenPipeError(),
+        ):
+            assert (
+                self._handle(exc).default_exception_handler.called is False
+            )
+
+    def test_passes_through_unrelated_errors(self):
+        loop = self._handle(ValueError("boom"))
+        loop.default_exception_handler.assert_called_once()
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="winerror is only set on Windows"
+    )
+    def test_passes_through_other_oserror(self):
+        loop = self._handle(OSError(2, "no such file", None, 2))
+        loop.default_exception_handler.assert_called_once()

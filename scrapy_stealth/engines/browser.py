@@ -147,6 +147,14 @@ class BrowserEngine(BaseEngine):
                 "BROWSER_EXECUTABLE_PATH to point to your browser binary (e.g. Brave)."
             ) from exc
 
+    # Benign Windows Proactor teardown WinErrors raised when in-flight overlapped
+    # socket ops (the proxy-relay accept loop, tab pipes) are aborted as the event
+    # loop stops during a browser restart/shutdown — not real failures.
+    #   10054 = WSAECONNRESET           (connection reset by peer)
+    #     995 = ERROR_OPERATION_ABORTED (I/O cancelled by thread exit / app request)
+    #      64 = ERROR_NETNAME_DELETED   (network name no longer available)
+    _BENIGN_WINERRORS: frozenset[int] = frozenset({10054, 995, 64})
+
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
         exc = context.get("exception")
@@ -155,7 +163,11 @@ class BrowserEngine(BaseEngine):
             exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)
         ):
             return
-        if isinstance(exc, OSError) and getattr(exc, "winerror", None) == 10054:
+        if (
+            isinstance(exc, OSError)
+            and getattr(exc, "winerror", None)
+            in BrowserEngine._BENIGN_WINERRORS
+        ):
             return
         loop.default_exception_handler(context)
 
