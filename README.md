@@ -62,7 +62,8 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 | Memory footprint             |     🟢 Low     |       🟢 Low       |      🔴 High      |    🔴 High    |      🟢 Low      |
 
 > ⚠️ `scrapy-playwright` passes real browser TLS but does not spoof fingerprint profiles like `scrapy-stealth` does.
-> `scrapy-impersonate` provides TLS/HTTP2 impersonation via `curl_cffi` but lacks built-in rotation, detection, or per-request engine switching.
+> `scrapy-impersonate` provides TLS/HTTP2 impersonation via `curl_cffi` but lacks built-in rotation, detection, or per-request engine
+> switching.
 > JavaScript rendering is available via the optional `browser` driver — use it selectively for pages that require a full browser.
 
 ---
@@ -75,10 +76,11 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🧬 Browser fingerprint rotation
 * 🔁 Smart retry logic
 * 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
-* ⚡  Thread-safe async integration
+* ⚡ Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
 * 🔄 Intelligent browser restart — restarts on consecutive bans, not a fixed request count
 * 🚫 Static asset blocking — skip images, fonts, CSS, and media for faster, lighter browser fetches
+* 🎯 Proxy bypass list — send chosen domains straight to the origin instead of through the proxy (`--proxy-bypass-list`)
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -105,7 +107,7 @@ DOWNLOADER_MIDDLEWARES = {
 
 # 2. (Optional) Route ALL requests through stealth automatically — no meta needed per request
 STEALTH_ENABLED = True
-STEALTH_DRIVER  = "turbo"   # "basic" (default), "turbo", or "browser"
+STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", or "browser"
 
 # 3. (Optional) Proxy list for automatic rotation
 #    Used when rotate_proxy=True (per-request) or when STEALTH_ENABLED=True with rotate_proxy
@@ -160,7 +162,7 @@ yield scrapy.Request(
 ```python
 # settings.py or custom_settings
 STEALTH_ENABLED = True
-STEALTH_DRIVER  = "turbo"
+STEALTH_DRIVER = "turbo"
 ```
 
 ```python
@@ -184,18 +186,19 @@ created at middleware initialisation, so changes inside `start_requests` or `par
 import scrapy
 from scrapy_stealth.config import config
 
-config.DEFAULT_ENGINE  = "stealth"      # "scrapy" (native) or "stealth" (browser impersonation)
-config.DEFAULT_PROFILE = "chrome_147"   # browser profile when meta["stealth"]["profile"] is not set
-config.DEFAULT_TIMEOUT = 30             # stealth request timeout in seconds
-config.STEALTH_DRIVER  = "turbo"        # "basic" (default), "turbo", or "browser"
-config.HTTP2           = True           # False for servers that only support HTTP/1.1
-config.BLOCK_CODES    |= {407}          # extend blocked status codes (|= keeps defaults)
+config.DEFAULT_ENGINE = "stealth"  # "scrapy" (native) or "stealth" (browser impersonation)
+config.DEFAULT_PROFILE = "chrome_147"  # browser profile when meta["stealth"]["profile"] is not set
+config.DEFAULT_TIMEOUT = 30  # stealth request timeout in seconds
+config.STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", or "browser"
+config.HTTP2 = True  # False for servers that only support HTTP/1.1
+config.BLOCK_CODES |= {407}  # extend blocked status codes (|= keeps defaults)
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
-config.BROWSER_HEADLESS = True          # browser driver: headless mode (False = visible window, more stealthy)
-config.BROWSER_SETTLE_S = 4.0          # browser driver: seconds to wait after navigation for JS to finish
+config.BROWSER_HEADLESS = True  # browser driver: headless mode (False = visible window, more stealthy)
+config.BROWSER_SETTLE_S = 4.0  # browser driver: seconds to wait after navigation for JS to finish
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
-config.BROWSER_RESTART_AFTER_BANS = 5   # restart Chrome (fresh fingerprint) after 5 consecutive bans
+config.BROWSER_RESTART_AFTER_BANS = 5  # restart Chrome (fresh fingerprint) after 5 consecutive bans
 config.BROWSER_STATIC_ASSETS_BLOCK = True  # block images/fonts/CSS/media (skipped when snapshot=True)
+config.BROWSER_PROXY_BYPASS_LIST = ["example.com", "*.internal"]  # these bypass the proxy
 
 
 class MySpider(scrapy.Spider):
@@ -214,28 +217,30 @@ class MySpider(scrapy.Spider):
 You can also read any value programmatically:
 
 ```python
-config.get("DEFAULT_ENGINE")          # "scrapy"
+config.get("DEFAULT_ENGINE")  # "scrapy"
 config.get("MISSING_KEY", "default")  # "default"
 ```
 
-| Attribute                     | Type             | Default                           | Description                                                                                                                                                           |
-|-------------------------------|------------------|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `DEFAULT_ENGINE`              | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                                                                              |
-| `DEFAULT_PROFILE`             | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                                                                           |
-| `DEFAULT_TIMEOUT`             | `int`            | `30`                              | Request timeout in seconds                                                                                                                                            |
-| `STEALTH_DRIVER`              | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER`                                                          |
-| `HTTP2`                       | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                                                                                   |
-| `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                                                                                  |
-| `BLOCK_KEYWORDS`              | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                                 |
-| `BROWSER_HEADLESS`            | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                                                                               |
-| `BROWSER_SETTLE_S`            | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                                           |
-| `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                              |
-| `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)              |
-| `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                  |
-| `BROWSER_RESTART_AFTER_BANS`  | `int`            | `5`                               | Browser driver: restart Chrome (fresh fingerprint/cookies/CDP session) after this many *consecutive* banned/challenged responses. Any clean response resets the count |
-| `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                           | Browser driver: block images, fonts, CSS, and media via CDP. Overridable per-request via `meta["stealth"]["static_assets_block"]`; always off when `snapshot=True`    |
+| Attribute                     | Type             | Default                           | Description                                                                                                                                                                                                                                                                                       |
+|-------------------------------|------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`              | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                                                                                                                                                                                                          |
+| `DEFAULT_PROFILE`             | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                                                                                                                                                                                                       |
+| `DEFAULT_TIMEOUT`             | `int`            | `30`                              | Request timeout in seconds                                                                                                                                                                                                                                                                        |
+| `STEALTH_DRIVER`              | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER`                                                                                                                                                                                      |
+| `HTTP2`                       | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                                                                                                                                                                                                               |
+| `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                                                                                                                                                                                                              |
+| `BLOCK_KEYWORDS`              | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                                                                                                                                                             |
+| `BROWSER_HEADLESS`            | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                                                                                                                                                                                                           |
+| `BROWSER_SETTLE_S`            | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                                                                                                                                                                       |
+| `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                          |
+| `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                          |
+| `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                              |
+| `BROWSER_RESTART_AFTER_BANS`  | `int`            | `5`                               | Browser driver: restart Chrome (fresh fingerprint/cookies/CDP session) after this many *consecutive* banned/challenged responses. Any clean response resets the count                                                                                                                             |
+| `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                           | Browser driver: block images, fonts, CSS, and media via CDP. Overridable per-request via `meta["stealth"]["static_assets_block"]`; always off when `snapshot=True`                                                                                                                                |
+| `BROWSER_PROXY_BYPASS_LIST`   | `list[str]`      | `[]`                              | Browser driver: domains/patterns that bypass the proxy and connect to the origin directly, via Chrome's `--proxy-bypass-list`. Supports wildcards (`*.example.com`), IP/CIDR, ports, and `<local>`. Only applies when a proxy is in use; set at browser launch (config/settings, not per-request) |
 
-For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration below).
+For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration
+below).
 
 ---
 
@@ -293,8 +298,8 @@ yield scrapy.Request(
     meta={
         "stealth": {
             "driver": "browser",
-            "headless": False,   # visible window — harder to detect (default: True)
-            "settle": 4.0,       # seconds to wait for JS after page load
+            "headless": False,  # visible window — harder to detect (default: True)
+            "settle": 4.0,  # seconds to wait for JS after page load
         }
     },
 )
@@ -303,7 +308,7 @@ yield scrapy.Request(
 **Heavy Cloudflare sites — increase settle time:**
 
 ```python
-meta={"stealth": {"driver": "browser", "headless": False, "settle": 12}}
+meta = {"stealth": {"driver": "browser", "headless": False, "settle": 12}}
 ```
 
 **Global default (all stealth requests use browser engine):**
@@ -311,9 +316,9 @@ meta={"stealth": {"driver": "browser", "headless": False, "settle": 12}}
 ```python
 from scrapy_stealth.config import config
 
-config.STEALTH_DRIVER   = "browser"
-config.BROWSER_HEADLESS = False   # more stealthy
-config.BROWSER_SETTLE_S = 6.0    # longer wait for JS
+config.STEALTH_DRIVER = "browser"
+config.BROWSER_HEADLESS = False  # more stealthy
+config.BROWSER_SETTLE_S = 6.0  # longer wait for JS
 ```
 
 **Custom browser binary (Brave, Chromium, or a non-default Chrome install):**
@@ -331,7 +336,8 @@ Or via `settings.py` / `custom_settings`:
 BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
 ```
 
-> When `BROWSER_EXECUTABLE_PATH` is `None` (the default), `scrapy-stealth` auto-detects Google Chrome or Chromium from standard system paths. Set it explicitly when using Brave or a non-standard Chrome installation — a clear error is raised if the path does not exist.
+> When `BROWSER_EXECUTABLE_PATH` is `None` (the default), `scrapy-stealth` auto-detects Google Chrome or Chromium from standard system
+> paths. Set it explicitly when using Brave or a non-standard Chrome installation — a clear error is raised if the path does not exist.
 
 **Intelligent restart:**
 
@@ -362,13 +368,43 @@ BROWSER_STATIC_ASSETS_BLOCK = True
 
 ```python
 # per-request
-meta={"stealth": {"driver": "browser", "static_assets_block": True}}
+meta = {"stealth": {"driver": "browser", "static_assets_block": True}}
 ```
 
 ```python
 # snapshot always wins — assets are never blocked here, even with the global default on
-meta={"stealth": {"driver": "browser", "snapshot": True}}
+meta = {"stealth": {"driver": "browser", "snapshot": True}}
 ```
+
+**Proxy bypass list:**
+
+When a proxy is configured, you can send specific domains straight to the origin instead of
+through the proxy. The list is passed to Chrome's `--proxy-bypass-list` launch flag, so it
+supports the full Chrome bypass syntax — bare hostnames, wildcards (`*.example.com`),
+IP/CIDR ranges, ports, and the special `<local>` token.
+
+```python
+# settings.py
+STEALTH_DRIVER = "browser"
+STEALTH_PROXIES = ["http://user:pass@proxy:8080"]
+BROWSER_PROXY_BYPASS_LIST = [
+    "example.com",  # exact host
+    "*.internal.net",  # wildcard subdomains
+    "127.0.0.1",  # IP
+    "<local>",  # any plain hostname without dots
+]
+```
+
+```python
+# or via config
+from scrapy_stealth.config import config
+
+config.BROWSER_PROXY_BYPASS_LIST = ["example.com", "*.internal.net"]
+```
+
+> The bypass list is a Chrome launch flag, so it's read once when the browser starts and
+> applies to the whole browser lifetime — it's configured globally (config/settings), not
+> per-request. It has no effect unless a proxy is in use.
 
 **Docker (running as root):**
 
@@ -376,7 +412,7 @@ Chrome requires `--no-sandbox` when the process runs as root. `scrapy-stealth` d
 but you can also set it explicitly in `settings.py`:
 
 ```python
-BROWSER_NO_SANDBOX = True           # force no-sandbox (Docker, any root environment)
+BROWSER_NO_SANDBOX = True  # force no-sandbox (Docker, any root environment)
 BROWSER_EXECUTABLE_PATH = "/usr/bin/chromium"  # use Chromium instead of Chrome in Docker
 ```
 
@@ -417,6 +453,7 @@ The raw PNG bytes are available at `response.meta["snapshot_content"]` inside yo
 
 ```python
 from scrapy_stealth.decorators import snapshot
+
 
 class MySpider(scrapy.Spider):
 
@@ -582,7 +619,8 @@ Using stealth selectively:
 
 ## 📜 Changelog
 
-See [CHANGELOG.md](https://github.com/fawadss1/scrapy-stealth/blob/master/CHANGELOG.md) for a full history of changes, or browse [GitHub Releases](https://github.com/fawadss1/scrapy-stealth/releases).
+See [CHANGELOG.md](https://github.com/fawadss1/scrapy-stealth/blob/master/CHANGELOG.md) for a full history of changes, or
+browse [GitHub Releases](https://github.com/fawadss1/scrapy-stealth/releases).
 
 ---
 

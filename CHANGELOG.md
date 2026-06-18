@@ -6,22 +6,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+
+## [0.6.9a1] - 2026-06-18
+
+### Added
+
+* **Proxy bypass list (`BROWSER_PROXY_BYPASS_LIST`)**
+  Route chosen domains around the proxy in the browser engine. The user-supplied list is passed to Chrome's `--proxy-bypass-list`
+  launch flag, so requests to those domains connect to the origin directly instead of through the proxy relay. Supports the full Chrome
+  bypass syntax — bare hostnames, wildcards (`*.example.com`), IP/CIDR ranges, ports, and the `<local>` token. Configured globally via
+  config/settings; only takes effect when a proxy is in use.
+
+---
+
 ## [0.6.8] - 2026-06-18
 
 ### Added
 
 * **Intelligent content wait (`_smart_wait`)**
-  Automatically detects JavaScript challenges, CAPTCHAs, and anti-bot interstitial pages and waits for meaningful page content before returning a response, improving success rates on protected websites.
+  Automatically detects JavaScript challenges, CAPTCHAs, and anti-bot interstitial pages and waits for meaningful page content before
+  returning a response, improving success rates on protected websites.
 * **Advanced challenge detection**
   Added comprehensive detection for Cloudflare, DataDome, Akamai, Kasada, and other common anti-bot challenge pages.
 * **Randomized browser fingerprinting**
-  Browser sessions now launch with realistic randomized window sizes and language configurations to reduce fingerprint consistency across sessions.
+  Browser sessions now launch with realistic randomized window sizes and language configurations to reduce fingerprint consistency
+  across sessions.
 * **Intelligent browser restart (`BROWSER_RESTART_AFTER_BANS`)**
-  Browser instances are now restarted only after a configurable number of consecutive bans or challenge responses, replacing the previous fixed-request restart strategy.
+  Browser instances are now restarted only after a configurable number of consecutive bans or challenge responses, replacing the
+  previous fixed-request restart strategy.
 * **Static asset blocking (`BROWSER_STATIC_ASSETS_BLOCK`)**
-  Optional blocking of images, fonts, stylesheets, and other non-essential assets via Chrome DevTools Protocol, reducing bandwidth usage and improving page load performance.
+  Optional blocking of images, fonts, stylesheets, and other non-essential assets via Chrome DevTools Protocol, reducing bandwidth
+  usage and improving page load performance.
 * **`StealthDependencyError`**
-  New typed exception for optional dependency loading failures, providing platform-specific guidance for resolving missing native libraries and runtime dependencies.
+  New typed exception for optional dependency loading failures, providing platform-specific guidance for resolving missing native
+  libraries and runtime dependencies.
 
 ### Fixed
 
@@ -30,14 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Windows dependency loading failures**
   Improved handling of `wreq` and `curl_cffi` DLL loading errors with actionable error messages instead of opaque import tracebacks.
 * **Deferred dependency loading**
-  Optional browser-profile dependencies are now loaded lazily, preventing unrelated engines from failing when specific native dependencies are unavailable.
+  Optional browser-profile dependencies are now loaded lazily, preventing unrelated engines from failing when specific native
+  dependencies are unavailable.
 * **Browser response rendering**
   Improved response handling to ensure successful pages are fully rendered before being returned to Scrapy.
 
 ### Changed
 
 * **Browser restart strategy**
-  Replaced the request-count-based restart mechanism with ban-aware restart logic, reducing unnecessary browser restarts during healthy crawls.
+  Replaced the request-count-based restart mechanism with ban-aware restart logic, reducing unnecessary browser restarts during healthy
+  crawls.
 * **Test suite refactoring**
   Simplified browser-related test cases and reduced mock complexity for improved maintainability.
 
@@ -47,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Static asset blocking can significantly decrease network usage and page load times when visual assets are not required.
 * **Improved browser stability**
   Smarter restart behavior reduces browser churn while maintaining long-running crawl reliability.
+
+---
 
 ## [0.6.8b2] - 2026-06-18
 
@@ -60,10 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   typically because a required native DLL or shared library could not be found.
 
   The exception provides a platform-aware, actionable message at raise time:
-  - **Windows** — instructs the user to install both x64 and x86 Visual C++ Redistributables
-    (2015–2022) with direct download links.
-  - **Linux** — suggests the appropriate `apt-get` / `yum` packages for missing system
-    libraries (`libssl`, `libcurl`).
+    - **Windows** — instructs the user to install both x64 and x86 Visual C++ Redistributables
+      (2015–2022) with direct download links.
+    - **Linux** — suggests the appropriate `apt-get` / `yum` packages for missing system
+      libraries (`libssl`, `libcurl`).
 
   `StealthDependencyError` is exported from the top-level package and added to `__all__`,
   making it catchable in user code alongside the other stealth exceptions.
@@ -392,7 +414,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bypassing Scrapy's retry middleware. Three typed exceptions now replace raw library errors:
 
   | Exception                     | Inherits from                 | Retried by Scrapy                           | Raised by                                                                             |
-        |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
+                      |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
   | `StealthTimeoutError`         | `DownloadTimeoutError`        | ✅ (in default `RETRY_EXCEPTIONS`)           | All engines on request timeout                                                        |
   | `StealthConnectionError`      | `ConnectionError` → `OSError` | ✅ (`OSError` in default `RETRY_EXCEPTIONS`) | `BasicEngine` / `TurboEngine` on DNS or network failure; `BrowserEngine` on `OSError` |
   | `StealthBrowserNotFoundError` | `StealthException` only       | ❌ (config error, retrying is pointless)     | `BrowserEngine` when Chrome/Chromium binary is missing                                |
