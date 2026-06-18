@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import os
 import random
 import subprocess
@@ -46,6 +47,15 @@ _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
+
+# Resource types blocked when static_assets_block=True — covers images, fonts,
+# stylesheets, and other media that aren't needed to read or detect-bypass a page.
+_STATIC_ASSET_RESOURCE_TYPES: tuple[str, ...] = (
+    "Image",
+    "Font",
+    "Stylesheet",
+    "Media",
+)
 
 _CONTENT_SHORT_THRESHOLD = 2500
 
@@ -134,6 +144,43 @@ async def _cdp_snapshot(page: Any) -> bytes | None:
         return base64.b64decode(data)
     except Exception:
         return None
+
+
+@contextlib.asynccontextmanager
+async def _block_static_assets(page: Any):
+    """
+    While active, fail every request whose resource type is in
+    ``_STATIC_ASSET_RESOURCE_TYPES`` (images, fonts, CSS, media) via the CDP
+    Fetch domain — everything else (document, script, XHR/fetch) passes
+    through untouched. Scoped to *page* and torn down on exit so it never
+    leaks to the next tab.
+    """
+    import nodriver.cdp.fetch as _cdp_fetch
+    import nodriver.cdp.network as _cdp_network
+
+    async def _on_paused(event: _cdp_fetch.RequestPaused, *_: Any) -> None:
+        try:
+            if event.resource_type.value in _STATIC_ASSET_RESOURCE_TYPES:
+                await page.send(
+                    _cdp_fetch.fail_request(
+                        event.request_id, _cdp_network.ErrorReason.BLOCKED_BY_CLIENT
+                    )
+                )
+            else:
+                await page.send(_cdp_fetch.continue_request(event.request_id))
+        except Exception:
+            pass
+
+    await page.send(_cdp_fetch.enable())
+    page.add_handler(_cdp_fetch.RequestPaused, _on_paused)
+    try:
+        yield
+    finally:
+        page.remove_handler(_cdp_fetch.RequestPaused, _on_paused)
+        try:
+            await page.send(_cdp_fetch.disable())
+        except Exception:
+            pass
 
 
 def _silence_browser() -> None:
