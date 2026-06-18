@@ -51,7 +51,9 @@ _TURBO_PREFIXES: list[tuple[str, str]] = [
 def _require_wreq() -> None:
     """Raise StealthDependencyError if wreq failed to load."""
     if not _WREQ_AVAILABLE:
-        StealthDependencyError.check("wreq", _wreq_import_error)
+        # Fallback ensuring mypy always receives a BaseException instance instead of None
+        err = _wreq_import_error or ImportError("wreq library is missing")
+        StealthDependencyError.check("wreq", err)
 
 
 def _build_browser_map() -> dict[str, "Profile"]:
