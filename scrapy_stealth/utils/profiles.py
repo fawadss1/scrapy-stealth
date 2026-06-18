@@ -66,7 +66,7 @@ def _build_browser_map() -> dict[str, "Profile"]:
             continue
         for prefix, key_prefix in _PREFIXES:
             if attr.startswith(prefix):
-                version = attr[len(prefix):]
+                version = attr[len(prefix) :]
                 result[f"{key_prefix}_{version.lower()}"] = value
                 break
     for alias, target in _ALIASES.items():
@@ -105,7 +105,7 @@ def _resolve_turbo(profile: "str | Profile") -> str:
 
 
 def resolve_browser(
-        profile: "str | Profile", backend: str = "basic"
+    profile: "str | Profile", backend: str = "basic"
 ) -> "Profile | str":
     if backend == "turbo":
         return _resolve_turbo(profile)
