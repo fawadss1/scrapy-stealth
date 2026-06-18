@@ -679,4 +679,3 @@ class TestBrowserEngine:
             engine._execute(Request("https://example.com"))
             engine._execute(Request("https://example.com"))
             mock_reset.assert_not_called()
-
