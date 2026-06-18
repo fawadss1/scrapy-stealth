@@ -104,7 +104,9 @@ def _resolve_turbo(profile: "str | Profile") -> str:
     return "chrome131"
 
 
-def resolve_browser(profile: "str | Profile", backend: str = "basic") -> "Profile | str":
+def resolve_browser(
+        profile: "str | Profile", backend: str = "basic"
+) -> "Profile | str":
     if backend == "turbo":
         return _resolve_turbo(profile)
     return _resolve_basic(profile)
