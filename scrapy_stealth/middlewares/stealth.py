@@ -56,6 +56,10 @@ class StealthDownloaderMiddleware:
             config.BROWSER_EXECUTABLE_PATH = executable_path
         if (assets_block := settings.get("BROWSER_STATIC_ASSETS_BLOCK")) is not None:
             config.BROWSER_STATIC_ASSETS_BLOCK = bool(assets_block)
+        if settings.get("BROWSER_PROXY_BYPASS_LIST") is not None:
+            config.BROWSER_PROXY_BYPASS_LIST = settings.getlist(
+                "BROWSER_PROXY_BYPASS_LIST"
+            )
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     async def process_request(self, request: Request, spider: Any) -> Response | None:

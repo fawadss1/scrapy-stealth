@@ -25,6 +25,7 @@ from ..utils.browser import (
     _ensure_xvfb,
     _is_browser_crash,
     _make_loop,
+    _proxy_bypass_args,
     _random_fingerprint_args,
     _silence_browser,
     _smart_wait,
@@ -95,6 +96,9 @@ class BrowserEngine(BaseEngine):
             args.append("--disable-dev-shm-usage")
         if proxy_port is not None:
             args.append(f"--proxy-server=http://127.0.0.1:{proxy_port}")
+            # Domains the user listed must reach the origin directly, never the
+            # proxy relay. Only meaningful alongside --proxy-server.
+            args.extend(_proxy_bypass_args(config.get("BROWSER_PROXY_BYPASS_LIST")))
         # Append fingerprint args last so they always win over any conflicting base arg.
         args.extend(fingerprint_args or _random_fingerprint_args())
         return args

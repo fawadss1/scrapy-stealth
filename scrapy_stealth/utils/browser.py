@@ -183,6 +183,29 @@ async def _block_static_assets(page: Any):
             pass
 
 
+def _proxy_bypass_args(bypass_list: Any) -> list[str]:
+    """
+    Build the Chrome ``--proxy-bypass-list`` launch flag from a user-supplied
+    list of domains/patterns.
+
+    Each entry is sent to Chrome verbatim (only surrounding whitespace is
+    trimmed and empties dropped), so the full Chrome bypass syntax is supported
+    — bare hostnames, wildcards (``*.example.com``), IP/CIDR ranges, ports, and
+    the special ``<local>`` token. Entries are joined with ``;`` as Chrome
+    expects. Returns ``[]`` when the list is empty, so callers can splat the
+    result unconditionally::
+
+        _proxy_bypass_args(["example.com", "*.internal", "<local>"])
+        -> ["--proxy-bypass-list=example.com;*.internal;<local>"]
+    """
+    if not bypass_list:
+        return []
+    entries = [str(e).strip() for e in bypass_list if e and str(e).strip()]
+    if not entries:
+        return []
+    return [f"--proxy-bypass-list={';'.join(entries)}"]
+
+
 def _silence_browser() -> None:
     import logging
 
