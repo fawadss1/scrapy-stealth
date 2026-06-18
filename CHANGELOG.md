@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [0.6.8] - 2026-06-18
+
+### Added
+
+- **Static asset blocking (`BROWSER_STATIC_ASSETS_BLOCK`)**
+  The browser engine can now block images, fonts, stylesheets, and other media via the CDP
+  `Fetch` domain, cutting bandwidth and speeding up page loads when the rendered assets
+  themselves aren't needed. Off by default; enable globally with
+  `config.BROWSER_STATIC_ASSETS_BLOCK = True` (also readable from `settings.py` /
+  `custom_settings`), or per-request via `meta["stealth"]["static_assets_block"]`. Blocking is
+  always skipped when `meta["stealth"]["snapshot"]` is `True`, since a snapshot needs the fully
+  rendered page. Implemented via a new `_block_static_assets()` async context manager in
+  `utils/browser.py`, scoped per-tab and torn down on exit.
 
 ## [0.6.8b2] - 2026-06-18
 

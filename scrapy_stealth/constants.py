@@ -58,6 +58,13 @@ BROWSER_MAX_TABS: int = 10
 # resets the counter, so a browser sailing through cleanly is never restarted.
 BROWSER_RESTART_AFTER_BANS: int = 5
 
+# Browser engine: block static assets (images, fonts, CSS, media) to speed up
+# page loads and cut bandwidth. Off by default since some anti-bot checks and
+# visual snapshots need them; overridable per-request via
+# meta["stealth"]["static_assets_block"]. Always left unblocked when
+# meta["stealth"]["snapshot"] is True, regardless of this setting.
+BROWSER_STATIC_ASSETS_BLOCK: bool = False
+
 # Browser engine: disable Chrome sandbox (required when running as root, e.g. Docker).
 # None = auto-detect: sandbox is disabled automatically when the process runs as root on Linux.
 # Set True to force no-sandbox mode; False to keep sandbox even when running as root.

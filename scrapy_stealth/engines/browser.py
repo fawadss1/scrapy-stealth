@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sys
 import threading
 from typing import Any
@@ -19,6 +20,7 @@ from ..utils.browser import (
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
     BanStreakTracker,
+    _block_static_assets,
     _cdp_snapshot,
     _ensure_xvfb,
     _is_browser_crash,
@@ -269,6 +271,7 @@ class BrowserEngine(BaseEngine):
         url: str,
         settle: float,
         snapshot: bool = False,
+        block_assets: bool = False,
     ) -> tuple[bytes, int, bytes | None]:
         """
         Open a new browser context (isolated tab), fetch *url*, then close
@@ -287,23 +290,27 @@ class BrowserEngine(BaseEngine):
         async with self._tab_sem:
             page = await self._browser.get(url, new_tab=True)
             try:
-                await page.wait()
+                async with contextlib.AsyncExitStack() as stack:
+                    if block_assets:
+                        await stack.enter_async_context(_block_static_assets(page))
 
-                if await page.evaluate(_JS_IS_CHROME_ERROR):
-                    raise StealthConnectionError(
-                        f"Browser engine connection failed fetching {url!r}"
-                    )
+                    await page.wait()
 
-                # Poll until Navigation Timing exposes a real (non-zero) status.
-                status = await _wait_for_status(page)
+                    if await page.evaluate(_JS_IS_CHROME_ERROR):
+                        raise StealthConnectionError(
+                            f"Browser engine connection failed fetching {url!r}"
+                        )
 
-                # Skip content wait on error responses — return immediately.
-                if 200 <= status < 300:
-                    await _smart_wait(page, settle)
+                    # Poll until Navigation Timing exposes a real (non-zero) status.
+                    status = await _wait_for_status(page)
 
-                html = await page.evaluate(_JS_HTML)
-                if snapshot:
-                    shot = await _cdp_snapshot(page)
+                    # Skip content wait on error responses — return immediately.
+                    if 200 <= status < 300:
+                        await _smart_wait(page, settle)
+
+                    html = await page.evaluate(_JS_HTML)
+                    if snapshot:
+                        shot = await _cdp_snapshot(page)
             finally:
                 try:
                     await page.close()
@@ -337,6 +344,13 @@ class BrowserEngine(BaseEngine):
                 request, "settle", config.get("BROWSER_SETTLE_S")
             )
             snap: bool = _get_meta_data(request, "snapshot", False)
+            # Snapshot needs the real rendered page, so it's never blocked —
+            # even if static_assets_block is on globally or per-request.
+            block_assets: bool = not snap and _get_meta_data(
+                request,
+                "static_assets_block",
+                config.get("BROWSER_STATIC_ASSETS_BLOCK"),
+            )
 
             logger.debug(
                 "Initializing browser engine (headless=%s & settle=%ss)",
@@ -355,7 +369,7 @@ class BrowserEngine(BaseEngine):
                 try:
                     assert self._loop is not None
                     future = asyncio.run_coroutine_threadsafe(
-                        self._do_fetch(request.url, settle, snap),
+                        self._do_fetch(request.url, settle, snap, block_assets),
                         self._loop,
                     )
                     body, status, shot = future.result(timeout=ctx.timeout)

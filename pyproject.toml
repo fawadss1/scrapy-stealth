@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrapy-stealth"
-version = "0.6.8b2"
+version = "0.6.8"
 description = "Stealthy Crawling. Maximum Results. A pluggable anti-bot and stealth framework for Scrapy."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -73,7 +73,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fawadss1/scrapy-stealth"
+Documentation = "https://fawadss1.github.io/scrapy-stealth-site"
 Repository = "https://github.com/fawadss1/scrapy-stealth"
 Issues = "https://github.com/fawadss1/scrapy-stealth/issues"
 Changelog = "https://github.com/fawadss1/scrapy-stealth/releases"

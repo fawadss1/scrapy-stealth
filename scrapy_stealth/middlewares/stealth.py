@@ -54,6 +54,8 @@ class StealthDownloaderMiddleware:
             config.BROWSER_NO_SANDBOX = no_sandbox
         if (executable_path := settings.get("BROWSER_EXECUTABLE_PATH")) is not None:
             config.BROWSER_EXECUTABLE_PATH = executable_path
+        if (assets_block := settings.get("BROWSER_STATIC_ASSETS_BLOCK")) is not None:
+            config.BROWSER_STATIC_ASSETS_BLOCK = bool(assets_block)
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     async def process_request(self, request: Request, spider: Any) -> Response | None:

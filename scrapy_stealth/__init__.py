@@ -47,7 +47,6 @@ from .exceptions import (
     EngineNotFound,
     StealthBrowserNotFoundError,
     StealthConnectionError,
-    StealthDependencyError,
     StealthException,
     StealthTimeoutError,
 )
@@ -83,7 +82,6 @@ __all__ = [
     "StealthTimeoutError",
     "StealthConnectionError",
     "StealthBrowserNotFoundError",
-    "StealthDependencyError",
     # Metadata
     "__version__",
     "__author__",

@@ -613,7 +613,7 @@ class TestBrowserEngine:
     def test_execute_uses_custom_settle_from_meta(self, engine):
         captured = []
 
-        async def fake_fetch(url, settle, snapshot=False):
+        async def fake_fetch(url, settle, snapshot=False, block_assets=False):
             captured.append(settle)
             return b"<html></html>", 200, None
 
@@ -626,7 +626,7 @@ class TestBrowserEngine:
     def test_execute_uses_config_settle_default(self, engine):
         captured = []
 
-        async def fake_fetch(url, settle, snapshot=False):
+        async def fake_fetch(url, settle, snapshot=False, block_assets=False):
             captured.append(settle)
             return b"<html></html>", 200, None
 
@@ -679,3 +679,126 @@ class TestBrowserEngine:
             engine._execute(Request("https://example.com"))
             engine._execute(Request("https://example.com"))
             mock_reset.assert_not_called()
+
+    # -----------------------------------------------------------------
+    # static_assets_block
+    # -----------------------------------------------------------------
+
+    def test_static_assets_block_off_by_default(self, engine):
+        with patch("scrapy_stealth.engines.browser._block_static_assets") as mock_block:
+            engine._execute(Request("https://example.com"))
+        mock_block.assert_not_called()
+
+    def test_static_assets_block_enabled_via_config(self, monkeypatch, engine):
+        monkeypatch.setattr(config, "BROWSER_STATIC_ASSETS_BLOCK", True)
+        with patch("scrapy_stealth.engines.browser._block_static_assets") as mock_block:
+            mock_block.return_value.__aenter__ = AsyncMock()
+            mock_block.return_value.__aexit__ = AsyncMock()
+            engine._execute(Request("https://example.com"))
+        mock_block.assert_called_once()
+
+    def test_static_assets_block_enabled_via_meta(self, engine):
+        with patch("scrapy_stealth.engines.browser._block_static_assets") as mock_block:
+            mock_block.return_value.__aenter__ = AsyncMock()
+            mock_block.return_value.__aexit__ = AsyncMock()
+            engine._execute(
+                Request(
+                    "https://example.com",
+                    meta={"stealth": {"static_assets_block": True}},
+                )
+            )
+        mock_block.assert_called_once()
+
+    def test_static_assets_block_never_applied_with_snapshot(self, monkeypatch, engine):
+        # Even with blocking on globally, snapshot=True must skip blocking.
+        monkeypatch.setattr(config, "BROWSER_STATIC_ASSETS_BLOCK", True)
+        with patch("scrapy_stealth.engines.browser._block_static_assets") as mock_block:
+            engine._execute(
+                Request(
+                    "https://example.com",
+                    meta={"stealth": {"snapshot": True}},
+                )
+            )
+        mock_block.assert_not_called()
+
+    def test_static_assets_block_meta_overrides_config_off(self, engine):
+        # static_assets_block=False per-request overrides a True global default.
+        config.BROWSER_STATIC_ASSETS_BLOCK = True
+        try:
+            with patch(
+                "scrapy_stealth.engines.browser._block_static_assets"
+            ) as mock_block:
+                engine._execute(
+                    Request(
+                        "https://example.com",
+                        meta={"stealth": {"static_assets_block": False}},
+                    )
+                )
+            mock_block.assert_not_called()
+        finally:
+            config.BROWSER_STATIC_ASSETS_BLOCK = False
+
+
+# ---------------------------------------------------------------------------
+# _block_static_assets (CDP Fetch-domain resource blocking)
+# ---------------------------------------------------------------------------
+
+
+class TestBlockStaticAssets:
+    @pytest.fixture
+    def fake_page(self):
+        page = AsyncMock()
+        page.handlers: dict = {}
+
+        def add_handler(event_type, callback):
+            page.handlers[event_type] = callback
+
+        def remove_handler(event_type, callback):
+            page.handlers.pop(event_type, None)
+            return True
+
+        page.add_handler = MagicMock(side_effect=add_handler)
+        page.remove_handler = MagicMock(side_effect=remove_handler)
+        return page
+
+    @staticmethod
+    def _make_event(resource_type: str):
+        import nodriver.cdp.fetch as cdp_fetch
+
+        event = MagicMock(spec=cdp_fetch.RequestPaused)
+        event.request_id = cdp_fetch.RequestId("req-1")
+        event.resource_type = MagicMock(value=resource_type)
+        return event
+
+    async def _trigger(self, page, resource_type: str):
+        import nodriver.cdp.fetch as cdp_fetch
+
+        from scrapy_stealth.utils.browser import _block_static_assets
+
+        async with _block_static_assets(page):
+            handler = page.handlers[cdp_fetch.RequestPaused]
+            await handler(self._make_event(resource_type))
+
+    def test_image_request_is_failed(self, fake_page):
+        import nodriver.cdp.fetch as cdp_fetch
+
+        with patch.object(
+            cdp_fetch, "fail_request", wraps=cdp_fetch.fail_request
+        ) as mock_fail:
+            asyncio.run(self._trigger(fake_page, "Image"))
+        mock_fail.assert_called_once()
+
+    def test_document_request_is_continued(self, fake_page):
+        import nodriver.cdp.fetch as cdp_fetch
+
+        with patch.object(
+            cdp_fetch, "continue_request", wraps=cdp_fetch.continue_request
+        ) as mock_continue:
+            asyncio.run(self._trigger(fake_page, "Document"))
+        mock_continue.assert_called_once()
+
+    def test_handler_removed_on_exit(self, fake_page):
+        import nodriver.cdp.fetch as cdp_fetch
+
+        asyncio.run(self._trigger(fake_page, "Image"))
+        assert cdp_fetch.RequestPaused not in fake_page.handlers
