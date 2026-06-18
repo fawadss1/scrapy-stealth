@@ -10,15 +10,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Static asset blocking (`BROWSER_STATIC_ASSETS_BLOCK`)**
-  The browser engine can now block images, fonts, stylesheets, and other media via the CDP
-  `Fetch` domain, cutting bandwidth and speeding up page loads when the rendered assets
-  themselves aren't needed. Off by default; enable globally with
-  `config.BROWSER_STATIC_ASSETS_BLOCK = True` (also readable from `settings.py` /
-  `custom_settings`), or per-request via `meta["stealth"]["static_assets_block"]`. Blocking is
-  always skipped when `meta["stealth"]["snapshot"]` is `True`, since a snapshot needs the fully
-  rendered page. Implemented via a new `_block_static_assets()` async context manager in
-  `utils/browser.py`, scoped per-tab and torn down on exit.
+* **Intelligent content wait (`_smart_wait`)**
+  Automatically detects JavaScript challenges, CAPTCHAs, and anti-bot interstitial pages and waits for meaningful page content before returning a response, improving success rates on protected websites.
+* **Advanced challenge detection**
+  Added comprehensive detection for Cloudflare, DataDome, Akamai, Kasada, and other common anti-bot challenge pages.
+* **Randomized browser fingerprinting**
+  Browser sessions now launch with realistic randomized window sizes and language configurations to reduce fingerprint consistency across sessions.
+* **Intelligent browser restart (`BROWSER_RESTART_AFTER_BANS`)**
+  Browser instances are now restarted only after a configurable number of consecutive bans or challenge responses, replacing the previous fixed-request restart strategy.
+* **Static asset blocking (`BROWSER_STATIC_ASSETS_BLOCK`)**
+  Optional blocking of images, fonts, stylesheets, and other non-essential assets via Chrome DevTools Protocol, reducing bandwidth usage and improving page load performance.
+* **`StealthDependencyError`**
+  New typed exception for optional dependency loading failures, providing platform-specific guidance for resolving missing native libraries and runtime dependencies.
+
+### Fixed
+
+* **Windows browser restart race condition**
+  Resolved event-loop teardown and restart timing issues that could produce `InvalidStateError` exceptions during browser restarts.
+* **Windows dependency loading failures**
+  Improved handling of `wreq` and `curl_cffi` DLL loading errors with actionable error messages instead of opaque import tracebacks.
+* **Deferred dependency loading**
+  Optional browser-profile dependencies are now loaded lazily, preventing unrelated engines from failing when specific native dependencies are unavailable.
+* **Browser response rendering**
+  Improved response handling to ensure successful pages are fully rendered before being returned to Scrapy.
+
+### Changed
+
+* **Browser restart strategy**
+  Replaced the request-count-based restart mechanism with ban-aware restart logic, reducing unnecessary browser restarts during healthy crawls.
+* **Test suite refactoring**
+  Simplified browser-related test cases and reduced mock complexity for improved maintainability.
+
+### Performance
+
+* **Reduced bandwidth consumption**
+  Static asset blocking can significantly decrease network usage and page load times when visual assets are not required.
+* **Improved browser stability**
+  Smarter restart behavior reduces browser churn while maintaining long-running crawl reliability.
 
 ## [0.6.8b2] - 2026-06-18
 
