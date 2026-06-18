@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.8b2] - 2026-06-18
+
+### Added
+
+- **`StealthDependencyError` — typed exception for compiled-dependency failures**
+  New exception class in `exceptions.py` that inherits from both `StealthException` and
+  `ImportError`, fitting naturally into both the package exception hierarchy and standard
+  `except ImportError` handlers.
+  Raised whenever a compiled optional dependency (`wreq`, `curl_cffi`) fails to load —
+  typically because a required native DLL or shared library could not be found.
+
+  The exception provides a platform-aware, actionable message at raise time:
+  - **Windows** — instructs the user to install both x64 and x86 Visual C++ Redistributables
+    (2015–2022) with direct download links.
+  - **Linux** — suggests the appropriate `apt-get` / `yum` packages for missing system
+    libraries (`libssl`, `libcurl`).
+
+  `StealthDependencyError` is exported from the top-level package and added to `__all__`,
+  making it catchable in user code alongside the other stealth exceptions.
+
+### Fixed
+
+- **`engines/basic.py` — `ImportError: DLL load failed while importing wreq` on fresh Windows**
+  The bare `from wreq.blocking import Client` and `from wreq.proxy import Proxy` module-level
+  imports crashed immediately on machines without the Visual C++ Redistributable installed,
+  surfacing as an opaque `DLL load failed` traceback deep inside Scrapy's middleware loader.
+  Both imports are now wrapped in `try/except ImportError` and delegate to
+  `StealthDependencyError.check("wreq", exc)` for a clear, actionable error message.
+
+- **`engines/turbo.py` — same DLL failure for `curl_cffi` on fresh Windows**
+  `from curl_cffi import CurlHttpVersion` and `from curl_cffi.requests import Session` suffer
+  the same failure path as `wreq` when the VCRT is absent.
+  Both imports are now guarded with `StealthDependencyError.check("curl_cffi", exc)`.
+
+- **`utils/profiles.py` — `wreq.emulation` crash at import time propagated silently**
+  `from wreq.emulation import Emulation, Profile` was a module-level import, meaning the
+  entire `profiles` module — and by extension every engine that imports it — failed to load
+  on VCRT-missing machines, producing the same deep `DLL load failed` traceback.
+  The import is now guarded with a `_WREQ_AVAILABLE` flag; `Emulation` and `Profile` fall
+  back to `None` so the module loads cleanly. The private `_require_wreq()` helper raises
+  `StealthDependencyError` at the point of actual use (inside `_resolve_basic`), not at
+  import time, keeping the `turbo` and `browser` drivers unaffected on machines where
+  `wreq` is broken but `curl_cffi` loads fine.
+
+---
+
 ## [0.6.8b1] - 2026-06-16
 
 ### Added
@@ -619,6 +665,10 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.8b2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.8b2
+
+[0.6.8b1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.8b1
 
 [0.6.8]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.8
 
