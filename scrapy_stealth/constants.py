@@ -65,6 +65,14 @@ BROWSER_RESTART_AFTER_BANS: int = 5
 # meta["stealth"]["snapshot"] is True, regardless of this setting.
 BROWSER_STATIC_ASSETS_BLOCK: bool = False
 
+# Browser engine: domains/patterns that must bypass the proxy and connect to the
+# origin directly. Passed straight to Chrome's --proxy-bypass-list launch flag
+# (entries joined with ';'), so the full Chrome syntax is supported: bare
+# hostnames, wildcards ("*.example.com"), IP/CIDR ranges, ports, and the special
+# "<local>" token. Only takes effect when a proxy is in use. Set at browser
+# launch, so it is read from config / settings (not per-request meta).
+BROWSER_PROXY_BYPASS_LIST: list[str] = []
+
 # Browser engine: disable Chrome sandbox (required when running as root, e.g. Docker).
 # None = auto-detect: sandbox is disabled automatically when the process runs as root on Linux.
 # Set True to force no-sandbox mode; False to keep sandbox even when running as root.
