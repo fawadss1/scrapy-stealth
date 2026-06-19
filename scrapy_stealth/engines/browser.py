@@ -17,9 +17,11 @@ from ..exceptions import (
 )
 from ..utils.browser import (
     _BROWSER_ARGS,
+    _JS_CURRENT_URL,
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
     BanStreakTracker,
+    ProxyRelay,
     _block_static_assets,
     _cdp_snapshot,
     _ensure_xvfb,
@@ -67,7 +69,7 @@ class BrowserEngine(BaseEngine):
         self._bans = BanStreakTracker()
 
         # Proxy-relay state — created once on first proxied request.
-        self._relay_server: Any = None
+        self._relay_server: ProxyRelay | None = None
         self._relay_port: int | None = None
         self._relay_lock = threading.Lock()
 
@@ -248,7 +250,10 @@ class BrowserEngine(BaseEngine):
 
     async def _shutdown(self) -> None:
         if self._relay_server is not None:
-            self._relay_server.close()
+            # await_closed() cancels every live handle() task and waits for
+            # them to finish — prevents "Task was destroyed but it is pending!"
+            # after the event loop closes.
+            await self._relay_server.await_closed()
             self._relay_server = None
             self._relay_port = None
         if self._browser is not None:
@@ -272,10 +277,13 @@ class BrowserEngine(BaseEngine):
                 self._browser = None
             self._tab_sem = None
 
-            # Tear down the old relay so a fresh one is created with the new loop.
-            if self._relay_server is not None:
+            # Tear down the old relay — must happen on the old loop while it
+            # is still running so await_closed() can cancel/await handle tasks.
+            if self._relay_server is not None and self._loop is not None:
                 try:
-                    self._relay_server.close()
+                    asyncio.run_coroutine_threadsafe(
+                        self._relay_server.await_closed(), self._loop
+                    ).result(timeout=5)
                 except Exception:
                     pass
                 self._relay_server = None
@@ -326,6 +334,34 @@ class BrowserEngine(BaseEngine):
 
                     await page.wait()
 
+                    # Guard against nodriver returning the wrong tab.
+                    #
+                    # browser.get(url, new_tab=True) is supposed to open a
+                    # fresh tab and return it, but when the main tab is still
+                    # "active" (e.g. sitting on the about:blank warmup page),
+                    # nodriver occasionally returns the main tab instead of
+                    # the newly created one.  If that happens the page's
+                    # current URL will not match *url* (it will be
+                    # "about:blank" or the previous splash URL) and every JS
+                    # evaluation runs against the wrong document.
+                    #
+                    # We detect this by comparing window.location.href to the
+                    # requested URL.  On a mismatch we explicitly navigate the
+                    # returned tab to the correct URL so the rest of _do_fetch
+                    # runs against the right document regardless of which tab
+                    # nodriver handed us.
+                    current_url = str(await page.evaluate(_JS_CURRENT_URL) or "")
+                    if current_url.rstrip("/") != url.rstrip(
+                        "/"
+                    ) and not current_url.startswith(url.rstrip("/")):
+                        logger.debug(
+                            "_do_fetch: tab URL mismatch (got %r, expected %r) — re-navigating",
+                            current_url,
+                            url,
+                        )
+                        await page.get(url)
+                        await page.wait()
+
                     if await page.evaluate(_JS_IS_CHROME_ERROR):
                         raise StealthConnectionError(
                             f"Browser engine connection failed fetching {url!r}"
@@ -342,8 +378,29 @@ class BrowserEngine(BaseEngine):
                     if snapshot:
                         shot = await _cdp_snapshot(page)
             finally:
+                # Two-step teardown to prevent "cannot call get() concurrently":
+                #
+                # nodriver's aopen() only creates a new websocket + _listener_task
+                # when self.socket is None or already closed.  page.close() sends
+                # a Target.closeTarget CDP command but does NOT call aclose(), so
+                # the websocket and _listener_task are left alive.  If the same
+                # Tab object is subsequently re-attach()ed (e.g. via
+                # browser.update_targets), aopen() sees a non-None socket whose
+                # close_code is not yet set (Chrome's close handshake is async)
+                # and skips creating a new socket — but spawns a second
+                # _listener_task on the old socket.  Two coroutines then race
+                # on the same ws.recv(), and websockets raises the assertion
+                # "cannot call get() concurrently".
+                #
+                # Calling aclose() explicitly after closing the CDP target
+                # cancels the existing _listener_task and closes the websocket
+                # cleanly, so aopen() always starts from a blank slate.
                 try:
                     await page.close()
+                except Exception:
+                    pass
+                try:
+                    await page.aclose()
                 except Exception:
                     pass
 

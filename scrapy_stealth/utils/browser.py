@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+import weakref
 from typing import Any
 from urllib.parse import urlparse
 
@@ -47,6 +48,18 @@ _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
+_JS_CURRENT_URL = "window.location.href"
+# Detects pages that are definitively blocked/errored with no content to wait
+# for.  Akamai 403/429 pages have an empty or near-empty body and a title of
+# "Access Denied", "403 Forbidden", "429 Too Many Requests", etc.  Matching on
+# title is faster and more reliable than waiting for Navigation Timing to
+# populate responseStatus when the connection is killed at the edge.
+_JS_ERROR_TITLE = (
+    "(() => {"
+    "  const t = (document.title || '').toLowerCase();"
+    "  return /access denied|forbidden|too many requests|blocked|error|unavailable/.test(t);"
+    "})()"
+)
 
 # Resource types blocked when static_assets_block=True — covers images, fonts,
 # stylesheets, and other media that aren't needed to read or detect-bypass a page.
@@ -89,9 +102,9 @@ def _make_loop() -> asyncio.AbstractEventLoop:
 
 
 def _stop_loop(
-    loop: asyncio.AbstractEventLoop | None,
-    thread: threading.Thread | None,
-    timeout: float = 5.0,
+        loop: asyncio.AbstractEventLoop | None,
+        thread: threading.Thread | None,
+        timeout: float = 5.0,
 ) -> None:
     """
     Stop *loop* and join *thread*, waiting for the loop to actually finish
@@ -103,45 +116,31 @@ def _stop_loop(
     into a thread nobody is watching, surfacing as unretrieved task exceptions
     or an ``InvalidStateError`` crash. Joining first eliminates that overlap.
 
-    On Windows with ProactorEventLoop, stopping the loop while overlapped I/O
-    ops (proxy-relay accept, tab pipes) are still in-flight causes Windows to
-    cancel them with WinError 995.  The cancellation callback fires inside
-    ``_poll`` and calls ``future.set_exception()`` on a future that the loop
-    already transitioned to a done/cancelled state, raising
-    ``InvalidStateError`` directly in the thread — bypassing the loop's own
-    exception handler.  We prevent this by scheduling a coroutine that cancels
-    all pending tasks first, giving them a chance to clean up their futures
-    before the loop actually stops.
+    We deliberately do NOT cancel pending tasks here.  _reset_browser is called
+    after a successful fetch has already returned (via _maybe_restart), so the
+    only tasks still alive at that point are background I/O tasks owned by
+    nodriver / the proxy relay — not user-visible _do_fetch coroutines.
+    Cancelling them is not necessary for correctness and would propagate
+    CancelledError into any concurrent _do_fetch calls still blocked on
+    future.result() in other Scrapy threads.
+
+    The ``InvalidStateError`` that surfaces on Windows (Python 3.13+) when
+    WinError-995 I/O-abort callbacks fire against already-done Proactor futures
+    during teardown is handled in ``_run_loop`` via a bare except.  Closing the
+    loop *after* the thread has exited ensures no further callbacks can fire
+    against the half-torn-down Proactor selector.
     """
     if loop is None:
         return
-
-    async def _cancel_all_tasks() -> None:
-        tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            # Let the cancellation callbacks run so futures reach a terminal
-            # state before the Proactor's completion port is torn down.
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    try:
-        future = asyncio.run_coroutine_threadsafe(_cancel_all_tasks(), loop)
-        future.result(timeout=max(timeout - 1.0, 1.0))
-    except Exception:
-        pass
-
     try:
         loop.call_soon_threadsafe(loop.stop)
     except RuntimeError:
         pass
-
     if thread is not None:
         thread.join(timeout=timeout)
-
-    # Close the loop after the thread has exited so no callbacks can fire
-    # against a half-torn-down Proactor selector.  A closed loop raises
-    # RuntimeError on any further use, which is the correct behaviour.
+    # Close the loop after the thread has fully stopped.  A closed loop raises
+    # RuntimeError on any further use, which is the correct and expected
+    # behaviour — _reset_browser always replaces self._loop with a fresh one.
     if not loop.is_closed():
         try:
             loop.close()
@@ -150,25 +149,22 @@ def _stop_loop(
 
 
 def _splash_url() -> str:
-    import json
-    import pathlib
-
-    try:
-        from importlib.metadata import distribution
-
-        raw = distribution("scrapy-stealth").read_text("direct_url.json")
-        if raw:
-            url = json.loads(raw).get("url", "")
-            if url.startswith("file:"):
-                source = pathlib.Path.from_uri(url)
-                if source.suffix == ".whl":
-                    source = source.parent.parent
-                logo = source / "docs" / "static" / "logo.png"
-                if logo.exists():
-                    return logo.as_uri()
-    except Exception:
-        pass
-    return "chrome://welcome"
+    # about:blank is the safest warmup target: Chrome loads it instantly,
+    # it does not produce a Navigation Timing entry that could confuse
+    # _wait_for_status, and it cannot be mis-returned by nodriver's
+    # browser.get(url, new_tab=True) as an active tab.
+    #
+    # We previously used a file:// URI pointing at docs/static/logo.png, but
+    # that caused two problems:
+    #   1. Chrome opens the PNG in the main tab and leaves it "active".
+    #      nodriver's get(url, new_tab=True) sometimes returns the main tab
+    #      instead of the newly created tab — so _do_fetch ends up evaluating
+    #      JS against logo.png instead of the target URL.
+    #   2. A file:// PNG never writes a responseStatus to Navigation Timing,
+    #      so _wait_for_status burns its full 8s timeout then falls back to
+    #      200, leading to the same 28s-before-timeout problem we fixed for
+    #      Akamai 403s.
+    return "about:blank"
 
 
 async def _cdp_snapshot(page: Any) -> bytes | None:
@@ -312,6 +308,13 @@ async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
     within *timeout* seconds (e.g. the page is a pure client-side SPA that
     replaces the navigation entry), treating it as success is the safest
     assumption — the caller will still wait for content as normal.
+
+    Fast-path: if the page title already signals a definitive block/error
+    (Akamai "Access Denied", generic 403/429 pages, etc.) we return 403
+    immediately rather than waiting the full *timeout* for a Navigation Timing
+    entry that will never arrive.  This prevents _do_fetch from entering
+    _smart_wait and burning 20 more seconds on a page that has already
+    delivered its final (empty) response.
     """
 
     async def _poll() -> int:
@@ -320,6 +323,13 @@ async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
             value = int(raw) if raw else 0
             if value != 0:
                 return value
+            # Fast-path: definitive block/error title means the response is
+            # already final — no Navigation Timing entry will ever appear.
+            if await page.evaluate(_JS_ERROR_TITLE):
+                logger.debug(
+                    "_wait_for_status: error title detected — returning 403 early"
+                )
+                return 403
             await asyncio.sleep(0.25)
 
     try:
@@ -347,11 +357,23 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
     if not bool(await page.evaluate(_JS_IS_CHALLENGE)):
         return
 
+    # If the page title already signals a block, there's nothing to wait for —
+    # the body will never grow.  Return immediately so _do_fetch can collect
+    # the (empty/error) HTML and let the ban tracker handle the response.
+    if await page.evaluate(_JS_ERROR_TITLE):
+        logger.debug("_smart_wait: blocked page title detected — skipping wait")
+        return
+
     logger.debug(
         "_smart_wait: Challenge or script stub detected. Waiting for content to populate..."
     )
 
+    last_len = body_len
+    stalled_ticks = 0
+    _STALL_LIMIT = 6  # 3 seconds of no body growth → give up
+
     async def _poll() -> None:
+        nonlocal last_len, stalled_ticks
         while True:
             current_len = int(await page.evaluate(_JS_BODY_LEN))
 
@@ -363,6 +385,24 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
 
             if current_len >= _CONTENT_SHORT_THRESHOLD and not is_still_stub:
                 return
+
+            # Bail early if the body has completely stopped growing — this means
+            # the page delivered its final (blocked) response and is not going
+            # to inject any content.  A real challenge page (Cloudflare, Akamai)
+            # will grow the DOM as it runs JS; a hard block will stay flat.
+            if current_len == last_len:
+                stalled_ticks += 1
+                if stalled_ticks >= _STALL_LIMIT:
+                    logger.debug(
+                        "_smart_wait: body stalled at %d chars for %.1fs — aborting",
+                        current_len,
+                        stalled_ticks * 0.5,
+                    )
+                    return
+            else:
+                stalled_ticks = 0
+                last_len = current_len
+
             await asyncio.sleep(0.5)
 
     try:
@@ -373,7 +413,69 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
     await asyncio.sleep(settle)
 
 
-async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, int]:
+class ProxyRelay:
+    """
+    A local TCP relay that forwards every browser connection to the upstream
+    proxy, injecting Proxy-Authorization on the way out.
+
+    ``asyncio.start_server`` only closes the *accept* socket when
+    ``server.close()`` is called — it does NOT cancel the already-accepted
+    ``handle()`` tasks that are still mid-connection.  Those orphaned tasks
+    are destroyed by Python's GC after the event loop closes, which triggers
+    the "Task was destroyed but it is pending!" warning and, because their
+    ``finally`` blocks call ``writer.close()`` against a closed loop, also
+    "Exception ignored while closing generator: RuntimeError: Event loop is
+    closed".
+
+    This class wraps the server and tracks every live ``handle`` task in a
+    ``WeakSet``.  ``close()`` cancels them all and waits for them to finish
+    before returning, so the loop teardown that follows always finds an empty
+    task set.
+    """
+
+    def __init__(self, server: asyncio.AbstractServer, port: int) -> None:
+        self._server = server
+        self.port = port
+        self._tasks: weakref.WeakSet[asyncio.Task[None]] = weakref.WeakSet()
+
+    def _track(self, task: asyncio.Task[None]) -> None:
+        self._tasks.add(task)
+
+    def close(self) -> None:
+        """Stop accepting new connections (non-blocking; call await_closed next)."""
+        self._server.close()
+
+    async def await_closed(self) -> None:
+        """Cancel all live handle tasks and wait for them to finish."""
+        self._server.close()
+        tasks = list(self._tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            await self._server.wait_closed()
+        except Exception:
+            pass
+
+
+def _close_writer(w: asyncio.StreamWriter) -> None:
+    """
+    Close *w* swallowing both OSError and RuntimeError.
+
+    StreamWriter.close() → transport.close() → loop.call_soon(...).
+    If the event loop is already closed that last call raises
+    ``RuntimeError: Event loop is closed``, producing a noisy
+    "Exception ignored while closing generator" traceback.
+    We swallow both error types so teardown is always silent.
+    """
+    try:
+        w.close()
+    except (OSError, RuntimeError):
+        pass
+
+
+async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
     """
     Start a local relay on 127.0.0.1 that forwards every connection to the
     upstream proxy, injecting the Proxy-Authorization header on the way out.
@@ -383,7 +485,8 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, in
     CDP-based proxy auth (both flaky in nodriver), this also propagates into
     contexts created via ``browser.create_context()``.
 
-    Returns ``(server, listen_port)``. Close the server to tear the relay down.
+    Returns ``(ProxyRelay, listen_port)``.  Call ``await relay.await_closed()``
+    to cancel all live handle tasks and drain the server cleanly.
     """
     parsed = urlparse(proxy_url if "://" in proxy_url else f"http://{proxy_url}")
     host = parsed.hostname
@@ -395,9 +498,17 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, in
         ).decode()
         auth_header = b"Proxy-Authorization: Basic " + token.encode() + b"\r\n"
 
+    # Forward-declare so handle() can call relay._track() on itself.
+    relay_holder: list[ProxyRelay] = []
+
     async def handle(
-        client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
+            client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
     ) -> None:
+        # Register this task so ProxyRelay.await_closed() can cancel it.
+        current = asyncio.current_task()
+        if current is not None and relay_holder:
+            relay_holder[0]._track(current)
+
         upstream_writer: asyncio.StreamWriter | None = None
         try:
             # Read the client's request head (CONNECT or absolute-URI request).
@@ -416,7 +527,7 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, in
             await upstream_writer.drain()
 
             async def pipe(
-                reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+                    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             ) -> None:
                 try:
                     while True:
@@ -425,31 +536,28 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[asyncio.AbstractServer, in
                             break
                         writer.write(data)
                         await writer.drain()
-                except OSError:
+                except (OSError, asyncio.CancelledError):
                     pass
                 finally:
-                    try:
-                        writer.close()
-                    except OSError:
-                        pass
+                    _close_writer(writer)
 
             await asyncio.gather(
                 pipe(upstream_reader, client_writer),
                 pipe(client_reader, upstream_writer),
+                return_exceptions=True,
             )
-        except OSError:
+        except (OSError, asyncio.CancelledError):
             pass
         finally:
             for w in (client_writer, upstream_writer):
                 if w is not None:
-                    try:
-                        w.close()
-                    except OSError:
-                        pass
+                    _close_writer(w)
 
     server = await asyncio.start_server(handle, "127.0.0.1", 0)
     listen_port = server.sockets[0].getsockname()[1]
-    return server, listen_port
+    relay = ProxyRelay(server, listen_port)
+    relay_holder.append(relay)
+    return relay, listen_port
 
 
 class BanStreakTracker:
