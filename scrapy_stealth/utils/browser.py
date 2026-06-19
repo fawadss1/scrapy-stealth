@@ -102,15 +102,51 @@ def _stop_loop(
     has already started — in-flight I/O gets aborted mid-callback and raises
     into a thread nobody is watching, surfacing as unretrieved task exceptions
     or an ``InvalidStateError`` crash. Joining first eliminates that overlap.
+
+    On Windows with ProactorEventLoop, stopping the loop while overlapped I/O
+    ops (proxy-relay accept, tab pipes) are still in-flight causes Windows to
+    cancel them with WinError 995.  The cancellation callback fires inside
+    ``_poll`` and calls ``future.set_exception()`` on a future that the loop
+    already transitioned to a done/cancelled state, raising
+    ``InvalidStateError`` directly in the thread — bypassing the loop's own
+    exception handler.  We prevent this by scheduling a coroutine that cancels
+    all pending tasks first, giving them a chance to clean up their futures
+    before the loop actually stops.
     """
     if loop is None:
         return
+
+    async def _cancel_all_tasks() -> None:
+        tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            # Let the cancellation callbacks run so futures reach a terminal
+            # state before the Proactor's completion port is torn down.
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    try:
+        future = asyncio.run_coroutine_threadsafe(_cancel_all_tasks(), loop)
+        future.result(timeout=max(timeout - 1.0, 1.0))
+    except Exception:
+        pass
+
     try:
         loop.call_soon_threadsafe(loop.stop)
     except RuntimeError:
         pass
+
     if thread is not None:
         thread.join(timeout=timeout)
+
+    # Close the loop after the thread has exited so no callbacks can fire
+    # against a half-torn-down Proactor selector.  A closed loop raises
+    # RuntimeError on any further use, which is the correct behaviour.
+    if not loop.is_closed():
+        try:
+            loop.close()
+        except Exception:
+            pass
 
 
 def _splash_url() -> str:

@@ -168,13 +168,28 @@ class BrowserEngine(BaseEngine):
             and getattr(exc, "winerror", None) in BrowserEngine._BENIGN_WINERRORS
         ):
             return
+        # InvalidStateError is raised inside the Proactor's _poll when a
+        # WinError-995 I/O-abort callback fires against an already-done future
+        # during loop teardown.  It never reaches the loop's exception handler
+        # through the normal path (it propagates through _run_loop instead), but
+        # suppress it here as well for any edge case where it does arrive.
+        if isinstance(exc, asyncio.InvalidStateError):
+            return
         loop.default_exception_handler(context)
 
     def _run_loop(self) -> None:
         assert self._loop is not None
         asyncio.set_event_loop(self._loop)
         self._loop.set_exception_handler(self._loop_exception_handler)
-        self._loop.run_forever()
+        try:
+            self._loop.run_forever()
+        except asyncio.InvalidStateError:
+            # Last-resort catch: WinError-995 abort during Proactor teardown can
+            # surface as InvalidStateError bubbling out of run_forever() on
+            # Python 3.13+ when a future's set_exception() races with loop.stop().
+            # The loop is already stopping at this point; swallowing the exception
+            # is safe — the restart/close path in _stop_loop handles cleanup.
+            pass
 
     def _ensure_browser(self, headless: bool, proxy: str | None = None) -> None:
         """
