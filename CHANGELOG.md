@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.9b1] - 2026-06-24
+
+### Fixed
+
+* **Browser engine — wrong-tab / `cannot call get() concurrently`**
+  Replaced `browser.get(url, new_tab=True)` with direct `cdp.target.create_target(url)` to
+  guarantee a 1:1 mapping between the created CDP target and the Tab object, eliminating the
+  wrong-tab race and the duplicate `_listener_task` that caused the concurrency assertion.
+
+* **Browser engine — `_do_fetch` tasks leaked on timeout**
+  Tasks continued running after `future.result(timeout=...)` raised `TimeoutError`, holding
+  `_tab_sem` slots and producing "Task was destroyed but it is pending!" on teardown.
+  The task is now cancelled directly via `loop.call_soon_threadsafe(task.cancel)` on timeout.
+
+* **Browser engine — `"Event loop is closed"` log noise**
+  `_chain_future` callbacks and `call_soon_threadsafe` handles firing against a closed loop
+  after `_reset_browser` are now suppressed by a `_ClosedLoopFilter` on the `asyncio` and
+  `concurrent.futures` loggers.
+
+* **Browser engine — `AttributeError: 'NoneType' object has no attribute 'get'`**
+  Snapshotting `browser = self._browser` at `_do_fetch` entry prevents `_reset_browser`
+  nulling `self._browser` mid-execution from reaching `browser.get()`.
+
+* **Browser engine — Akamai 403 consuming full 30 s timeout**
+  `_wait_for_status` now fast-exits on error page titles (Access Denied, Forbidden, etc.)
+  returning 403 immediately. `_smart_wait` exits early when body length stops growing for 3 s.
+
+* **Browser engine — `logo.png` splash causing wrong-tab on startup**
+  `_splash_url()` now returns `"about:blank"` instead of a `file://` URI.
+
+* **Proxy relay — orphaned `handle()` tasks on restart / shutdown**
+  `ProxyRelay.await_closed()` now cancels and awaits all live `handle()` tasks before
+  closing the server, replacing the bare `server.close()` that left tasks running.
+
+* **Windows Proactor — `InvalidStateError` crashing the browser loop thread**
+  `_run_loop` wraps `loop.run_forever()` in `try/except asyncio.InvalidStateError`;
+  the loop exception handler suppresses it as well.
+
+* **Temp profiles — `uc_*` dirs accumulating in `%TEMP%`**
+  `_cleanup_browser_profiles()` removes stale nodriver temp dirs on every restart and shutdown.
+
+### Changed
+
+* **Console** — timestamp now styled `Fore.YELLOW` to match Scrapy's log format.
+
+---
+
 ## [0.6.9a2] - 2026-06-18
 
 ### Fixed
@@ -424,7 +471,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bypassing Scrapy's retry middleware. Three typed exceptions now replace raw library errors:
 
   | Exception                     | Inherits from                 | Retried by Scrapy                           | Raised by                                                                             |
-                      |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
+                        |-------------------------------|-------------------------------|---------------------------------------------|---------------------------------------------------------------------------------------|
   | `StealthTimeoutError`         | `DownloadTimeoutError`        | ✅ (in default `RETRY_EXCEPTIONS`)           | All engines on request timeout                                                        |
   | `StealthConnectionError`      | `ConnectionError` → `OSError` | ✅ (`OSError` in default `RETRY_EXCEPTIONS`) | `BasicEngine` / `TurboEngine` on DNS or network failure; `BrowserEngine` on `OSError` |
   | `StealthBrowserNotFoundError` | `StealthException` only       | ❌ (config error, retrying is pointless)     | `BrowserEngine` when Chrome/Chromium binary is missing                                |

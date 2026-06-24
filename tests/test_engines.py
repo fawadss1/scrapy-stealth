@@ -489,13 +489,22 @@ class TestBrowserEngine:
                 )
             )
         )
+        tab.attach = AsyncMock()
+        tab.wait = AsyncMock()
         tab.close = AsyncMock()
+        tab.aclose = AsyncMock()
         return tab
 
     @pytest.fixture
     def mock_browser(self, mock_tab):
+        target_id = "mock-target-id"
+        mock_tab.target = MagicMock()
+        mock_tab.target.target_id = target_id
+
         browser = MagicMock()
-        browser.get = AsyncMock(return_value=mock_tab)
+        browser.send = AsyncMock(return_value=target_id)
+        browser.update_targets = AsyncMock()
+        browser.targets = [mock_tab]
         browser.stop = MagicMock()
         return browser
 
@@ -542,19 +551,19 @@ class TestBrowserEngine:
     def test_execute_opens_tab_per_request(self, engine, mock_browser):
         engine._execute(Request("https://example.com/page1"))
         engine._execute(Request("https://example.com/page2"))
-        assert mock_browser.get.call_count == 2
+        assert mock_browser.send.call_count == 2
 
     def test_execute_closes_tab_after_fetch(self, engine, mock_tab):
         engine._execute(Request("https://example.com"))
         mock_tab.close.assert_called_once()
 
     def test_execute_returns_none_on_exception(self, engine, mock_browser):
-        mock_browser.get = AsyncMock(side_effect=Exception("network error"))
+        mock_browser.send = AsyncMock(side_effect=Exception("network error"))
         result = engine._execute(Request("https://example.com"))
         assert result is None
 
     def test_execute_raises_stealth_timeout(self, engine, mock_browser):
-        mock_browser.get = AsyncMock(side_effect=TimeoutError("timed out"))
+        mock_browser.send = AsyncMock(side_effect=TimeoutError("timed out"))
         with pytest.raises(
             StealthTimeoutError, match=r"Browser engine timed out after .+s fetching"
         ):
@@ -563,7 +572,7 @@ class TestBrowserEngine:
     def test_execute_raises_stealth_connection_error_on_oserror(
         self, engine, mock_browser
     ):
-        mock_browser.get = AsyncMock(side_effect=OSError("connection refused"))
+        mock_browser.send = AsyncMock(side_effect=OSError("connection refused"))
         with pytest.raises(
             StealthConnectionError, match=r"Browser engine connection failed fetching"
         ):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import sys
 import threading
 from typing import Any
@@ -20,8 +21,10 @@ from ..utils.browser import (
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
     BanStreakTracker,
+    ProxyRelay,
     _block_static_assets,
     _cdp_snapshot,
+    _cleanup_browser_profiles,
     _ensure_xvfb,
     _is_browser_crash,
     _make_loop,
@@ -46,6 +49,27 @@ patch_nodriver()
 logger = get_logger()
 
 
+# Suppress "Event loop is closed" RuntimeErrors logged by both concurrent.futures
+# and asyncio when _chain_future callbacks or call_soon_threadsafe handles fire
+# against a loop that _reset_browser already closed.  These are cosmetic race
+# artifacts — the timeout/restart path already handles the real error correctly.
+class _ClosedLoopFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not (
+            "Event loop is closed" in msg
+            and (
+                "callback" in msg
+                or "Exception in callback" in msg
+                or "calling callback" in msg
+            )
+        )
+
+
+logging.getLogger("concurrent.futures").addFilter(_ClosedLoopFilter())
+logging.getLogger("asyncio").addFilter(_ClosedLoopFilter())
+
+
 class BrowserEngine(BaseEngine):
     """
     Chrome engine via DevTools Protocol (no WebDriver overhead).
@@ -67,7 +91,7 @@ class BrowserEngine(BaseEngine):
         self._bans = BanStreakTracker()
 
         # Proxy-relay state — created once on first proxied request.
-        self._relay_server: Any = None
+        self._relay_server: ProxyRelay | None = None
         self._relay_port: int | None = None
         self._relay_lock = threading.Lock()
 
@@ -168,13 +192,28 @@ class BrowserEngine(BaseEngine):
             and getattr(exc, "winerror", None) in BrowserEngine._BENIGN_WINERRORS
         ):
             return
+        # InvalidStateError is raised inside the Proactor's _poll when a
+        # WinError-995 I/O-abort callback fires against an already-done future
+        # during loop teardown.  It never reaches the loop's exception handler
+        # through the normal path (it propagates through _run_loop instead), but
+        # suppress it here as well for any edge case where it does arrive.
+        if isinstance(exc, asyncio.InvalidStateError):
+            return
         loop.default_exception_handler(context)
 
     def _run_loop(self) -> None:
         assert self._loop is not None
         asyncio.set_event_loop(self._loop)
         self._loop.set_exception_handler(self._loop_exception_handler)
-        self._loop.run_forever()
+        try:
+            self._loop.run_forever()
+        except asyncio.InvalidStateError:
+            # Last-resort catch: WinError-995 abort during Proactor teardown can
+            # surface as InvalidStateError bubbling out of run_forever() on
+            # Python 3.13+ when a future's set_exception() races with loop.stop().
+            # The loop is already stopping at this point; swallowing the exception
+            # is safe — the restart/close path in _stop_loop handles cleanup.
+            pass
 
     def _ensure_browser(self, headless: bool, proxy: str | None = None) -> None:
         """
@@ -233,12 +272,14 @@ class BrowserEngine(BaseEngine):
 
     async def _shutdown(self) -> None:
         if self._relay_server is not None:
-            self._relay_server.close()
+            await self._relay_server.await_closed()
             self._relay_server = None
             self._relay_port = None
         if self._browser is not None:
             self._browser.stop()
             self._browser = None
+            # Final cleanup — wipe all uc_* dirs now that the last session is done.
+            _cleanup_browser_profiles(keep=None)
 
     def _reset_browser(
         self,
@@ -255,12 +296,18 @@ class BrowserEngine(BaseEngine):
                 except Exception:
                     pass
                 self._browser = None
+
+                # Clean up stale uc_* temp profile dirs from previous sessions.
+                _cleanup_browser_profiles(keep=None)
             self._tab_sem = None
 
-            # Tear down the old relay so a fresh one is created with the new loop.
-            if self._relay_server is not None:
+            # Tear down the old relay — must happen on the old loop while it
+            # is still running so await_closed() can cancel/await handle tasks.
+            if self._relay_server is not None and self._loop is not None:
                 try:
-                    self._relay_server.close()
+                    asyncio.run_coroutine_threadsafe(
+                        self._relay_server.await_closed(), self._loop
+                    ).result(timeout=5)
                 except Exception:
                     pass
                 self._relay_server = None
@@ -289,21 +336,49 @@ class BrowserEngine(BaseEngine):
         block_assets: bool = False,
     ) -> tuple[bytes, int, bytes | None]:
         """
-        Open a new browser context (isolated tab), fetch *url*, then close
-        the context.  The caller is responsible for holding ``_tab_sem`` before
-        calling this coroutine so concurrency is capped at ``BROWSER_MAX_TABS``.
+        Open a new browser tab via CDP target.create_target, fetch *url*,
+        then close the tab.
 
-        Proxy credentials are already baked into the browser via the relay
-        started in ``_start()``, so no special handling is needed here.
+        We bypass browser.get(url, new_tab=True) entirely.  That helper calls
+        update_targets() and returns a Tab by matching target_id, but under
+        concurrency it sometimes returns the main tab (about:blank) instead of
+        the newly created one — causing a cascade of wrong-tab bugs.
+
+        Instead we call cdp.target.create_target ourselves, get the target_id
+        back immediately, then find the matching Tab object directly.  This
+        gives us a guaranteed 1:1 mapping between the CDP target and the Tab
+        we operate on, with no ambiguity.
         """
+        import nodriver.cdp.target as _cdp_target
+
         html: Any = ""
         status: Any = 200
         shot: bytes | None = None
 
+        if self._browser is None:
+            raise StealthConnectionError("Browser is not running")
+
+        browser = self._browser
         assert self._tab_sem is not None
 
         async with self._tab_sem:
-            page = await self._browser.get(url, new_tab=True)
+            # Create the target and navigate it atomically via CDP.
+            # create_target returns the new target_id immediately — no
+            # update_targets() race, no wrong-tab ambiguity.
+            target_id = await browser.send(
+                _cdp_target.create_target(url, enable_begin_frame_control=True)
+            )
+            await browser.update_targets()
+            page = next(
+                (t for t in browser.targets if t.target.target_id == target_id),
+                None,
+            )
+            if page is None:
+                raise StealthConnectionError(
+                    f"Browser engine could not find new tab for {url!r}"
+                )
+            await page.attach()
+
             try:
                 async with contextlib.AsyncExitStack() as stack:
                     if block_assets:
@@ -329,6 +404,10 @@ class BrowserEngine(BaseEngine):
             finally:
                 try:
                     await page.close()
+                except Exception:
+                    pass
+                try:
+                    await page.aclose()
                 except Exception:
                     pass
 
@@ -383,11 +462,30 @@ class BrowserEngine(BaseEngine):
             for attempt in range(2):
                 try:
                     assert self._loop is not None
-                    future = asyncio.run_coroutine_threadsafe(
-                        self._do_fetch(request.url, settle, snap, block_assets),
-                        self._loop,
-                    )
-                    body, status, shot = future.result(timeout=ctx.timeout)
+                    # Snapshot the loop reference now — _reset_browser may
+                    # replace self._loop concurrently after we release the lock.
+                    loop = self._loop
+                    task: asyncio.Task[Any] | None = None
+
+                    async def _run_fetch() -> tuple[bytes, int, bytes | None]:
+                        nonlocal task
+                        task = asyncio.current_task()  # type: ignore[assignment]
+                        return await self._do_fetch(
+                            request.url, settle, snap, block_assets
+                        )
+
+                    future = asyncio.run_coroutine_threadsafe(_run_fetch(), loop)
+                    try:
+                        body, status, shot = future.result(timeout=ctx.timeout)
+                    except TimeoutError:
+                        # Cancel via the snapshotted loop — if it's already
+                        # closed, swallow silently (the task is dead anyway).
+                        if task is not None and not loop.is_closed():
+                            try:
+                                loop.call_soon_threadsafe(task.cancel)
+                            except RuntimeError:
+                                pass
+                        raise
                     break
                 except (ConnectionRefusedError, RuntimeError) as exc:
                     if attempt == 0 and _is_browser_crash(exc):
