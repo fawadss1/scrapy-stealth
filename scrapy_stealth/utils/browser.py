@@ -5,8 +5,10 @@ import base64
 import contextlib
 import os
 import random
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import weakref
@@ -17,6 +19,72 @@ from .js_challenge import _JS_IS_CHALLENGE
 from .logger import get_logger
 
 logger = get_logger()
+
+
+def _cleanup_browser_profiles(keep: str | None = None) -> int:
+    """
+    Delete stale ``uc_*`` temp profile directories left behind by nodriver.
+
+    nodriver creates a fresh ``tempfile.mkdtemp(prefix="uc_")`` directory for
+    every browser session and never removes it on exit, causing %TEMP% (Windows)
+    or /tmp (Linux/macOS) to accumulate hundreds of MB over time.
+
+    This function scans the system temp directory, removes every ``uc_*`` folder
+    that is **not** currently in use, and returns the number of directories
+    deleted.
+
+    Parameters
+    ----------
+    keep:
+        Absolute path of the profile directory that belongs to the *currently
+        running* browser session.  If supplied, that directory is skipped so
+        the live browser is never disrupted.  Pass ``browser.config.user_data_dir``
+        (the nodriver config attribute) as this value.
+
+    Returns
+    -------
+    int
+        Number of directories successfully deleted.
+    """
+    tmp = tempfile.gettempdir()
+    deleted = 0
+    errors = 0
+
+    try:
+        entries = os.scandir(tmp)
+    except OSError as exc:
+        logger.debug("_cleanup_browser_profiles: cannot scan %s: %s", tmp, exc)
+        return 0
+
+    with entries:
+        for entry in entries:
+            if not (
+                entry.name.startswith("uc_") and entry.is_dir(follow_symlinks=False)
+            ):
+                continue
+            if keep and os.path.abspath(entry.path) == os.path.abspath(keep):
+                continue
+            try:
+                shutil.rmtree(entry.path, ignore_errors=False)
+                deleted += 1
+                logger.debug("_cleanup_browser_profiles: removed %s", entry.path)
+            except OSError as exc:
+                # Directory is still locked by another Chrome process — skip it.
+                errors += 1
+                logger.debug(
+                    "_cleanup_browser_profiles: could not remove %s: %s",
+                    entry.path,
+                    exc,
+                )
+
+    if deleted or errors:
+        logger.debug(
+            "_cleanup_browser_profiles: deleted=%d skipped_locked=%d",
+            deleted,
+            errors,
+        )
+    return deleted
+
 
 _BROWSER_ARGS: list[str] = [
     "--window-position=0,0",
@@ -102,9 +170,9 @@ def _make_loop() -> asyncio.AbstractEventLoop:
 
 
 def _stop_loop(
-        loop: asyncio.AbstractEventLoop | None,
-        thread: threading.Thread | None,
-        timeout: float = 5.0,
+    loop: asyncio.AbstractEventLoop | None,
+    thread: threading.Thread | None,
+    timeout: float = 5.0,
 ) -> None:
     """
     Stop *loop* and join *thread*, waiting for the loop to actually finish
@@ -502,7 +570,7 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
     relay_holder: list[ProxyRelay] = []
 
     async def handle(
-            client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
+        client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
     ) -> None:
         # Register this task so ProxyRelay.await_closed() can cancel it.
         current = asyncio.current_task()
@@ -527,7 +595,7 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
             await upstream_writer.drain()
 
             async def pipe(
-                    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+                reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             ) -> None:
                 try:
                     while True:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+
 from ..constants import LOGGER_NAME
 
 _SYMBOLS: dict[str, str] = {
@@ -15,7 +17,7 @@ _SYMBOLS: dict[str, str] = {
 
 
 class Console:
-    """Styled console output with a fixed [scrapy-stealth] prefix."""
+    """Styled console output with a fixed [scrapy-stealth] prefix and timestamp."""
 
     _init_done: bool = False
 
@@ -30,6 +32,10 @@ class Console:
             init()
             Console._init_done = True
 
+    @staticmethod
+    def _timestamp() -> str:
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     def _print(
         self,
         message: str,
@@ -40,6 +46,7 @@ class Console:
         from colorama import Fore, Style
 
         self._ensure_init()
+        ts = f"{Fore.YELLOW}{self._timestamp()}{Style.RESET_ALL}"
         prefix = (
             f"{Fore.CYAN}[{Style.RESET_ALL}"
             f"{Style.BRIGHT}{Fore.MAGENTA}{self._prefix}{Style.RESET_ALL}"
@@ -47,7 +54,7 @@ class Console:
         )
         sym = f"{symbol} " if symbol else ""
         text = f"{getattr(Fore, msg_color)}{sym}{message}{Style.RESET_ALL}"
-        print(f"{prefix} {text}")
+        print(f"{ts} {prefix} {text}")
 
     def info(self, message: str) -> None:
         self._print(message, symbol=_SYMBOLS["info"])
