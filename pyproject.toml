@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrapy-stealth"
-version = "0.6.9b1"
+version = "0.6.9"
 description = "Stealthy Crawling. Maximum Results. A pluggable anti-bot and stealth framework for Scrapy."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -44,7 +44,7 @@ keywords = [
 ]
 
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Framework :: Scrapy",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",

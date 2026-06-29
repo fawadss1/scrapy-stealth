@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.6.9b1] - 2026-06-24
+## [0.6.9] - 2026-06-29
+
+### Added
+
+* **Proxy bypass list (`BROWSER_PROXY_BYPASS_LIST`)**
+  Route chosen domains around the proxy in the browser engine. The user-supplied list is passed to Chrome's `--proxy-bypass-list`
+  launch flag, so requests to those domains connect to the origin directly instead of through the proxy relay. Supports the full Chrome
+  bypass syntax — bare hostnames, wildcards (`*.example.com`), IP/CIDR ranges, ports, and the `<local>` token. Configured globally via
+  config/settings; only takes effect when a proxy is in use.
 
 ### Fixed
+
+* **Browser engine — pending tasks destroyed on ban-triggered restart**
+  When one Scrapy thread triggered a browser restart after consecutive bans,
+  other concurrent `_run_fetch` coroutines and their `_smart_wait` ``sleep()``
+  children were left running on the old event loop and destroyed during
+  teardown. Restarts now block new fetches behind a restart barrier, drain
+  **all** pending loop tasks before stopping Chrome, and retry transient
+  connection errors once on the fresh browser.
 
 * **Browser engine — wrong-tab / `cannot call get() concurrently`**
   Replaced `browser.get(url, new_tab=True)` with direct `cdp.target.create_target(url)` to
@@ -23,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * **Browser engine — `"Event loop is closed"` log noise**
   `_chain_future` callbacks and `call_soon_threadsafe` handles firing against a closed loop
-  after `_reset_browser` are now suppressed by a `_ClosedLoopFilter` on the `asyncio` and
+  after `_reset_browser` are now suppressed by a teardown filter on the `asyncio` and
   `concurrent.futures` loggers.
 
 * **Browser engine — `AttributeError: 'NoneType' object has no attribute 'get'`**
@@ -45,36 +61,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_run_loop` wraps `loop.run_forever()` in `try/except asyncio.InvalidStateError`;
   the loop exception handler suppresses it as well.
 
-* **Temp profiles — `uc_*` dirs accumulating in `%TEMP%`**
-  `_cleanup_browser_profiles()` removes stale nodriver temp dirs on every restart and shutdown.
-
-### Changed
-
-* **Console** — timestamp now styled `Fore.YELLOW` to match Scrapy's log format.
-
----
-
-## [0.6.9a2] - 2026-06-18
-
-### Fixed
-
 * **Windows browser-restart log noise (`WinError 995`)**
   Suppressed benign Windows Proactor teardown errors logged when the event loop and proxy relay are torn down during a browser restart.
   The loop exception handler now ignores `WinError 995` (`ERROR_OPERATION_ABORTED`) and `WinError 64` (`ERROR_NETNAME_DELETED`)
   alongside the existing `10054` (`WSAECONNRESET`); genuine errors are still surfaced. The restart itself was always succeeding — only
   the spurious `ERROR` tracebacks are gone.
 
-----
+* **Temp profiles — `uc_*` dirs accumulating in `%TEMP%`**
+  `_cleanup_browser_profiles()` removes stale nodriver temp dirs on every restart and shutdown.
 
-## [0.6.9a1] - 2026-06-18
+### Changed
 
-### Added
-
-* **Proxy bypass list (`BROWSER_PROXY_BYPASS_LIST`)**
-  Route chosen domains around the proxy in the browser engine. The user-supplied list is passed to Chrome's `--proxy-bypass-list`
-  launch flag, so requests to those domains connect to the origin directly instead of through the proxy relay. Supports the full Chrome
-  bypass syntax — bare hostnames, wildcards (`*.example.com`), IP/CIDR ranges, ports, and the `<local>` token. Configured globally via
-  config/settings; only takes effect when a proxy is in use.
+* **Console** — timestamp now styled `Fore.YELLOW` to match Scrapy's log format.
 
 ---
 
