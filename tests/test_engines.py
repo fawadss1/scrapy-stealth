@@ -581,7 +581,7 @@ class TestBrowserEngine:
     def test_execute_raises_browser_not_found_on_file_not_found(self, engine):
         with patch.object(
             engine,
-            "_ensure_browser",
+            "_ensure_browser_unlocked",
             side_effect=StealthBrowserNotFoundError("Browser binary not found."),
         ):
             with pytest.raises(
@@ -590,14 +590,14 @@ class TestBrowserEngine:
                 engine._execute(Request("https://example.com"))
 
     def test_execute_passes_headless_from_meta(self, engine):
-        with patch.object(engine, "_ensure_browser") as mock_ensure:
+        with patch.object(engine, "_ensure_browser_unlocked") as mock_ensure:
             engine._execute(
                 Request("https://example.com", meta={"stealth": {"headless": False}})
             )
         assert mock_ensure.call_args.kwargs["headless"] is False
 
     def test_execute_uses_config_headless_default(self, engine):
-        with patch.object(engine, "_ensure_browser") as mock_ensure:
+        with patch.object(engine, "_ensure_browser_unlocked") as mock_ensure:
             engine._execute(Request("https://example.com"))
         assert mock_ensure.call_args.kwargs["headless"] == config.get(
             "BROWSER_HEADLESS"
@@ -689,6 +689,71 @@ class TestBrowserEngine:
             engine._execute(Request("https://example.com"))
             engine._execute(Request("https://example.com"))
             mock_reset.assert_not_called()
+
+    def test_drain_loop_tasks_cancels_in_flight_coroutines(self, engine):
+        from concurrent import futures
+
+        started = threading.Event()
+
+        async def tracked_slow_fetch():
+            task = asyncio.current_task()
+            assert task is not None
+            engine._track_fetch_task(task)
+            try:
+                started.set()
+                await asyncio.sleep(30)
+                return b"<html></html>", 200, None
+            finally:
+                engine._fetch_tasks.discard(task)
+
+        future = asyncio.run_coroutine_threadsafe(tracked_slow_fetch(), engine._loop)
+        assert started.wait(timeout=5)
+
+        asyncio.run_coroutine_threadsafe(
+            engine._drain_loop_tasks(), engine._loop
+        ).result(timeout=5)
+
+        with pytest.raises(futures.CancelledError):
+            future.result(timeout=5)
+
+    def test_drain_loop_tasks_cancels_orphaned_sleep_tasks(self, engine):
+        async def sleeper():
+            await asyncio.sleep(30)
+
+        asyncio.run_coroutine_threadsafe(sleeper(), engine._loop)
+        asyncio.run_coroutine_threadsafe(
+            engine._drain_loop_tasks(), engine._loop
+        ).result(timeout=5)
+        pending = asyncio.run_coroutine_threadsafe(
+            self._count_pending_tasks(engine), engine._loop
+        ).result(timeout=5)
+        assert pending == 0
+
+    @staticmethod
+    async def _count_pending_tasks(engine) -> int:
+        current = asyncio.current_task()
+        return len(
+            [
+                task
+                for task in asyncio.all_tasks()
+                if task is not current and not task.done()
+            ]
+        )
+
+    def test_execute_retries_when_fetch_cancelled_during_restart(self, engine):
+        calls = {"count": 0}
+
+        async def fetch_once_then_cancel(*_args, **_kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise asyncio.CancelledError()
+            return b"<html></html>", 200, None
+
+        with patch.object(engine, "_do_fetch", side_effect=fetch_once_then_cancel):
+            response = engine._execute(Request("https://example.com"))
+
+        assert calls["count"] == 2
+        assert isinstance(response, StealthResponse)
 
     # -----------------------------------------------------------------
     # static_assets_block
