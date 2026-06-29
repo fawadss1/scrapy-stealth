@@ -5,6 +5,8 @@ import contextlib
 import logging
 import sys
 import threading
+import weakref
+from concurrent import futures
 from typing import Any
 
 from scrapy.http import Request, Response
@@ -49,25 +51,38 @@ patch_nodriver()
 logger = get_logger()
 
 
-# Suppress "Event loop is closed" RuntimeErrors logged by both concurrent.futures
-# and asyncio when _chain_future callbacks or call_soon_threadsafe handles fire
-# against a loop that _reset_browser already closed.  These are cosmetic race
-# artifacts — the timeout/restart path already handles the real error correctly.
-class _ClosedLoopFilter(logging.Filter):
+# Suppress benign asyncio teardown noise when the browser loop is stopped or
+# replaced during restart — the real errors are handled by retry/cancel paths.
+class _AsyncioTeardownFilter(logging.Filter):
+    _TRANSIENT_TASK_MARKERS = (
+        "StealthConnectionError",
+        "Connection closed",
+        "ConnectionError",
+        "InvalidMessage",
+        "_run_fetch",
+        "update_targets",
+        "sleep()",
+    )
+
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
-        return not (
-            "Event loop is closed" in msg
-            and (
-                "callback" in msg
-                or "Exception in callback" in msg
-                or "calling callback" in msg
-            )
-        )
+        if "Event loop is closed" in msg and (
+            "callback" in msg
+            or "Exception in callback" in msg
+            or "calling callback" in msg
+        ):
+            return False
+        if "Task was destroyed but it is pending" in msg:
+            return False
+        if "Task exception was never retrieved" in msg and any(
+            marker in msg for marker in self._TRANSIENT_TASK_MARKERS
+        ):
+            return False
+        return True
 
 
-logging.getLogger("concurrent.futures").addFilter(_ClosedLoopFilter())
-logging.getLogger("asyncio").addFilter(_ClosedLoopFilter())
+logging.getLogger("concurrent.futures").addFilter(_AsyncioTeardownFilter())
+logging.getLogger("asyncio").addFilter(_AsyncioTeardownFilter())
 
 
 class BrowserEngine(BaseEngine):
@@ -85,6 +100,8 @@ class BrowserEngine(BaseEngine):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._restart_cv = threading.Condition(self._lock)
+        self._restarting = False
         self._tab_sem: asyncio.Semaphore | None = None
         # Restarts Chrome (fresh fingerprint/cookies/CDP session) after N
         # consecutive banned/challenged responses; resets on any clean response.
@@ -94,6 +111,9 @@ class BrowserEngine(BaseEngine):
         self._relay_server: ProxyRelay | None = None
         self._relay_port: int | None = None
         self._relay_lock = threading.Lock()
+        # In-flight _run_fetch tasks — cancelled before loop teardown so concurrent
+        # Scrapy threads are not left with orphaned coroutines on browser restart.
+        self._fetch_tasks: weakref.WeakSet[asyncio.Task[Any]] = weakref.WeakSet()
 
     def _build_args(
         self,
@@ -199,6 +219,9 @@ class BrowserEngine(BaseEngine):
         # suppress it here as well for any edge case where it does arrive.
         if isinstance(exc, asyncio.InvalidStateError):
             return
+        # Orphaned nodriver / fetch tasks during browser restart.
+        if isinstance(exc, (ConnectionError, StealthConnectionError)):
+            return
         loop.default_exception_handler(context)
 
     def _run_loop(self) -> None:
@@ -222,16 +245,23 @@ class BrowserEngine(BaseEngine):
         without a proxy the browser connects directly.
         """
         with self._lock:
-            if self._browser is not None:
-                return
-            loop = _make_loop()
-            self._loop = loop
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
-            self._thread.start()
-            future = asyncio.run_coroutine_threadsafe(
-                self._start(headless, proxy=proxy), loop
-            )
-            self._browser = future.result(timeout=30)
+            while self._restarting:
+                self._restart_cv.wait()
+            self._ensure_browser_unlocked(headless, proxy=proxy)
+
+    def _ensure_browser_unlocked(
+        self, headless: bool, proxy: str | None = None
+    ) -> None:
+        if self._browser is not None:
+            return
+        loop = _make_loop()
+        self._loop = loop
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        future = asyncio.run_coroutine_threadsafe(
+            self._start(headless, proxy=proxy), loop
+        )
+        self._browser = future.result(timeout=30)
 
     async def _start(self, headless: bool, proxy: str | None = None) -> Any:
         _ensure_xvfb(headless)
@@ -270,7 +300,37 @@ class BrowserEngine(BaseEngine):
             pass
         _stop_loop(self._loop, self._thread)
 
+    def _track_fetch_task(self, task: asyncio.Task[Any]) -> None:
+        self._fetch_tasks.add(task)
+
+    async def _drain_loop_tasks(self) -> None:
+        """Cancel and await every pending task on this loop before teardown."""
+        current = asyncio.current_task()
+        pending = [
+            task for task in asyncio.all_tasks() if task is not current and not task.done()
+        ]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+            # Flush timer/callback wakeups (notably asyncio.sleep on Windows).
+            await asyncio.sleep(0)
+
+    @staticmethod
+    def _is_restart_transient(exc: BaseException) -> bool:
+        if isinstance(exc, StealthConnectionError):
+            return True
+        if isinstance(exc, ConnectionError):
+            return True
+        if isinstance(exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)):
+            return True
+        if _is_browser_crash(exc):
+            return True
+        module = getattr(type(exc), "__module__", "")
+        return "websockets" in module
+
     async def _shutdown(self) -> None:
+        await self._drain_loop_tasks()
         if self._relay_server is not None:
             await self._relay_server.await_closed()
             self._relay_server = None
@@ -288,45 +348,60 @@ class BrowserEngine(BaseEngine):
         proxy: str | None = None,
     ) -> None:
         with self._lock:
-            if dead_browser is not None and self._browser is not dead_browser:
-                return
-            if self._browser is not None:
-                try:
-                    self._browser.stop()
-                except Exception:
-                    pass
-                self._browser = None
+            self._restarting = True
+            try:
+                if dead_browser is not None and self._browser is not dead_browser:
+                    return
+                # Drain in-flight work (fetches, _smart_wait sleeps, nodriver I/O)
+                # before killing Chrome so tasks are not orphaned on loop close.
+                if self._loop is not None:
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            self._drain_loop_tasks(), self._loop
+                        ).result(timeout=10)
+                    except Exception:
+                        pass
 
-                # Clean up stale uc_* temp profile dirs from previous sessions.
-                _cleanup_browser_profiles(keep=None)
-            self._tab_sem = None
+                if self._browser is not None:
+                    try:
+                        self._browser.stop()
+                    except Exception:
+                        pass
+                    self._browser = None
 
-            # Tear down the old relay — must happen on the old loop while it
-            # is still running so await_closed() can cancel/await handle tasks.
-            if self._relay_server is not None and self._loop is not None:
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        self._relay_server.await_closed(), self._loop
-                    ).result(timeout=5)
-                except Exception:
-                    pass
-                self._relay_server = None
-                self._relay_port = None
+                    # Clean up stale uc_* temp profile dirs from previous sessions.
+                    _cleanup_browser_profiles(keep=None)
+                self._tab_sem = None
 
-            # Join the old loop/thread before starting a new one — otherwise it
-            # keeps polling its selector after the new loop exists and can crash
-            # on in-flight I/O (see _stop_loop docstring).
-            _stop_loop(self._loop, self._thread)
+                # Tear down the old relay — must happen on the old loop while it
+                # is still running so await_closed() can cancel/await handle tasks.
+                if self._relay_server is not None and self._loop is not None:
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            self._relay_server.await_closed(), self._loop
+                        ).result(timeout=5)
+                    except Exception:
+                        pass
+                    self._relay_server = None
+                    self._relay_port = None
 
-            loop = _make_loop()
-            self._loop = loop
-            self._thread = threading.Thread(target=self._run_loop, daemon=True)
-            self._thread.start()
-            future = asyncio.run_coroutine_threadsafe(
-                self._start(headless, proxy=proxy), loop
-            )
-            self._browser = future.result(timeout=30)
-            console.success("Browser restarted successfully")
+                # Join the old loop/thread before starting a new one — otherwise it
+                # keeps polling its selector after the new loop exists and can crash
+                # on in-flight I/O (see _stop_loop docstring).
+                _stop_loop(self._loop, self._thread)
+
+                loop = _make_loop()
+                self._loop = loop
+                self._thread = threading.Thread(target=self._run_loop, daemon=True)
+                self._thread.start()
+                future = asyncio.run_coroutine_threadsafe(
+                    self._start(headless, proxy=proxy), loop
+                )
+                self._browser = future.result(timeout=30)
+                console.success("Browser restarted successfully")
+            finally:
+                self._restarting = False
+                self._restart_cv.notify_all()
 
     async def _do_fetch(
         self,
@@ -453,48 +528,67 @@ class BrowserEngine(BaseEngine):
             )
 
             # Ensure the single persistent browser is up (proxy-aware).
-            self._ensure_browser(headless=headless, proxy=ctx.proxy or None)
-
             body: bytes = b""
             status: int = 200
             shot: bytes | None = None
 
             for attempt in range(2):
-                try:
-                    assert self._loop is not None
-                    # Snapshot the loop reference now — _reset_browser may
-                    # replace self._loop concurrently after we release the lock.
-                    loop = self._loop
-                    task: asyncio.Task[Any] | None = None
+                task: asyncio.Task[Any] | None = None
+                loop: asyncio.AbstractEventLoop | None = None
 
-                    async def _run_fetch() -> tuple[bytes, int, bytes | None]:
-                        nonlocal task
-                        task = asyncio.current_task()  # type: ignore[assignment]
+                async def _run_fetch() -> tuple[bytes, int, bytes | None]:
+                    nonlocal task
+                    current = asyncio.current_task()
+                    assert current is not None
+                    task = current
+                    self._track_fetch_task(task)
+                    try:
                         return await self._do_fetch(
                             request.url, settle, snap, block_assets
                         )
+                    finally:
+                        self._fetch_tasks.discard(task)
 
+                with self._lock:
+                    while self._restarting:
+                        self._restart_cv.wait()
+                    self._ensure_browser_unlocked(
+                        headless=headless, proxy=ctx.proxy or None
+                    )
+                    loop = self._loop
+                    assert loop is not None
                     future = asyncio.run_coroutine_threadsafe(_run_fetch(), loop)
-                    try:
-                        body, status, shot = future.result(timeout=ctx.timeout)
-                    except TimeoutError:
-                        # Cancel via the snapshotted loop — if it's already
-                        # closed, swallow silently (the task is dead anyway).
-                        if task is not None and not loop.is_closed():
-                            try:
-                                loop.call_soon_threadsafe(task.cancel)
-                            except RuntimeError:
-                                pass
-                        raise
+
+                try:
+                    body, status, shot = future.result(timeout=ctx.timeout)
                     break
-                except (ConnectionRefusedError, RuntimeError) as exc:
+                except TimeoutError:
+                    # Cancel via the snapshotted loop — if it's already
+                    # closed, swallow silently (the task is dead anyway).
+                    if task is not None and loop is not None and not loop.is_closed():
+                        try:
+                            loop.call_soon_threadsafe(task.cancel)
+                        except RuntimeError:
+                            pass
+                    raise
+                except (futures.CancelledError, asyncio.CancelledError):
+                    if attempt == 0:
+                        continue
+                    raise
+                except StealthConnectionError:
+                    if attempt == 0:
+                        continue
+                    raise
+                except Exception as exc:
+                    if attempt == 0 and self._is_restart_transient(exc):
+                        continue
                     if attempt == 0 and _is_browser_crash(exc):
                         console.warning(f"Browser crashed, restarting: {exc}")
                         self._reset_browser(
                             headless, self._browser, proxy=ctx.proxy or None
                         )
-                    else:
-                        raise
+                        continue
+                    raise
 
             logger.debug(
                 "Browser engine fetched %s  status=%s  size=%d bytes",

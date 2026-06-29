@@ -184,13 +184,12 @@ def _stop_loop(
     into a thread nobody is watching, surfacing as unretrieved task exceptions
     or an ``InvalidStateError`` crash. Joining first eliminates that overlap.
 
-    We deliberately do NOT cancel pending tasks here.  _reset_browser is called
-    after a successful fetch has already returned (via _maybe_restart), so the
-    only tasks still alive at that point are background I/O tasks owned by
-    nodriver / the proxy relay — not user-visible _do_fetch coroutines.
-    Cancelling them is not necessary for correctness and would propagate
-    CancelledError into any concurrent _do_fetch calls still blocked on
-    future.result() in other Scrapy threads.
+    We deliberately do NOT cancel pending tasks inside this helper.  Callers
+    must drain their own user-visible work first: ``_reset_browser`` drains
+    every pending task via ``_drain_loop_tasks()`` and awaits the proxy relay
+    via ``await_closed()`` before invoking ``_stop_loop``.
+    What remains at loop-stop time is only nodriver-internal I/O, which does
+    not need explicit cancellation.
 
     The ``InvalidStateError`` that surfaces on Windows (Python 3.13+) when
     WinError-995 I/O-abort callbacks fire against already-done Proactor futures
