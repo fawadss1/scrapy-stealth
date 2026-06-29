@@ -307,7 +307,9 @@ class BrowserEngine(BaseEngine):
         """Cancel and await every pending task on this loop before teardown."""
         current = asyncio.current_task()
         pending = [
-            task for task in asyncio.all_tasks() if task is not current and not task.done()
+            task
+            for task in asyncio.all_tasks()
+            if task is not current and not task.done()
         ]
         for task in pending:
             task.cancel()
@@ -322,7 +324,9 @@ class BrowserEngine(BaseEngine):
             return True
         if isinstance(exc, ConnectionError):
             return True
-        if isinstance(exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)):
+        if isinstance(
+            exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)
+        ):
             return True
         if _is_browser_crash(exc):
             return True
