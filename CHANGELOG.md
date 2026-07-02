@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Windows — `ValueError: I/O operation on closed pipe` on browser restart**
   Suppressed benign asyncio subprocess teardown noise via `sys.unraisablehook`; added a short post-join pause in `_stop_loop` on Windows.
 
+* **Engine errors — backend library tracebacks hidden**
+  and other backend failures are now re-raised as `StealthTimeoutError` / `StealthConnectionError` via `raise_stealth()` (`from None`), so Scrapy logs show only scrapy-stealth exception frames.
+
 ---
 
 ## [0.6.9] - 2026-06-29
