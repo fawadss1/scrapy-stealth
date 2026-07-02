@@ -976,3 +976,38 @@ class TestLoopExceptionHandler:
     def test_passes_through_other_oserror(self):
         loop = self._handle(OSError(2, "no such file", None, 2))
         loop.default_exception_handler.assert_called_once()
+
+
+class TestBanStreakTracker:
+    def test_cooldown_prevents_immediate_re_restart(self, monkeypatch):
+        from scrapy_stealth.utils.browser import BanStreakTracker
+
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 60.0)
+        tracker = BanStreakTracker()
+        tracker.record(True)
+        assert tracker.record(True) is True
+        tracker.acknowledge_restart()
+        tracker.record(True)
+        assert tracker.record(True) is False
+
+    def test_streak_kept_until_restart_acknowledged(self, monkeypatch):
+        from scrapy_stealth.utils.browser import BanStreakTracker
+
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
+        tracker = BanStreakTracker()
+        tracker.record(True)
+        assert tracker.record(True) is True
+        assert tracker.record(True) is True
+        tracker.acknowledge_restart()
+        assert tracker.record(True) is False
+
+    def test_clean_response_resets_streak(self, monkeypatch):
+        from scrapy_stealth.utils.browser import BanStreakTracker
+
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
+        tracker = BanStreakTracker()
+        tracker.record(True)
+        assert tracker.record(False) is False
+        assert tracker.record(True) is False
+        assert tracker.record(True) is True

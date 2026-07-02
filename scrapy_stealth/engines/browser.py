@@ -84,6 +84,22 @@ class _AsyncioTeardownFilter(logging.Filter):
 logging.getLogger("concurrent.futures").addFilter(_AsyncioTeardownFilter())
 logging.getLogger("asyncio").addFilter(_AsyncioTeardownFilter())
 
+if sys.platform == "win32":
+    _orig_unraisablehook = sys.unraisablehook
+
+    def _win_unraisablehook(unraisable: sys.UnraisableHookArgs) -> None:
+        exc = unraisable.exc_value
+        if isinstance(exc, ValueError) and "closed pipe" in str(exc):
+            return
+        _orig_unraisablehook(unraisable)
+
+    sys.unraisablehook = _win_unraisablehook
+
+
+def _browser_fetch_timeout(request_timeout: int, settle: float) -> float:
+    # Cover status poll (~8s), settle/smart-wait, and tab-queue headroom.
+    return request_timeout + settle + 12.0
+
 
 class BrowserEngine(BaseEngine):
     """
@@ -500,12 +516,17 @@ class BrowserEngine(BaseEngine):
             AntiBotDetector.is_blocked(response)
             or AntiBotDetector.is_js_challenge(response)
         )
-        if self._bans.record(banned):
-            console.info(
-                f"Restarting browser after "
-                f"{config.get('BROWSER_RESTART_AFTER_BANS')} consecutive bans"
-            )
-            self._reset_browser(headless, self._browser, proxy=proxy)
+        if not self._bans.record(banned):
+            return
+        with self._lock:
+            if self._restarting:
+                return
+        console.info(
+            f"Restarting browser after "
+            f"{config.get('BROWSER_RESTART_AFTER_BANS')} consecutive bans"
+        )
+        self._reset_browser(headless, self._browser, proxy=proxy)
+        self._bans.acknowledge_restart()
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
@@ -564,7 +585,9 @@ class BrowserEngine(BaseEngine):
                     future = asyncio.run_coroutine_threadsafe(_run_fetch(), loop)
 
                 try:
-                    body, status, shot = future.result(timeout=ctx.timeout)
+                    body, status, shot = future.result(
+                        timeout=_browser_fetch_timeout(ctx.timeout, settle)
+                    )
                     break
                 except TimeoutError:
                     # Cancel via the snapshotted loop — if it's already
