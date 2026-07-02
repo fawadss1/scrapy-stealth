@@ -12,18 +12,13 @@ Contributions are welcome! This is an open source project and all help is apprec
 
 ## Code Style & Linting
 
-This project uses [ruff](https://docs.astral.sh/ruff/) for linting and formatting, and [mypy](https://mypy-lang.org/) for type checking. The CI pipeline will fail if any of these checks do not pass, so run them locally first:
+This project uses [ruff](https://docs.astral.sh/ruff/) for linting and formatting, and [mypy](https://mypy-lang.org/) for type checking. GitHub Actions will fail if any of these checks do not pass:
 
 ```bash
 pip install -e ".[dev]"
 
-# Lint
 ruff check .
-
-# Format (auto-fix)
-ruff format .
-
-# Type check
+ruff format --check .
 mypy scrapy_stealth
 ```
 
@@ -32,9 +27,17 @@ All three must pass before your pull request can be merged.
 ## Running Tests
 
 ```bash
-pip install pytest
 pytest
 ```
+
+## CI on GitHub
+
+Two workflows run on every push and pull request to `master`:
+
+| Workflow | Checks |
+|----------|--------|
+| **Lint** | `ruff check`, `ruff format --check`, `mypy` |
+| **CI** | `pytest` on Python 3.11–3.14 (Ubuntu, Windows, macOS) |
 
 ## Ways to Contribute
 
