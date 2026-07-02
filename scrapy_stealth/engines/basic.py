@@ -14,7 +14,7 @@ except ImportError as exc:
     StealthDependencyError.check("wreq", exc)
 
 from ..detectors.antibot import AntiBotDetector
-from ..exceptions import StealthConnectionError, StealthTimeoutError
+from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
 from ..utils.console import console
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
@@ -91,12 +91,14 @@ class BasicEngine(BaseEngine):
             from wreq.exceptions import TimeoutError as WTimeout
 
             if isinstance(exc, WTimeout):
-                raise StealthTimeoutError(
-                    f"Basic engine timed out after {ctx.timeout}s fetching {request.url!r}"
-                ) from exc
+                raise_stealth(
+                    StealthTimeoutError,
+                    f"Basic engine timed out after {ctx.timeout}s fetching {request.url!r}",
+                )
             if isinstance(exc, (WConn, WProxyConn)):
-                raise StealthConnectionError(
-                    f"Basic engine connection failed fetching {request.url!r}"
-                ) from exc
-            logger.exception("Basic engine request failed: %s", exc)
+                raise_stealth(
+                    StealthConnectionError,
+                    f"Basic engine connection failed fetching {request.url!r}",
+                )
+            logger.error("Basic engine request failed: %s", exc)
             return None

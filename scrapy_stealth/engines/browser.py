@@ -17,6 +17,7 @@ from ..exceptions import (
     StealthBrowserNotFoundError,
     StealthConnectionError,
     StealthTimeoutError,
+    raise_stealth,
 )
 from ..utils.browser import (
     _BROWSER_ARGS,
@@ -96,7 +97,7 @@ if sys.platform == "win32":
     sys.unraisablehook = _win_unraisablehook
 
 
-def _browser_fetch_timeout(request_timeout: int, settle: float) -> float:
+def _browser_fetch_timeout(request_timeout: int | float, settle: float) -> float:
     # Cover status poll (~8s), settle/smart-wait, and tab-queue headroom.
     return request_timeout + settle + 12.0
 
@@ -196,16 +197,18 @@ class BrowserEngine(BaseEngine):
                     "Initializing browser with executable path: %s", executable_path
                 )
             return await _nd.start(**kwargs)
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             if executable_path:
-                raise StealthBrowserNotFoundError(
+                raise_stealth(
+                    StealthBrowserNotFoundError,
                     f"Browser binary not found at the configured path: {executable_path!r}. "
-                    "Check BROWSER_EXECUTABLE_PATH in your settings or config."
-                ) from exc
-            raise StealthBrowserNotFoundError(
+                    "Check BROWSER_EXECUTABLE_PATH in your settings or config.",
+                )
+            raise_stealth(
+                StealthBrowserNotFoundError,
                 "Browser binary not found. Install Google Chrome or Chromium, or set "
-                "BROWSER_EXECUTABLE_PATH to point to your browser binary (e.g. Brave)."
-            ) from exc
+                "BROWSER_EXECUTABLE_PATH to point to your browser binary (e.g. Brave).",
+            )
 
     # Benign Windows Proactor teardown WinErrors raised when in-flight overlapped
     # socket ops (the proxy-relay accept loop, tab pipes) are aborted as the event
@@ -637,36 +640,42 @@ class BrowserEngine(BaseEngine):
 
             return response
 
-        except TimeoutError as exc:
-            raise StealthTimeoutError(
-                f"Browser engine timed out after {ctx.timeout}s fetching {request.url!r}"
-            ) from exc
+        except TimeoutError:
+            raise_stealth(
+                StealthTimeoutError,
+                f"Browser engine timed out after {ctx.timeout}s fetching {request.url!r}",
+            )
         except StealthBrowserNotFoundError:
             raise
         except StealthConnectionError:
             raise
-        except (ConnectionRefusedError, OSError) as exc:
-            raise StealthConnectionError(
-                f"Browser engine connection failed fetching {request.url!r}"
-            ) from exc
+        except StealthTimeoutError:
+            raise
+        except (ConnectionRefusedError, OSError):
+            raise_stealth(
+                StealthConnectionError,
+                f"Browser engine connection failed fetching {request.url!r}",
+            )
         except Exception as exc:
             try:
                 from websockets.exceptions import ConnectionClosedError as _WsClosed
 
                 if isinstance(exc, _WsClosed):
-                    raise StealthConnectionError(
-                        f"Browser tab closed unexpectedly fetching {request.url!r}"
-                    ) from exc
+                    raise_stealth(
+                        StealthConnectionError,
+                        f"Browser tab closed unexpectedly fetching {request.url!r}",
+                    )
             except ImportError:
                 pass
             try:
                 from nodriver.core.connection import ProtocolException as _ProtoExc
 
                 if isinstance(exc, _ProtoExc):
-                    raise StealthConnectionError(
-                        f"Browser target lost fetching {request.url!r}"
-                    ) from exc
+                    raise_stealth(
+                        StealthConnectionError,
+                        f"Browser target lost fetching {request.url!r}",
+                    )
             except ImportError:
                 pass
-            logger.exception("Browser engine request failed: %s", exc)
+            logger.error("Browser engine request failed: %s", exc)
             return None

@@ -13,7 +13,7 @@ except ImportError as exc:
     StealthDependencyError.check("curl_cffi", exc)
 
 from ..detectors.antibot import AntiBotDetector
-from ..exceptions import StealthConnectionError, StealthTimeoutError
+from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
 from ..utils.console import console
 from ..utils.headers import _FINGERPRINT_KEYS
 from ..utils.logger import get_logger
@@ -96,12 +96,14 @@ class TurboEngine(BaseEngine):
             from curl_cffi.requests.exceptions import Timeout as CurlTimeout
 
             if isinstance(exc, CurlTimeout):
-                raise StealthTimeoutError(
-                    f"Turbo engine timed out after {ctx.timeout}s fetching {request.url!r}"
-                ) from exc
+                raise_stealth(
+                    StealthTimeoutError,
+                    f"Turbo engine timed out after {ctx.timeout}s fetching {request.url!r}",
+                )
             if isinstance(exc, (CurlConn, CurlDNS, CurlProxy)):
-                raise StealthConnectionError(
-                    f"Turbo engine connection failed fetching {request.url!r}"
-                ) from exc
-            logger.exception("Turbo engine request failed: %s", exc)
+                raise_stealth(
+                    StealthConnectionError,
+                    f"Turbo engine connection failed fetching {request.url!r}",
+                )
+            logger.error("Turbo engine request failed: %s", exc)
             return None

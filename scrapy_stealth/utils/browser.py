@@ -648,8 +648,10 @@ class BanStreakTracker:
             self._streak += 1
             if self._streak < config.get("BROWSER_RESTART_AFTER_BANS"):
                 return False
-            if time.monotonic() - self._last_restart < config.get(
-                "BROWSER_RESTART_COOLDOWN_S"
+            if (
+                self._last_restart
+                and time.monotonic() - self._last_restart
+                < config.get("BROWSER_RESTART_COOLDOWN_S")
             ):
                 return False
             return True
