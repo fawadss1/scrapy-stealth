@@ -114,3 +114,20 @@ class TestStealthBrowserNotFoundError:
         exc = StealthBrowserNotFoundError("Browser binary not found.")
         exc.__cause__ = original
         assert exc.__cause__ is original
+
+
+class TestRaiseStealth:
+    def test_suppresses_backend_exception_chain(self):
+        from scrapy_stealth.exceptions import raise_stealth
+
+        try:
+            try:
+                raise RuntimeError("curl_cffi backend noise")
+            except RuntimeError:
+                raise_stealth(
+                    StealthTimeoutError,
+                    "Turbo engine timed out after 30s fetching 'https://example.com'",
+                )
+        except StealthTimeoutError as exc:
+            assert exc.__cause__ is None
+            assert "Turbo engine timed out" in str(exc)

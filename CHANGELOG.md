@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.10a1] - 2026-07-01
+
+### Added
+
+* **Browser restart cooldown (`BROWSER_RESTART_COOLDOWN_S`)**
+  Minimum seconds between browser restarts (default `60`). Prevents restart storms when many concurrent tabs all receive 403s from the same blocked session.
+
+### Fixed
+
+* **Browser engine — restart not firing after 5 consecutive bans**
+  `BanStreakTracker.record()` no longer resets the streak or starts the cooldown until the restart actually completes (`acknowledge_restart()`). Previously, a restart signal could be consumed while another restart was already in progress (`_restarting=True`), leaving Chrome running with a false cooldown active.
+
+* **Browser engine — `Browser engine timed out after 30s` under load**
+  The browser fetch deadline now includes settle time and headroom for status polling and tab-queue wait (`stealth_timeout + settle + 12`).
+
+* **Windows — `ValueError: I/O operation on closed pipe` on browser restart**
+  Suppressed benign asyncio subprocess teardown noise via `sys.unraisablehook`; added a short post-join pause in `_stop_loop` on Windows.
+
+* **Engine errors — backend library tracebacks hidden**
+  and other backend failures are now re-raised as `StealthTimeoutError` / `StealthConnectionError` via `raise_stealth()` (`from None`), so Scrapy logs show only scrapy-stealth exception frames.
+
+---
+
 ## [0.6.9] - 2026-06-29
 
 ### Added

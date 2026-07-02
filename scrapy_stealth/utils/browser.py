@@ -205,6 +205,8 @@ def _stop_loop(
         pass
     if thread is not None:
         thread.join(timeout=timeout)
+    if sys.platform == "win32":
+        time.sleep(0.15)
     # Close the loop after the thread has fully stopped.  A closed loop raises
     # RuntimeError on any further use, which is the correct and expected
     # behaviour — _reset_browser always replaces self._loop with a fresh one.
@@ -628,18 +630,15 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
 
 
 class BanStreakTracker:
-    """
-    Counts *consecutive* banned/challenged responses and signals a restart once
-    the streak reaches ``BROWSER_RESTART_AFTER_BANS``. Any clean response resets
-    the streak to zero, so a browser sailing through cleanly is never restarted.
-    """
+    """Consecutive ban counter with a restart cooldown to avoid restart storms."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._streak = 0
+        self._last_restart = 0.0
 
     def record(self, banned: bool) -> bool:
-        """Record one outcome; returns True if the browser should restart."""
+        """Return True when a restart should be attempted (does not consume the streak)."""
         from ..config import config
 
         with self._lock:
@@ -647,7 +646,18 @@ class BanStreakTracker:
                 self._streak = 0
                 return False
             self._streak += 1
-            if self._streak >= config.get("BROWSER_RESTART_AFTER_BANS"):
-                self._streak = 0
-                return True
-            return False
+            if self._streak < config.get("BROWSER_RESTART_AFTER_BANS"):
+                return False
+            if (
+                self._last_restart
+                and time.monotonic() - self._last_restart
+                < config.get("BROWSER_RESTART_COOLDOWN_S")
+            ):
+                return False
+            return True
+
+    def acknowledge_restart(self) -> None:
+        """Call after a browser restart actually completes."""
+        with self._lock:
+            self._streak = 0
+            self._last_restart = time.monotonic()
