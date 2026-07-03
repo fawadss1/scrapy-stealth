@@ -26,7 +26,7 @@ designed for large-scale, production-grade crawling.
   <tr>
     <td width="380" align="center">
       <a href="https://go.nodemaven.com/Fawadss1readme">
-        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/banner.svg" alt="NodeMaven" width="380"/>
+        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/nodemaven-banner.svg" alt="NodeMaven" width="380"/>
       </a>
     </td>
     <td>
