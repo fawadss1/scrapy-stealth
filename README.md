@@ -20,6 +20,36 @@ designed for large-scale, production-grade crawling.
 
 ---
 
+## 💜 Sponsor
+
+<table>
+  <tr>
+    <td width="380" align="center">
+      <a href="https://go.nodemaven.com/Fawadss1readme">
+        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/banner.svg" alt="NodeMaven" width="380"/>
+      </a>
+    </td>
+    <td>
+      <strong><a href="https://go.nodemaven.com/Fawadss1readme">NodeMaven</a></strong> — the most reliable proxy provider with the highest-quality IP on the market.
+      Best solution for automation, web scraping, SEO research, and social media management.
+      <br/><br/>
+      <strong>Why NodeMaven?</strong>
+      <ul>
+        <li>99.9% uptime</li>
+        <li>Sticky sessions up to 7 days</li>
+        <li>IP filtering: all proxies have fraud score &lt;97%</li>
+        <li>No KYC required</li>
+        <li>Cashback on traffic — burn GB and earn up to 10% back</li>
+      </ul>
+      Special codes for scrapy-stealth users:
+      <code>SCRAPYSTEALTH35</code> — 35% off Mobile and Residential Proxies;
+      <code>SCRAPYSTEALTH40</code> — 40% off ISP (Static) Proxies.
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 🧠 Why scrapy-stealth?
 
 Scrapy is fast and powerful, but modern websites use advanced anti-bot protections such as:
