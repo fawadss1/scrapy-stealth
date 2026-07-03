@@ -677,6 +677,44 @@ class TestBrowserEngine:
             engine._execute(Request("https://example.com"))
         mock_reset.assert_called_once()
 
+    def test_no_restart_on_200_with_antibot_markers_in_large_page(
+        self, monkeypatch, engine, mock_tab
+    ):
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 5)
+        self._set_status(mock_tab, 200)
+        large_body = "x" * 3000 + "datadome"
+        mock_tab.evaluate = AsyncMock(
+            side_effect=lambda js: (
+                200
+                if "responseStatus" in js
+                else (
+                    False
+                    if "chrome-error" in js
+                    else (10000 if "trim().length" in js else large_body)
+                )
+            )
+        )
+        with patch.object(engine, "_reset_browser") as mock_reset:
+            for _ in range(10):
+                engine._execute(Request("https://example.com"))
+        mock_reset.assert_not_called()
+
+    def test_restarts_again_after_another_ban_streak(
+        self, monkeypatch, engine, mock_tab
+    ):
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 5)
+        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.0)
+        self._set_status(mock_tab, 403)
+        with patch.object(engine, "_reset_browser") as mock_reset:
+            for _ in range(5):
+                engine._execute(Request("https://example.com"))
+            mock_reset.assert_called_once()
+            for _ in range(4):
+                engine._execute(Request("https://example.com"))
+            assert mock_reset.call_count == 1
+            engine._execute(Request("https://example.com"))
+        assert mock_reset.call_count == 2
+
     def test_clean_response_resets_ban_streak(self, monkeypatch, engine, mock_tab):
         monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 3)
         with patch.object(engine, "_reset_browser") as mock_reset:
@@ -979,22 +1017,39 @@ class TestLoopExceptionHandler:
 
 
 class TestBanStreakTracker:
-    def test_cooldown_prevents_immediate_re_restart(self, monkeypatch):
+    def test_can_restart_again_after_new_ban_streak(self, monkeypatch):
         from scrapy_stealth.utils.browser import BanStreakTracker
 
         monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
-        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 60.0)
+        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.0)
         tracker = BanStreakTracker()
         tracker.record(True)
         assert tracker.record(True) is True
         tracker.acknowledge_restart()
         tracker.record(True)
+        assert tracker.record(True) is True
+
+    def test_cooldown_delays_restart_while_bans_continue(self, monkeypatch):
+        import time
+
+        from scrapy_stealth.utils.browser import BanStreakTracker
+
+        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.5)
+        tracker = BanStreakTracker()
         assert tracker.record(True) is False
+        assert tracker.record(True) is True
+        tracker.acknowledge_restart()
+        assert tracker.record(True) is False
+        assert tracker.record(True) is False
+        time.sleep(0.6)
+        assert tracker.record(True) is True
 
     def test_streak_kept_until_restart_acknowledged(self, monkeypatch):
         from scrapy_stealth.utils.browser import BanStreakTracker
 
         monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.0)
         tracker = BanStreakTracker()
         tracker.record(True)
         assert tracker.record(True) is True

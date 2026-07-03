@@ -630,34 +630,44 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
 
 
 class BanStreakTracker:
-    """Consecutive ban counter with a restart cooldown to avoid restart storms."""
+    """Consecutive ban counter for browser session recycling."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._streak = 0
+        self._restart_due = False
         self._last_restart = 0.0
 
     def record(self, banned: bool) -> bool:
-        """Return True when a restart should be attempted (does not consume the streak)."""
+        """Return True once when a restart should be attempted."""
         from ..config import config
 
         with self._lock:
             if not banned:
                 self._streak = 0
+                self._restart_due = False
                 return False
+
             self._streak += 1
-            if self._streak < config.get("BROWSER_RESTART_AFTER_BANS"):
+            threshold = config.get("BROWSER_RESTART_AFTER_BANS")
+            if self._streak >= threshold:
+                self._restart_due = True
+
+            if not self._restart_due:
                 return False
+
             if (
                 self._last_restart
                 and time.monotonic() - self._last_restart
                 < config.get("BROWSER_RESTART_COOLDOWN_S")
             ):
                 return False
+
             return True
 
     def acknowledge_restart(self) -> None:
-        """Call after a browser restart actually completes."""
+        """Call when a ban-triggered browser restart is initiated."""
         with self._lock:
             self._streak = 0
+            self._restart_due = False
             self._last_restart = time.monotonic()

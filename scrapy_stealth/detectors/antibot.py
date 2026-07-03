@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from ..utils.antibot import _JS_CHALLENGE_SIGS, is_blocked, is_js_challenge
+from ..utils.antibot import (
+    _JS_CHALLENGE_SIGS,
+    is_blocked,
+    is_browser_session_ban,
+    is_js_challenge,
+)
 
 
 class AntiBotDetector:
@@ -20,6 +25,11 @@ class AntiBotDetector:
     def is_js_challenge_body(body: str) -> bool:
         """Same as is_js_challenge but accepts a raw HTML string instead of a response."""
         return is_js_challenge(body)
+
+    @staticmethod
+    def is_browser_session_ban(response) -> bool:
+        """True when the browser engine should recycle the Chrome session."""
+        return is_browser_session_ban(response)
 
     @staticmethod
     def reason(response) -> str | None:

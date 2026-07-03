@@ -511,25 +511,35 @@ class BrowserEngine(BaseEngine):
 
         return str(html).encode(errors="replace"), int(status), shot
 
+    def _wait_for_browser_ready(self) -> None:
+        with self._lock:
+            while self._restarting:
+                self._restart_cv.wait()
+
     def _maybe_restart(
         self, headless: bool, proxy: str | None, response: Response | None
     ) -> None:
         """Restart Chrome once BanStreakTracker reports N consecutive bans."""
-        banned = response is not None and (
-            AntiBotDetector.is_blocked(response)
-            or AntiBotDetector.is_js_challenge(response)
-        )
-        if not self._bans.record(banned):
-            return
         with self._lock:
             if self._restarting:
                 return
+
+        banned = response is not None and AntiBotDetector.is_browser_session_ban(
+            response
+        )
+        if not self._bans.record(banned):
+            return
+
+        with self._lock:
+            if self._restarting:
+                return
+
         console.info(
             f"Restarting browser after "
             f"{config.get('BROWSER_RESTART_AFTER_BANS')} consecutive bans"
         )
-        self._reset_browser(headless, self._browser, proxy=proxy)
         self._bans.acknowledge_restart()
+        self._reset_browser(headless, self._browser, proxy=proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
@@ -560,7 +570,7 @@ class BrowserEngine(BaseEngine):
             status: int = 200
             shot: bytes | None = None
 
-            for attempt in range(2):
+            for attempt in range(5):
                 task: asyncio.Task[Any] | None = None
                 loop: asyncio.AbstractEventLoop | None = None
 
@@ -577,9 +587,8 @@ class BrowserEngine(BaseEngine):
                     finally:
                         self._fetch_tasks.discard(task)
 
+                self._wait_for_browser_ready()
                 with self._lock:
-                    while self._restarting:
-                        self._restart_cv.wait()
                     self._ensure_browser_unlocked(
                         headless=headless, proxy=ctx.proxy or None
                     )
@@ -602,17 +611,20 @@ class BrowserEngine(BaseEngine):
                             pass
                     raise
                 except (futures.CancelledError, asyncio.CancelledError):
-                    if attempt == 0:
+                    self._wait_for_browser_ready()
+                    if attempt < 4:
                         continue
                     raise
                 except StealthConnectionError:
-                    if attempt == 0:
+                    self._wait_for_browser_ready()
+                    if attempt < 4:
                         continue
                     raise
                 except Exception as exc:
-                    if attempt == 0 and self._is_restart_transient(exc):
+                    if attempt < 4 and self._is_restart_transient(exc):
+                        self._wait_for_browser_ready()
                         continue
-                    if attempt == 0 and _is_browser_crash(exc):
+                    if attempt < 4 and _is_browser_crash(exc):
                         console.warning(f"Browser crashed, restarting: {exc}")
                         self._reset_browser(
                             headless, self._browser, proxy=ctx.proxy or None
@@ -677,5 +689,10 @@ class BrowserEngine(BaseEngine):
                     )
             except ImportError:
                 pass
-            logger.error("Browser engine request failed: %s", exc)
+            if isinstance(exc, (futures.CancelledError, asyncio.CancelledError)):
+                logger.debug(
+                    "Browser fetch cancelled during restart for %s", request.url
+                )
+                return None
+            logger.error("Browser engine request failed: %r", exc)
             return None

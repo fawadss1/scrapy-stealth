@@ -58,9 +58,9 @@ BROWSER_MAX_TABS: int = 10
 # resets the counter, so a browser sailing through cleanly is never restarted.
 BROWSER_RESTART_AFTER_BANS: int = 5
 
-# Minimum seconds between browser restarts — prevents restart storms when every
-# concurrent tab is getting 403s from the same blocked IP/session.
-BROWSER_RESTART_COOLDOWN_S: float = 60.0
+# Minimum seconds between ban-triggered browser restarts. Stops restart loops when
+# every concurrent request keeps returning 403; does not block the first restart.
+BROWSER_RESTART_COOLDOWN_S: float = 15.0
 
 # Browser engine: block static assets (images, fonts, CSS, media) to speed up
 # page loads and cut bandwidth. Off by default since some anti-bot checks and
