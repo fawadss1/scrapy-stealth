@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.10a2] - 2026-07-03
+
+### Added
+
+* **Automatic PyPI update check**
+  When `StealthDownloaderMiddleware` is loaded, scrapy-stealth checks PyPI once per process in a background thread. If a newer version is published, an info message is printed with `pip install -U scrapy-stealth` and a link to that release on PyPI (e.g. `https://pypi.org/project/scrapy-stealth/0.7.0/`). Network errors are silent and never interrupt crawling.
+
+* **Local CI helper (`scripts/check.py`, `CHECK.md`)**
+  Run the same ruff, format, mypy, and pytest checks as GitHub Actions locally before pushing.
+
+* **`is_browser_session_ban()` — stricter ban detection for browser restarts**
+  New helper in `utils/antibot.py`. HTTP block codes (403, 429, 503) always count; keyword and JS-challenge heuristics apply only to short pages (< 2500 bytes). Large HTTP 200 documents that embed anti-bot scripts (e.g. DataDome on RS Online) are no longer treated as bans.
+
+### Changed
+
+* **`.gitignore`** — ignore `stealth_snapshots/`, the default output directory for browser snapshots saved via the `@snapshot` decorator.
+
+* **`BROWSER_RESTART_COOLDOWN_S`** — default reduced from `60` to `15` seconds and reworked. Cooldown now spaces ban-triggered restarts when every concurrent request keeps returning 403, without blocking the first restart or all subsequent restarts for a full minute. Configurable via `config.BROWSER_RESTART_COOLDOWN_S`.
+
+* **`BanStreakTracker`** — restart is signalled once per ban wave (`_restart_due` flag); bans during an active restart (`_restarting=True`) are ignored; streak resets when restart begins (`acknowledge_restart()` before `_reset_browser()`).
+
+### Fixed
+
+* **Browser engine — false “5 consecutive bans” restarts on HTTP 200**
+  `_maybe_restart` now uses `is_browser_session_ban()` instead of generic `is_blocked()` + `is_js_challenge()`, which matched anti-bot script fragments in otherwise valid product pages.
+
+* **Browser engine — only one restart after 5 bans, then never again**
+  Removed the broken 60s cooldown that treated `_last_restart = 0` as “just restarted” and blocked the first restart; later removed the all-or-nothing cooldown that prevented any second restart within 60s.
+
+* **Browser engine — restart storm every 1–2 seconds under concurrent 403s**
+  Fixed duplicate restart signals when streak exceeded the threshold, bans piling up during Chrome reset, and concurrent threads all triggering `_reset_browser()` in the same ban wave.
+
+* **Browser engine — `CancelledError` and empty “request failed” logs during restart**
+  Fetches cancelled mid-restart now wait for Chrome to come back (`_wait_for_browser_ready()`) and retry up to 5 times. Fixed a deadlock from calling `_wait_for_browser_ready()` while already holding the engine lock.
+
+* **Browser engine — intermittent empty HTML on JS-heavy pages (HTTP 200)**
+  `_smart_wait` no longer skips the settle delay when the body text is already long.
+
+---
+
 ## [0.6.10a1] - 2026-07-01
 
 ### Added
