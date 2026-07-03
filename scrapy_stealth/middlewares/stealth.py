@@ -18,6 +18,7 @@ from ..utils.meta import (
     _is_meta_enabled,
     _resolve_engine,
 )
+from ..utils.updates import update_available
 
 logger = get_logger()
 
@@ -39,6 +40,7 @@ class StealthDownloaderMiddleware:
         stealth_enabled = crawler.settings.getbool("STEALTH_ENABLED", False)
         mw = cls(proxies=proxies, stealth_enabled=stealth_enabled)
         crawler.signals.connect(mw.spider_opened, signal=signals.spider_opened)
+        update_available()
         return mw
 
     def spider_opened(self, spider: Any) -> None:

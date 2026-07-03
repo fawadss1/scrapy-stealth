@@ -230,6 +230,17 @@ class TestStealthDownloaderMiddleware:
         middleware.spider_opened(spider)
         assert config.get("STEALTH_DRIVER") == original
 
+    def test_from_crawler_triggers_update_check(self):
+        crawler = MagicMock()
+        crawler.settings.getlist.return_value = []
+        crawler.settings.getbool.return_value = False
+        with (
+            patch("scrapy_stealth.engines.basic.Client"),
+            patch("scrapy_stealth.middlewares.stealth.update_available") as mock_check,
+        ):
+            StealthDownloaderMiddleware.from_crawler(crawler)
+        mock_check.assert_called_once()
+
     def test_invalid_stealth_driver_in_settings_falls_back_in_manager(
         self, middleware, spider
     ):
