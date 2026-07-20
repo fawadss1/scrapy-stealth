@@ -252,12 +252,46 @@ class TestStealthDownloaderMiddleware:
     ):
         spider.crawler.settings.getlist.return_value = []
         spider.crawler.settings.getbool.return_value = False
-        spider.crawler.settings.get.return_value = "browsesr"
-        middleware.spider_opened(spider)
-        request = Request("https://example.com", meta={"stealth": {}})
-        with patch.object(
-            middleware.manager, "get", wraps=middleware.manager.get
-        ) as mock_get:
-            mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
-            asyncio.run(middleware.process_request(request, spider))
-        mock_get.assert_called_once_with("stealth", None)
+        spider.crawler.settings.get.side_effect = lambda key, default=None: (
+            "browsesr" if key == "STEALTH_DRIVER" else None
+        )
+        original = config.get("STEALTH_DRIVER")
+        try:
+            middleware.spider_opened(spider)
+            request = Request("https://example.com", meta={"stealth": {}})
+            with patch.object(
+                middleware.manager, "get", wraps=middleware.manager.get
+            ) as mock_get:
+                mock_get.return_value = MagicMock(fetch=AsyncMock(return_value=None))
+                asyncio.run(middleware.process_request(request, spider))
+            mock_get.assert_called_once_with("stealth", None)
+        finally:
+            config.STEALTH_DRIVER = original
+
+    # -------------------------------------------------------------------
+    # STEALTH_DNS_OVERRIDES
+    # -------------------------------------------------------------------
+
+    def test_spider_opened_loads_dns_overrides(self, middleware):
+        spider = MagicMock()
+        spider.crawler.settings.getlist.return_value = []
+        spider.crawler.settings.getbool.return_value = False
+        spider.crawler.settings.get.side_effect = lambda key, default=None: (
+            {"example.com": "203.0.113.10"} if key == "STEALTH_DNS_OVERRIDES" else None
+        )
+        original = dict(config.STEALTH_DNS_OVERRIDES)
+        try:
+            middleware.spider_opened(spider)
+            assert config.STEALTH_DNS_OVERRIDES == {"example.com": "203.0.113.10"}
+        finally:
+            config.STEALTH_DNS_OVERRIDES = original
+
+    def test_spider_opened_rejects_invalid_dns_ip(self, middleware):
+        spider = MagicMock()
+        spider.crawler.settings.getlist.return_value = []
+        spider.crawler.settings.getbool.return_value = False
+        spider.crawler.settings.get.side_effect = lambda key, default=None: (
+            {"example.com": "not-an-ip"} if key == "STEALTH_DNS_OVERRIDES" else None
+        )
+        with pytest.raises(ValueError, match="not a valid IPv4/IPv6"):
+            middleware.spider_opened(spider)

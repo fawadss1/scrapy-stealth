@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+* **Custom DNS overrides (`STEALTH_DNS_OVERRIDES` / `meta["stealth"]["dns"]`)**
+  Pin hostnames to fixed origin IPs so `basic` / `turbo` connect via that address while keeping the hostname for TLS SNI, Host header, and certificate verification. Configure globally via Scrapy settings / `config.STEALTH_DNS_OVERRIDES`, or per-request with a bare IP (`"dns": "203.0.113.10"`) or a `{host: ip}` map. The `browser` driver applies the effective map via a local CONNECT relay that dials the pinned IP (not Chrome `--host-resolver-rules`). Invalid IPs raise `ValueError` at startup / resolve time.
+
+### Changed
+
+* **Dependency: `wreq>=0.12.1`** (was `>=0.11.2`)
+  Required for the `DnsOptions` API used by custom DNS overrides (`ResolverOptions` was renamed in wreq 0.12).
+
+* **Basic engine DNS — apply `dns_options` on `Client(...)`**
+  wreq ignores per-request `dns_options=` on `get()`/`post()`; clients are now cached per `(http2, dns map)` like turbo sessions.
+
+* **Browser engine DNS — local CONNECT relay**
+  Replaced unreliable `--host-resolver-rules` with a DNS-aware local proxy relay (same mechanism as proxy auth injection). Pinned hosts are dialed by IP while Chrome keeps the original hostname for TLS.
+
+* **Browser relay — silence shutdown races / dial IPs without getaddrinfo**
+  Pinned-IP connects use `sock_connect` so Windows Proactor no longer hits `RuntimeError: cannot schedule new futures after shutdown` when Chrome still CONNECT-retries during browser restart. Loop/executor teardown errors in the relay callback are swallowed.
+
+* **Browser engine — blank tab / wait / relay consistency**
+  Disabled `enable_begin_frame_control` on tab create. Browser always uses the local CONNECT relay (even with no DNS/proxy). Replaced nodriver `page.wait()` with `_wait_for_document`. `_wait_for_status` returns ~0.75s after document complete when Navigation Timing never fills. `_smart_wait` long-poll only for short challenge/script-only shells. Challenge HTML heuristics no longer match bare `akamai` / `captcha` / `please wait.` / `enable javascript`.
+
+* **Browser engine — close tab as soon as `_smart_wait` passes**
+  `_smart_wait` returns immediately when body content is ready (`settle` is a max wait for growth, not a sleep after ready). HTML is captured, the fetch tab is closed via CDP, then the response is returned. Chrome is stopped when idle so the window is not left on `about:blank`.
+
+---
+
 ## [0.6.10a2] - 2026-07-03
 
 ### Added

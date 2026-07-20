@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import ipaddress
 import os
 import random
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -22,34 +24,9 @@ logger = get_logger()
 
 
 def _cleanup_browser_profiles(keep: str | None = None) -> int:
-    """
-    Delete stale ``uc_*`` temp profile directories left behind by nodriver.
-
-    nodriver creates a fresh ``tempfile.mkdtemp(prefix="uc_")`` directory for
-    every browser session and never removes it on exit, causing %TEMP% (Windows)
-    or /tmp (Linux/macOS) to accumulate hundreds of MB over time.
-
-    This function scans the system temp directory, removes every ``uc_*`` folder
-    that is **not** currently in use, and returns the number of directories
-    deleted.
-
-    Parameters
-    ----------
-    keep:
-        Absolute path of the profile directory that belongs to the *currently
-        running* browser session.  If supplied, that directory is skipped so
-        the live browser is never disrupted.  Pass ``browser.config.user_data_dir``
-        (the nodriver config attribute) as this value.
-
-    Returns
-    -------
-    int
-        Number of directories successfully deleted.
-    """
+    """Delete stale ``uc_*`` temp profile dirs; skip *keep* if set."""
     tmp = tempfile.gettempdir()
-    deleted = 0
-    errors = 0
-
+    deleted = errors = 0
     try:
         entries = os.scandir(tmp)
     except OSError as exc:
@@ -79,9 +56,7 @@ def _cleanup_browser_profiles(keep: str | None = None) -> int:
 
     if deleted or errors:
         logger.debug(
-            "_cleanup_browser_profiles: deleted=%d skipped_locked=%d",
-            deleted,
-            errors,
+            "_cleanup_browser_profiles: deleted=%d skipped_locked=%d", deleted, errors
         )
     return deleted
 
@@ -116,54 +91,42 @@ _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
-_JS_CURRENT_URL = "window.location.href"
-# Detects pages that are definitively blocked/errored with no content to wait
-# for.  Akamai 403/429 pages have an empty or near-empty body and a title of
-# "Access Denied", "403 Forbidden", "429 Too Many Requests", etc.  Matching on
-# title is faster and more reliable than waiting for Navigation Timing to
-# populate responseStatus when the connection is killed at the edge.
 _JS_ERROR_TITLE = (
     "(() => {"
     "  const t = (document.title || '').toLowerCase();"
     "  return /access denied|forbidden|too many requests|blocked|error|unavailable/.test(t);"
     "})()"
 )
-
-# Resource types blocked when static_assets_block=True — covers images, fonts,
-# stylesheets, and other media that aren't needed to read or detect-bypass a page.
-_STATIC_ASSET_RESOURCE_TYPES: tuple[str, ...] = (
-    "Image",
-    "Font",
-    "Stylesheet",
-    "Media",
+# True when the document has finished loading and has real content (not a shell).
+_JS_PAGE_READY = (
+    "(() => {"
+    "  if (document.readyState !== 'complete') return false;"
+    "  const b = document.body;"
+    "  if (!b) return false;"
+    "  if (b.children.length === 1 && b.children[0].tagName === 'SCRIPT') return false;"
+    "  const text = (b.innerText || '').trim().length;"
+    "  const nodes = b.querySelectorAll('*').length;"
+    "  return text >= 400 || nodes >= 40;"
+    "})()"
 )
 
+_STATIC_ASSET_RESOURCE_TYPES: tuple[str, ...] = ("Image", "Font", "Stylesheet", "Media")
+# Kept in sync with utils/antibot.py short-page heuristic.
 _CONTENT_SHORT_THRESHOLD = 2500
-
-_xvfb_proc: Any = None  # module-level so only one Xvfb is started per process
+# After the page looks ready, don't burn the full user settle — just a short cushion.
+_READY_SETTLE_CAP_S = 1.5
+_xvfb_proc: Any = None
 
 
 def _random_fingerprint_args() -> list[str]:
-    """
-    Return Chrome launch args that vary per browser startup to present a
-    distinct fingerprint on each session.
-
-    All args are appended after ``_BROWSER_ARGS`` by
-    ``BrowserEngine._build_args()`` so they always win over base defaults.
-    Called once per ``_start()`` / ``_reset_browser()`` so each browser
-    lifetime gets a stable but unique identity.
-    """
+    """Chrome launch args that vary per browser session."""
     size = random.choice(_FP_WINDOW_SIZES)
     lang = random.choice(_FP_LANGUAGES)
     logger.debug("Browser fingerprint — size=%s  lang=%s", size, lang)
-    return [
-        f"--window-size={size}",
-        f"--lang={lang}",
-    ]
+    return [f"--window-size={size}", f"--lang={lang}"]
 
 
 def _make_loop() -> asyncio.AbstractEventLoop:
-    # ProactorEventLoop is required on Windows for Chrome subprocess management.
     if sys.platform == "win32":
         return asyncio.ProactorEventLoop()
     return asyncio.new_event_loop()
@@ -174,29 +137,7 @@ def _stop_loop(
     thread: threading.Thread | None,
     timeout: float = 5.0,
 ) -> None:
-    """
-    Stop *loop* and join *thread*, waiting for the loop to actually finish
-    running before returning.
-
-    Discarding a running loop/thread pair without joining lets the old thread
-    keep polling the (Proactor, on Windows) selector after the new loop/thread
-    has already started — in-flight I/O gets aborted mid-callback and raises
-    into a thread nobody is watching, surfacing as unretrieved task exceptions
-    or an ``InvalidStateError`` crash. Joining first eliminates that overlap.
-
-    We deliberately do NOT cancel pending tasks inside this helper.  Callers
-    must drain their own user-visible work first: ``_reset_browser`` drains
-    every pending task via ``_drain_loop_tasks()`` and awaits the proxy relay
-    via ``await_closed()`` before invoking ``_stop_loop``.
-    What remains at loop-stop time is only nodriver-internal I/O, which does
-    not need explicit cancellation.
-
-    The ``InvalidStateError`` that surfaces on Windows (Python 3.13+) when
-    WinError-995 I/O-abort callbacks fire against already-done Proactor futures
-    during teardown is handled in ``_run_loop`` via a bare except.  Closing the
-    loop *after* the thread has exited ensures no further callbacks can fire
-    against the half-torn-down Proactor selector.
-    """
+    """Stop *loop*, join *thread*, then close the loop."""
     if loop is None:
         return
     try:
@@ -207,32 +148,12 @@ def _stop_loop(
         thread.join(timeout=timeout)
     if sys.platform == "win32":
         time.sleep(0.15)
-    # Close the loop after the thread has fully stopped.  A closed loop raises
-    # RuntimeError on any further use, which is the correct and expected
-    # behaviour — _reset_browser always replaces self._loop with a fresh one.
     if not loop.is_closed():
-        try:
+        with contextlib.suppress(Exception):
             loop.close()
-        except Exception:
-            pass
 
 
 def _splash_url() -> str:
-    # about:blank is the safest warmup target: Chrome loads it instantly,
-    # it does not produce a Navigation Timing entry that could confuse
-    # _wait_for_status, and it cannot be mis-returned by nodriver's
-    # browser.get(url, new_tab=True) as an active tab.
-    #
-    # We previously used a file:// URI pointing at docs/static/logo.png, but
-    # that caused two problems:
-    #   1. Chrome opens the PNG in the main tab and leaves it "active".
-    #      nodriver's get(url, new_tab=True) sometimes returns the main tab
-    #      instead of the newly created tab — so _do_fetch ends up evaluating
-    #      JS against logo.png instead of the target URL.
-    #   2. A file:// PNG never writes a responseStatus to Navigation Timing,
-    #      so _wait_for_status burns its full 8s timeout then falls back to
-    #      200, leading to the same 28s-before-timeout problem we fixed for
-    #      Akamai 403s.
     return "about:blank"
 
 
@@ -249,13 +170,7 @@ async def _cdp_snapshot(page: Any) -> bytes | None:
 
 @contextlib.asynccontextmanager
 async def _block_static_assets(page: Any):
-    """
-    While active, fail every request whose resource type is in
-    ``_STATIC_ASSET_RESOURCE_TYPES`` (images, fonts, CSS, media) via the CDP
-    Fetch domain — everything else (document, script, XHR/fetch) passes
-    through untouched. Scoped to *page* and torn down on exit so it never
-    leaks to the next tab.
-    """
+    """Fail Image/Font/Stylesheet/Media requests via CDP Fetch for *page*."""
     import nodriver.cdp.fetch as _cdp_fetch
     import nodriver.cdp.network as _cdp_network
 
@@ -278,33 +193,16 @@ async def _block_static_assets(page: Any):
         yield
     finally:
         page.remove_handler(_cdp_fetch.RequestPaused, _on_paused)
-        try:
+        with contextlib.suppress(Exception):
             await page.send(_cdp_fetch.disable())
-        except Exception:
-            pass
 
 
 def _proxy_bypass_args(bypass_list: Any) -> list[str]:
-    """
-    Build the Chrome ``--proxy-bypass-list`` launch flag from a user-supplied
-    list of domains/patterns.
-
-    Each entry is sent to Chrome verbatim (only surrounding whitespace is
-    trimmed and empties dropped), so the full Chrome bypass syntax is supported
-    — bare hostnames, wildcards (``*.example.com``), IP/CIDR ranges, ports, and
-    the special ``<local>`` token. Entries are joined with ``;`` as Chrome
-    expects. Returns ``[]`` when the list is empty, so callers can splat the
-    result unconditionally::
-
-        _proxy_bypass_args(["example.com", "*.internal", "<local>"])
-        -> ["--proxy-bypass-list=example.com;*.internal;<local>"]
-    """
+    """Build ``--proxy-bypass-list=...`` from a domain/pattern list (or ``[]``)."""
     if not bypass_list:
         return []
     entries = [str(e).strip() for e in bypass_list if e and str(e).strip()]
-    if not entries:
-        return []
-    return [f"--proxy-bypass-list={';'.join(entries)}"]
+    return [f"--proxy-bypass-list={';'.join(entries)}"] if entries else []
 
 
 def _silence_browser() -> None:
@@ -322,22 +220,12 @@ def _is_browser_crash(exc: BaseException) -> bool:
 
 
 def _ensure_xvfb(headless: bool = False) -> None:
-    """Enforce a display when running non-headless.
-
-    When ``headless`` is True the browser needs no display, so this is a no-op.
-    When ``headless`` is False a display is required: the real desktop on Windows
-    or an existing DISPLAY, otherwise an Xvfb virtual display is started — with no
-    fallback to headless. If Xvfb is not installed we raise, so the browser is
-    never silently downgraded to (easily detectable) headless mode.
-    """
-
+    """Start Xvfb when non-headless and no DISPLAY (no-op on Windows/headless)."""
     global _xvfb_proc
-    if headless:
-        return
-    if sys.platform == "win32" or os.environ.get("DISPLAY"):
+    if headless or sys.platform == "win32" or os.environ.get("DISPLAY"):
         return
     if _xvfb_proc is not None:
-        return  # already started
+        return
     try:
         _xvfb_proc = subprocess.Popen(
             ["Xvfb", ":99", "-screen", "0", "1366x768x24", "-ac"],
@@ -359,32 +247,7 @@ def _ensure_xvfb(headless: bool = False) -> None:
 
 
 async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
-    """
-    Poll ``performance.getEntriesByType('navigation')[0].responseStatus`` until
-    it returns a non-zero value, then return it.
-
-    Background
-    ----------
-    Chrome writes the Navigation Timing entry asynchronously — it can still be
-    absent (empty array) or carry ``responseStatus: 0`` immediately after
-    ``page.wait()`` returns, particularly when a proxy is in use or the page
-    involved one or more redirects.  Returning ``0`` from this function would
-    cause the caller to mis-classify every response as a success (``200 <= 0``
-    is False, so the wait-for-content step would be skipped on pages that
-    actually loaded fine).
-
-    The fallback of ``200`` is intentional: if Chrome never exposes a status
-    within *timeout* seconds (e.g. the page is a pure client-side SPA that
-    replaces the navigation entry), treating it as success is the safest
-    assumption — the caller will still wait for content as normal.
-
-    Fast-path: if the page title already signals a definitive block/error
-    (Akamai "Access Denied", generic 403/429 pages, etc.) we return 403
-    immediately rather than waiting the full *timeout* for a Navigation Timing
-    entry that will never arrive.  This prevents _do_fetch from entering
-    _smart_wait and burning 20 more seconds on a page that has already
-    delivered its final (empty) response.
-    """
+    """Poll Navigation Timing status; error titles → 403; timeout → 200."""
 
     async def _poll() -> int:
         while True:
@@ -411,96 +274,82 @@ async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
 
 
 async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
-    """
-    Intelligently wait for page content to load, skipping the wait entirely
-    when the page is already fully rendered, but robustly catching anti-bot stubs.
-    """
-    # Safeguard: wait a split second for the initial DOM frame to touch down
-    await asyncio.sleep(0.2)
+    """Wait until the page looks loaded, then apply a short settle (not a long hang)."""
+    await asyncio.sleep(0.15)
+
+    if await page.evaluate(_JS_ERROR_TITLE):
+        logger.debug("_smart_wait: blocked page title — skipping wait")
+        return
+
+    async def _is_ready() -> bool:
+        return bool(await page.evaluate(_JS_PAGE_READY))
+
+    def _settle_after_ready() -> float:
+        # Page already usable — only a brief cushion for late hydration.
+        if settle <= 0:
+            return 0.0
+        return min(settle, _READY_SETTLE_CAP_S)
+
+    if await _is_ready():
+        delay = _settle_after_ready()
+        if delay:
+            await asyncio.sleep(delay)
+        return
 
     body_len = int(await page.evaluate(_JS_BODY_LEN))
-
-    if body_len >= _CONTENT_SHORT_THRESHOLD:
-        return
-
-    if not bool(await page.evaluate(_JS_IS_CHALLENGE)):
-        return
-
-    # If the page title already signals a block, there's nothing to wait for —
-    # the body will never grow.  Return immediately so _do_fetch can collect
-    # the (empty/error) HTML and let the ban tracker handle the response.
-    if await page.evaluate(_JS_ERROR_TITLE):
-        logger.debug("_smart_wait: blocked page title detected — skipping wait")
-        return
-
     logger.debug(
-        "_smart_wait: Challenge or script stub detected. Waiting for content to populate..."
+        "_smart_wait: waiting for load (body_len=%d settle=%.1fs)",
+        body_len,
+        settle,
     )
 
     last_len = body_len
-    stalled_ticks = 0
-    _STALL_LIMIT = 6  # 3 seconds of no body growth → give up
+    stalled = 0
+    poll_timeout = min(timeout, max(6.0, settle + 2.0))
 
     async def _poll() -> None:
-        nonlocal last_len, stalled_ticks
+        nonlocal last_len, stalled
         while True:
-            current_len = int(await page.evaluate(_JS_BODY_LEN))
-
-            # Re-evaluate challenge status. If the script injected a new challenge UI
-            # or if the body length has cleared the threshold, we keep moving.
-            is_still_stub = await page.evaluate(
-                "(() => { const b=document.body; return b && b.children.length === 1 && b.children[0].tagName === 'SCRIPT'; })()"
-            )
-
-            if current_len >= _CONTENT_SHORT_THRESHOLD and not is_still_stub:
+            if await page.evaluate(_JS_ERROR_TITLE):
                 return
 
-            # Bail early if the body has completely stopped growing — this means
-            # the page delivered its final (blocked) response and is not going
-            # to inject any content.  A real challenge page (Cloudflare, Akamai)
-            # will grow the DOM as it runs JS; a hard block will stay flat.
-            if current_len == last_len:
-                stalled_ticks += 1
-                if stalled_ticks >= _STALL_LIMIT:
+            if await _is_ready():
+                # Confirm once more so we don't race a half-painted frame.
+                await asyncio.sleep(0.3)
+                if await _is_ready():
+                    return
+
+            current = int(await page.evaluate(_JS_BODY_LEN))
+            growth = abs(current - last_len)
+            # Treat tiny/analytic growth as stable so we don't reset forever.
+            if growth < max(40, int(last_len * 0.03)):
+                stalled += 1
+                # ~1s stable with real content, or ~2.5s if still empty.
+                limit = 3 if current >= 400 else 7
+                if stalled >= limit:
                     logger.debug(
-                        "_smart_wait: body stalled at %d chars for %.1fs — aborting",
-                        current_len,
-                        stalled_ticks * 0.5,
+                        "_smart_wait: body stable at %d chars — stopping poll",
+                        current,
                     )
                     return
             else:
-                stalled_ticks = 0
-                last_len = current_len
+                stalled = 0
+                last_len = current
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.35)
 
     try:
-        await asyncio.wait_for(_poll(), timeout=timeout)
+        await asyncio.wait_for(_poll(), timeout=poll_timeout)
     except asyncio.TimeoutError:
-        logger.warning("_smart_wait: timed out waiting for challenge to resolve")
+        logger.debug("_smart_wait: poll timed out after %.1fs", poll_timeout)
 
-    await asyncio.sleep(settle)
+    delay = _settle_after_ready() if await _is_ready() else max(settle, 0.0)
+    if delay > 0:
+        await asyncio.sleep(delay)
 
 
 class ProxyRelay:
-    """
-    A local TCP relay that forwards every browser connection to the upstream
-    proxy, injecting Proxy-Authorization on the way out.
-
-    ``asyncio.start_server`` only closes the *accept* socket when
-    ``server.close()`` is called — it does NOT cancel the already-accepted
-    ``handle()`` tasks that are still mid-connection.  Those orphaned tasks
-    are destroyed by Python's GC after the event loop closes, which triggers
-    the "Task was destroyed but it is pending!" warning and, because their
-    ``finally`` blocks call ``writer.close()`` against a closed loop, also
-    "Exception ignored while closing generator: RuntimeError: Event loop is
-    closed".
-
-    This class wraps the server and tracks every live ``handle`` task in a
-    ``WeakSet``.  ``close()`` cancels them all and waits for them to finish
-    before returning, so the loop teardown that follows always finds an empty
-    task set.
-    """
+    """Local TCP relay; ``await_closed`` cancels live handle tasks before teardown."""
 
     def __init__(self, server: asyncio.AbstractServer, port: int) -> None:
         self._server = server
@@ -522,65 +371,119 @@ class ProxyRelay:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-        try:
+        with contextlib.suppress(Exception):
             await self._server.wait_closed()
-        except Exception:
-            pass
 
 
 def _close_writer(w: asyncio.StreamWriter) -> None:
-    """
-    Close *w* swallowing both OSError and RuntimeError.
-
-    StreamWriter.close() → transport.close() → loop.call_soon(...).
-    If the event loop is already closed that last call raises
-    ``RuntimeError: Event loop is closed``, producing a noisy
-    "Exception ignored while closing generator" traceback.
-    We swallow both error types so teardown is always silent.
-    """
+    """Close *w*, swallowing OSError/RuntimeError during loop teardown."""
     try:
         w.close()
     except (OSError, RuntimeError):
         pass
 
 
+def _is_loop_shutdown_error(exc: BaseException) -> bool:
+    """True when the browser loop/executor is tearing down mid-relay."""
+    if isinstance(exc, asyncio.CancelledError):
+        return True
+    if not isinstance(exc, RuntimeError):
+        return False
+    msg = str(exc).lower()
+    return (
+        "after shutdown" in msg
+        or "event loop is closed" in msg
+        or "no running event loop" in msg
+    )
+
+
+async def _open_tcp_connection(
+    host: str, port: int
+) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """Open TCP to *host*:*port*; IP literals use ``sock_connect`` (no getaddrinfo)."""
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return await asyncio.open_connection(host, port)
+
+    loop = asyncio.get_running_loop()
+    if isinstance(ip, ipaddress.IPv6Address):
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        addr: tuple[Any, ...] = (host, port, 0, 0)
+    else:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr = (host, port)
+    sock.setblocking(False)
+    try:
+        await loop.sock_connect(sock, addr)
+    except BaseException:
+        sock.close()
+        raise
+    return await asyncio.open_connection(sock=sock)
+
+
 async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
-    """
-    Start a local relay on 127.0.0.1 that forwards every connection to the
-    upstream proxy, injecting the Proxy-Authorization header on the way out.
+    """Start a local auth-injecting relay to an upstream HTTP proxy."""
+    return await _start_browser_relay(proxy_url=proxy_url)
 
-    Chrome/Brave honour a plain ``--proxy-server=127.0.0.1:<port>`` flag while
-    the upstream credentials never touch the browser. Unlike extension- or
-    CDP-based proxy auth (both flaky in nodriver), this also propagates into
-    contexts created via ``browser.create_context()``.
 
-    Returns ``(ProxyRelay, listen_port)``.  Call ``await relay.await_closed()``
-    to cancel all live handle tasks and drain the server cleanly.
-    """
-    parsed = urlparse(proxy_url if "://" in proxy_url else f"http://{proxy_url}")
-    host = parsed.hostname
-    port = parsed.port or 3128
+async def _start_browser_relay(
+    proxy_url: str | None = None,
+    dns_overrides: dict[str, str] | None = None,
+) -> tuple[ProxyRelay, int]:
+    """Local CONNECT relay: DNS pin dial, upstream proxy auth, or direct dial."""
+    dns_map = {h.lower(): ip for h, ip in (dns_overrides or {}).items()}
+
+    up_host: str | None = None
+    up_port = 3128
     auth_header = b""
-    if parsed.username:
-        token = base64.b64encode(
-            f"{parsed.username}:{parsed.password or ''}".encode()
-        ).decode()
-        auth_header = b"Proxy-Authorization: Basic " + token.encode() + b"\r\n"
+    if proxy_url:
+        parsed = urlparse(proxy_url if "://" in proxy_url else f"http://{proxy_url}")
+        up_host = parsed.hostname
+        up_port = parsed.port or 3128
+        if parsed.username:
+            token = base64.b64encode(
+                f"{parsed.username}:{parsed.password or ''}".encode()
+            ).decode()
+            auth_header = b"Proxy-Authorization: Basic " + token.encode() + b"\r\n"
 
-    # Forward-declare so handle() can call relay._track() on itself.
+    if not up_host and not dns_map:
+        raise ValueError("browser relay requires proxy_url and/or dns_overrides")
+
     relay_holder: list[ProxyRelay] = []
+
+    async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            while True:
+                data = await reader.read(65536)
+                if not data:
+                    break
+                writer.write(data)
+                await writer.drain()
+        except (OSError, asyncio.CancelledError):
+            pass
+        finally:
+            _close_writer(writer)
+
+    async def _forward_upstream(
+        upstream_writer: asyncio.StreamWriter,
+        request_line: bytes,
+        rest_headers: bytes,
+        body: bytes,
+    ) -> None:
+        upstream_writer.write(request_line + b"\r\n" + auth_header + rest_headers)
+        upstream_writer.write((b"\r\n\r\n" + body) if body else b"\r\n\r\n")
+        await upstream_writer.drain()
 
     async def handle(
         client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
     ) -> None:
-        # Register this task so ProxyRelay.await_closed() can cancel it.
         current = asyncio.current_task()
         if current is not None and relay_holder:
             relay_holder[0]._track(current)
 
         upstream_writer: asyncio.StreamWriter | None = None
         try:
-            # Read the client's request head (CONNECT or absolute-URI request).
             header = b""
             while b"\r\n\r\n" not in header:
                 chunk = await client_reader.read(65536)
@@ -588,35 +491,74 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
                     return
                 header += chunk
 
-            upstream_reader, upstream_writer = await asyncio.open_connection(host, port)
+            head, _, body = header.partition(b"\r\n\r\n")
+            request_line, _, rest_headers = head.partition(b"\r\n")
+            parts = request_line.split(None, 2)
+            method = parts[0].upper() if parts else b""
+            target = parts[1].decode(errors="replace") if len(parts) > 1 else ""
 
-            # Inject credentials right after the request line, then forward.
-            request_line, _, rest = header.partition(b"\r\n")
-            upstream_writer.write(request_line + b"\r\n" + auth_header + rest)
-            await upstream_writer.drain()
+            connect_host: str | None = None
+            connect_port: int | None = None
+            if method == b"CONNECT" and target:
+                host_part, sep, port_part = target.rpartition(":")
+                if sep and port_part.isdigit():
+                    connect_host = host_part.strip("[]").lower().rstrip(".")
+                    connect_port = int(port_part)
 
-            async def pipe(
-                reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-            ) -> None:
-                try:
-                    while True:
-                        data = await reader.read(65536)
-                        if not data:
-                            break
-                        writer.write(data)
-                        await writer.drain()
-                except (OSError, asyncio.CancelledError):
-                    pass
-                finally:
-                    _close_writer(writer)
+            pinned_ip = dns_map.get(connect_host) if connect_host is not None else None
+            dial_host = pinned_ip or connect_host
+            dial_port = connect_port
+            use_upstream = bool(up_host) and pinned_ip is None
+            # Non-CONNECT / unparseable target without dial info falls back to upstream.
+            if not use_upstream and (not dial_host or not dial_port):
+                if not up_host:
+                    return
+                use_upstream = True
+
+            if use_upstream:
+                # Guaranteed by use_upstream / early return above.
+                assert up_host is not None
+                upstream_reader, upstream_writer = await _open_tcp_connection(
+                    up_host, up_port
+                )
+                await _forward_upstream(
+                    upstream_writer, request_line, rest_headers, body
+                )
+            else:
+                # Guaranteed: missing dial info forces use_upstream or return.
+                assert dial_host is not None and dial_port is not None
+                if pinned_ip:
+                    logger.debug(
+                        "Browser relay DNS pin: %s:%s -> %s",
+                        connect_host,
+                        dial_port,
+                        pinned_ip,
+                    )
+                upstream_reader, upstream_writer = await _open_tcp_connection(
+                    dial_host, dial_port
+                )
+                if method == b"CONNECT":
+                    client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                    await client_writer.drain()
+                    if body:
+                        upstream_writer.write(body)
+                        await upstream_writer.drain()
+                else:
+                    upstream_writer.write(header)
+                    await upstream_writer.drain()
 
             await asyncio.gather(
-                pipe(upstream_reader, client_writer),
-                pipe(client_reader, upstream_writer),
+                _pipe(upstream_reader, client_writer),
+                _pipe(client_reader, upstream_writer),
                 return_exceptions=True,
             )
         except (OSError, asyncio.CancelledError):
             pass
+        except RuntimeError as exc:
+            # Browser restart closes the loop/executor while Chrome still has
+            # CONNECT attempts hitting this relay — not a crawl failure.
+            if not _is_loop_shutdown_error(exc):
+                raise
         finally:
             for w in (client_writer, upstream_writer):
                 if w is not None:
@@ -649,18 +591,13 @@ class BanStreakTracker:
                 return False
 
             self._streak += 1
-            threshold = config.get("BROWSER_RESTART_AFTER_BANS")
-            if self._streak >= threshold:
+            if self._streak >= config.get("BROWSER_RESTART_AFTER_BANS"):
                 self._restart_due = True
 
             if not self._restart_due:
                 return False
-
-            if (
-                self._last_restart
-                and time.monotonic() - self._last_restart
-                < config.get("BROWSER_RESTART_COOLDOWN_S")
-            ):
+            cooldown = config.get("BROWSER_RESTART_COOLDOWN_S")
+            if self._last_restart and time.monotonic() - self._last_restart < cooldown:
                 return False
 
             return True

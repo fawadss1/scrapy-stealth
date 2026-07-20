@@ -944,37 +944,50 @@ class TestBrowserEngine:
         args = engine._build_args(headless=True, proxy_port=8123)
         assert not any(a.startswith("--proxy-bypass-list") for a in args)
 
-    def test_dns_host_resolver_flag_added(self, monkeypatch, engine):
+    def test_dns_does_not_add_host_resolver_rules(self, monkeypatch, engine):
+        # Browser DNS uses a local CONNECT relay, not --host-resolver-rules.
         monkeypatch.setattr(
             config,
             "STEALTH_DNS_OVERRIDES",
             {"example.com": "203.0.113.10"},
         )
         args = engine._build_args(headless=True, proxy_port=None)
-        matching = [a for a in args if a.startswith("--host-resolver-rules=")]
-        assert len(matching) == 1
-        assert "MAP example.com 203.0.113.10" in matching[0]
-
-    def test_dns_host_resolver_flag_absent_when_empty(self, monkeypatch, engine):
-        monkeypatch.setattr(config, "STEALTH_DNS_OVERRIDES", {})
-        args = engine._build_args(headless=True, proxy_port=None)
         assert not any(a.startswith("--host-resolver-rules=") for a in args)
 
-    def test_dns_meta_applied_via_engine_state(self, engine):
-        engine._dns_overrides = {"shop.example.com": "203.0.113.50"}
-        args = engine._build_args(headless=True, proxy_port=None)
-        matching = [a for a in args if a.startswith("--host-resolver-rules=")]
-        assert len(matching) == 1
-        assert "MAP shop.example.com 203.0.113.50" in matching[0]
-
-    def test_dns_hosts_added_to_proxy_bypass(self, monkeypatch, engine):
+    def test_dns_hosts_not_added_to_proxy_bypass(self, monkeypatch, engine):
+        # Pinned hosts must stay on the local relay (bypass would skip DNS pin).
         monkeypatch.setattr(config, "BROWSER_PROXY_BYPASS_LIST", ["keep.example"])
         engine._dns_overrides = {"shop.example.com": "203.0.113.50"}
         args = engine._build_args(headless=True, proxy_port=8123)
         bypass = [a for a in args if a.startswith("--proxy-bypass-list=")]
         assert len(bypass) == 1
         assert "keep.example" in bypass[0]
-        assert "shop.example.com" in bypass[0]
+        assert "shop.example.com" not in bypass[0]
+
+    def test_dns_relay_started_without_upstream_proxy(self, engine):
+        import asyncio
+
+        engine._dns_overrides = {"example.com": "203.0.113.10"}
+        with patch(
+            "scrapy_stealth.engines.browser._start_browser_relay",
+            new_callable=AsyncMock,
+        ) as mock_relay:
+            mock_relay.return_value = (MagicMock(), 19099)
+            with patch.object(
+                engine, "_start_browser", new_callable=AsyncMock
+            ) as mock_start:
+                mock_browser = MagicMock()
+                mock_browser.main_tab.get = AsyncMock()
+                mock_browser.main_tab.wait = AsyncMock()
+                mock_start.return_value = mock_browser
+                asyncio.run(engine._start(headless=True, proxy=None))
+
+        mock_relay.assert_awaited_once()
+        kwargs = mock_relay.await_args.kwargs
+        assert kwargs.get("proxy_url") is None
+        assert kwargs.get("dns_overrides") == {"example.com": "203.0.113.10"}
+        mock_start.assert_awaited_once()
+        assert mock_start.await_args.kwargs.get("proxy_port") == 19099
 
 
 # ---------------------------------------------------------------------------
