@@ -217,9 +217,15 @@ class TestStealthDownloaderMiddleware:
         spider = MagicMock()
         spider.crawler.settings.getlist.return_value = []
         spider.crawler.settings.getbool.return_value = False
-        spider.crawler.settings.get.return_value = "turbo"
-        middleware.spider_opened(spider)
-        assert config.get("STEALTH_DRIVER") == "turbo"
+        spider.crawler.settings.get.side_effect = lambda key, default=None: (
+            "turbo" if key == "STEALTH_DRIVER" else None
+        )
+        original = config.get("STEALTH_DRIVER")
+        try:
+            middleware.spider_opened(spider)
+            assert config.get("STEALTH_DRIVER") == "turbo"
+        finally:
+            config.STEALTH_DRIVER = original
 
     def test_spider_opened_no_stealth_driver_leaves_config_unchanged(self, middleware):
         spider = MagicMock()
