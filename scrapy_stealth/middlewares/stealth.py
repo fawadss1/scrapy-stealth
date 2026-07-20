@@ -11,6 +11,7 @@ from ..manager import EngineManager
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
 from ..utils.console import console
+from ..utils.dns import validate_dns_overrides
 from ..utils.logger import get_logger
 from ..utils.meta import (
     STEALTH_KEY,
@@ -61,6 +62,13 @@ class StealthDownloaderMiddleware:
         if settings.get("BROWSER_PROXY_BYPASS_LIST") is not None:
             config.BROWSER_PROXY_BYPASS_LIST = settings.getlist(
                 "BROWSER_PROXY_BYPASS_LIST"
+            )
+        dns_setting = settings.get("STEALTH_DNS_OVERRIDES")
+        if isinstance(dns_setting, dict):
+            config.STEALTH_DNS_OVERRIDES = validate_dns_overrides(dns_setting)
+            logger.debug(
+                "Loaded %d DNS overrides from spider settings",
+                len(config.STEALTH_DNS_OVERRIDES),
             )
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 

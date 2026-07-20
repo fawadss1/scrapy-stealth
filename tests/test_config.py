@@ -15,3 +15,7 @@ def test_default_profile():
 
 def test_http2_default():
     assert config.get("HTTP2") is True
+
+
+def test_dns_overrides_default():
+    assert config.get("STEALTH_DNS_OVERRIDES") == {}

@@ -162,6 +162,49 @@ class TestBasicEngine:
         call_kwargs = mock_client.get.call_args.kwargs
         assert "proxy" not in call_kwargs
 
+    def test_execute_passes_dns_options(self):
+        mock_client = _make_mock_client()
+        with patch(
+            "scrapy_stealth.engines.basic.Client", return_value=mock_client
+        ) as mock_cls:
+            engine = BasicEngine()
+            request = Request(
+                "https://example.com",
+                meta={"stealth": {"dns": "203.0.113.10"}},
+            )
+            engine._execute(request)
+
+        # wreq only applies DnsOptions on Client(...), not per-request get().
+        assert "dns_options" in mock_cls.call_args.kwargs
+        assert mock_cls.call_args.kwargs["dns_options"] is not None
+        assert "dns_options" not in mock_client.get.call_args.kwargs
+
+    def test_execute_no_dns_options_when_not_set(self):
+        mock_client = _make_mock_client()
+        with patch(
+            "scrapy_stealth.engines.basic.Client", return_value=mock_client
+        ) as mock_cls:
+            engine = BasicEngine()
+            request = Request("https://example.com")
+            engine._execute(request)
+
+        assert "dns_options" not in mock_cls.call_args.kwargs
+
+    def test_separate_client_per_dns_override(self):
+        mock_client = _make_mock_client()
+        with patch(
+            "scrapy_stealth.engines.basic.Client", return_value=mock_client
+        ) as mock_cls:
+            engine = BasicEngine()
+            engine._execute(Request("https://example.com"))
+            engine._execute(
+                Request(
+                    "https://example.com",
+                    meta={"stealth": {"dns": "203.0.113.10"}},
+                )
+            )
+        assert mock_cls.call_count == 2
+
     def test_execute_passes_emulation_per_request(self):
         mock_client = _make_mock_client()
         with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
@@ -424,6 +467,34 @@ class TestTurboEngine:
         engine._execute(Request("https://example.com"))
         engine._execute(Request("https://example.com"))
         assert mock_cls.call_count == 1
+
+    def test_execute_passes_dns_resolve_on_session(self, session_patch):
+        from curl_cffi import CurlOpt
+
+        mock_cls, _ = session_patch
+        engine = TurboEngine()
+        engine._execute(
+            Request(
+                "https://example.com",
+                meta={"stealth": {"dns": "203.0.113.10"}},
+            )
+        )
+        curl_options = mock_cls.call_args.kwargs.get("curl_options")
+        assert curl_options is not None
+        assert CurlOpt.RESOLVE in curl_options
+        assert "example.com:443:203.0.113.10" in curl_options[CurlOpt.RESOLVE]
+
+    def test_separate_session_per_dns_override(self, session_patch):
+        mock_cls, _ = session_patch
+        engine = TurboEngine()
+        engine._execute(Request("https://example.com"))
+        engine._execute(
+            Request(
+                "https://example.com",
+                meta={"stealth": {"dns": "203.0.113.10"}},
+            )
+        )
+        assert mock_cls.call_count == 2
 
     def test_separate_session_per_profile(self, session_patch):
         mock_cls, _ = session_patch
@@ -797,7 +868,8 @@ class TestBrowserEngine:
     # static_assets_block
     # -----------------------------------------------------------------
 
-    def test_static_assets_block_off_by_default(self, engine):
+    def test_static_assets_block_off_by_default(self, monkeypatch, engine):
+        monkeypatch.setattr(config, "BROWSER_STATIC_ASSETS_BLOCK", False)
         with patch("scrapy_stealth.engines.browser._block_static_assets") as mock_block:
             engine._execute(Request("https://example.com"))
         mock_block.assert_not_called()
@@ -871,6 +943,38 @@ class TestBrowserEngine:
         monkeypatch.setattr(config, "BROWSER_PROXY_BYPASS_LIST", [])
         args = engine._build_args(headless=True, proxy_port=8123)
         assert not any(a.startswith("--proxy-bypass-list") for a in args)
+
+    def test_dns_host_resolver_flag_added(self, monkeypatch, engine):
+        monkeypatch.setattr(
+            config,
+            "STEALTH_DNS_OVERRIDES",
+            {"example.com": "203.0.113.10"},
+        )
+        args = engine._build_args(headless=True, proxy_port=None)
+        matching = [a for a in args if a.startswith("--host-resolver-rules=")]
+        assert len(matching) == 1
+        assert "MAP example.com 203.0.113.10" in matching[0]
+
+    def test_dns_host_resolver_flag_absent_when_empty(self, monkeypatch, engine):
+        monkeypatch.setattr(config, "STEALTH_DNS_OVERRIDES", {})
+        args = engine._build_args(headless=True, proxy_port=None)
+        assert not any(a.startswith("--host-resolver-rules=") for a in args)
+
+    def test_dns_meta_applied_via_engine_state(self, engine):
+        engine._dns_overrides = {"shop.example.com": "203.0.113.50"}
+        args = engine._build_args(headless=True, proxy_port=None)
+        matching = [a for a in args if a.startswith("--host-resolver-rules=")]
+        assert len(matching) == 1
+        assert "MAP shop.example.com 203.0.113.50" in matching[0]
+
+    def test_dns_hosts_added_to_proxy_bypass(self, monkeypatch, engine):
+        monkeypatch.setattr(config, "BROWSER_PROXY_BYPASS_LIST", ["keep.example"])
+        engine._dns_overrides = {"shop.example.com": "203.0.113.50"}
+        args = engine._build_args(headless=True, proxy_port=8123)
+        bypass = [a for a in args if a.startswith("--proxy-bypass-list=")]
+        assert len(bypass) == 1
+        assert "keep.example" in bypass[0]
+        assert "shop.example.com" in bypass[0]
 
 
 # ---------------------------------------------------------------------------

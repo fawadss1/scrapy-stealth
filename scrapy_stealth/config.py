@@ -19,6 +19,7 @@ from .constants import (
     DEFAULT_TIMEOUT,
     HTTP2,
     LOGGER_NAME,
+    STEALTH_DNS_OVERRIDES,
     STEALTH_DRIVER,
     STEALTH_ENABLED,
 )
@@ -35,6 +36,7 @@ class StealthConfig:
         config.DEFAULT_TIMEOUT = 30
         config.DEFAULT_ENGINE = "stealth"
         config.STEALTH_DRIVER = "turbo"
+        config.STEALTH_DNS_OVERRIDES = {"example.com": "203.0.113.10"}
         config.BLOCK_CODES |= {403}
         config.BLOCK_KEYWORDS.append("captcha")
     """
@@ -48,6 +50,7 @@ class StealthConfig:
     HTTP2: bool = HTTP2
     STEALTH_DRIVER: str = STEALTH_DRIVER
     STEALTH_ENABLED: bool = STEALTH_ENABLED
+    STEALTH_DNS_OVERRIDES: dict[str, str] = dict(STEALTH_DNS_OVERRIDES)
     BROWSER_HEADLESS: bool = BROWSER_HEADLESS
     BROWSER_SETTLE_S: float = BROWSER_SETTLE_S
     BROWSER_MAX_TABS: int = BROWSER_MAX_TABS
