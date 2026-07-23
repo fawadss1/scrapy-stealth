@@ -4,10 +4,10 @@
 
 Only the latest minor series receives security fixes.
 
-| Version         | Supported |
-|-----------------|-----------|
-| 0.6.9 (latest)  | ✅         |
-| 0.6.x (< 0.6.9) | ❌         |
+| Version          | Supported |
+|------------------|-----------|
+| 0.6.10 (latest)  | ✅        |
+| 0.6.x (< 0.6.10) | ❌        |
 
 ## Reporting a Vulnerability
 
