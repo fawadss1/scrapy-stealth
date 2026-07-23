@@ -16,6 +16,11 @@ except ImportError as exc:
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
 from ..utils.console import console
+from ..utils.dns import (
+    build_wreq_dns_options,
+    dns_fingerprint,
+    resolve_dns_overrides,
+)
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
@@ -25,6 +30,10 @@ from .base import BaseEngine
 
 logger = get_logger()
 
+# Client cache key: (http2, frozen host→IP pairs).
+# dns_options= on get()/post() is ignored.
+_BasicClientKey = tuple[bool, tuple[tuple[str, str], ...]]
+
 
 class BasicEngine(BaseEngine):
     """Stealth HTTP engine powered by wreq with browser profile impersonation."""
@@ -32,9 +41,17 @@ class BasicEngine(BaseEngine):
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         super().__init__(profile, timeout)
         self.default_profile = resolve_browser(self._default_profile)
-        self._clients: SessionCache[bool, Client] = SessionCache(
-            lambda http2: Client(http2_only=http2)
+        self._clients: SessionCache[_BasicClientKey, Client] = SessionCache(
+            self._make_client
         )
+
+    @staticmethod
+    def _make_client(key: _BasicClientKey) -> Client:
+        http2, dns_items = key
+        kwargs: dict[str, Any] = {"http2_only": http2}
+        if dns_options := build_wreq_dns_options(dict(dns_items)):
+            kwargs["dns_options"] = dns_options
+        return Client(**kwargs)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
@@ -59,13 +76,23 @@ class BasicEngine(BaseEngine):
             if ctx.proxy:
                 kwargs["proxy"] = Proxy.all(ctx.proxy)
 
+            dns_overrides = resolve_dns_overrides(request)
+            dns_key = dns_fingerprint(dns_overrides)
+            if dns_key:
+                logger.debug(
+                    "Basic engine DNS override(s): %s",
+                    dns_overrides,
+                )
+
             logger.debug(
                 "Initializing basic stealth client (profile=%s & protocol=%s)",
                 ctx.profile,
                 "HTTP/2" if ctx.http2 else "HTTP/1.1",
             )
 
-            method_fn = getattr(self._clients.get(ctx.http2), request.method.lower())
+            method_fn = getattr(
+                self._clients.get((ctx.http2, dns_key)), request.method.lower()
+            )
             resp = method_fn(request.url, **kwargs)
 
             body = resp.bytes()

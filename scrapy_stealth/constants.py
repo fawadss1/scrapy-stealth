@@ -44,6 +44,15 @@ STEALTH_DRIVER: str = "basic"
 # Per-request opt-out: meta={"stealth": False}
 STEALTH_ENABLED: bool = False
 
+# Pin destination hosts to fixed IPs (bypass local/public DNS). Connects to the
+# given IP while keeping the original hostname for TLS SNI, Host header, and
+# certificate verification — useful when public DNS is poisoned, geo-shifted,
+# or when you want a stable origin edge. Also readable from Scrapy settings as
+# STEALTH_DNS_OVERRIDES. Per-request override via meta["stealth"]["dns"]
+# (bare IP for the request host, or a {host: ip} mapping).
+# Example: {"example.com": "203.0.113.10", "www.example.com": "203.0.113.10"}
+STEALTH_DNS_OVERRIDES: dict[str, str] = {}
+
 # Browser engine: run Chrome headless by default.
 BROWSER_HEADLESS: bool = True
 
@@ -58,9 +67,9 @@ BROWSER_MAX_TABS: int = 10
 # resets the counter, so a browser sailing through cleanly is never restarted.
 BROWSER_RESTART_AFTER_BANS: int = 5
 
-# Minimum seconds between browser restarts — prevents restart storms when every
-# concurrent tab is getting 403s from the same blocked IP/session.
-BROWSER_RESTART_COOLDOWN_S: float = 60.0
+# Minimum seconds between ban-triggered browser restarts. Stops restart loops when
+# every concurrent request keeps returning 403; does not block the first restart.
+BROWSER_RESTART_COOLDOWN_S: float = 15.0
 
 # Browser engine: block static assets (images, fonts, CSS, media) to speed up
 # page loads and cut bandwidth. Off by default since some anti-bot checks and

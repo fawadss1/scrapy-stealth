@@ -11,6 +11,7 @@ from ..manager import EngineManager
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
 from ..utils.console import console
+from ..utils.dns import validate_dns_overrides
 from ..utils.logger import get_logger
 from ..utils.meta import (
     STEALTH_KEY,
@@ -18,6 +19,7 @@ from ..utils.meta import (
     _is_meta_enabled,
     _resolve_engine,
 )
+from ..utils.updates import update_available
 
 logger = get_logger()
 
@@ -39,6 +41,7 @@ class StealthDownloaderMiddleware:
         stealth_enabled = crawler.settings.getbool("STEALTH_ENABLED", False)
         mw = cls(proxies=proxies, stealth_enabled=stealth_enabled)
         crawler.signals.connect(mw.spider_opened, signal=signals.spider_opened)
+        update_available()
         return mw
 
     def spider_opened(self, spider: Any) -> None:
@@ -59,6 +62,13 @@ class StealthDownloaderMiddleware:
         if settings.get("BROWSER_PROXY_BYPASS_LIST") is not None:
             config.BROWSER_PROXY_BYPASS_LIST = settings.getlist(
                 "BROWSER_PROXY_BYPASS_LIST"
+            )
+        dns_setting = settings.get("STEALTH_DNS_OVERRIDES")
+        if isinstance(dns_setting, dict):
+            config.STEALTH_DNS_OVERRIDES = validate_dns_overrides(dns_setting)
+            logger.debug(
+                "Loaded %d DNS overrides from spider settings",
+                len(config.STEALTH_DNS_OVERRIDES),
             )
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 

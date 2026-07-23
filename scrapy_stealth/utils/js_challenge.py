@@ -1,19 +1,21 @@
-# Detects JS challenge / CAPTCHA pages by scanning the raw HTML for known
+# Detects JS challenge / CAPTCHA *shells* — structural checks + specific markers.
+# Avoid bare vendor names (datadome/akamai/captcha/kasada): real product pages
+# embed those in scripts and would never leave the browser wait loop.
 _JS_IS_CHALLENGE = (
     "(()=>{"
     "const h=document.documentElement.innerHTML.toLowerCase();"
     "const t=(document.title||'').toLowerCase();"
-    # 1. Known challenge keywords in HTML body
+    ""
+    # Specific challenge markers (not bare vendor names).
     "const has_keywords = ["
     "'ray id','cf-challenge','cf_chl','challenge-platform',"
-    "'verifying you are human','enable javascript',"
-    "'checking your browser','please wait.',"
-    "'captcha','recaptcha','hcaptcha','px-captcha',"
-    "'datadome','ak-challenge','akamai','kasada'"
+    "'verifying you are human','checking your browser',"
+    "'recaptcha','hcaptcha','px-captcha','ak-challenge',"
+    "'sec-if-cpt-container','behavioral-content','cf-browser-verification'"
     "].some(k=>h.includes(k));"
     "if (has_keywords) return true;"
     ""
-    # 2. Known challenge keywords in <title>
+    # Challenge titles.
     "const title_kw = ["
     "'just a moment','access denied','attention required',"
     "'are you a human','are you human','one more step',"
@@ -24,29 +26,29 @@ _JS_IS_CHALLENGE = (
     "const b=document.body;"
     "if (!b) return false;"
     ""
-    # 3. Body is completely empty
+    # Empty body.
     "if (b.children.length === 0 && b.innerText.trim().length === 0) {"
     "    return true;"
     "}"
     ""
-    # 4. Body contains ONLY <script> tag(s) — single or multiple
+    # Body is only <script> tag(s).
     "const kids = Array.from(b.children);"
     "if (kids.length > 0 && kids.every(el => el.tagName === 'SCRIPT')) {"
     "    return true;"
     "}"
     ""
-    # 5. Body contains ONLY a <noscript> tag
+    # Body is only <noscript>.
     "if (kids.length === 1 && kids[0].tagName === 'NOSCRIPT') {"
     "    return true;"
     "}"
     ""
-    # 6. Meta refresh redirect
+    # Meta refresh redirect.
     "const metas=Array.from(document.getElementsByTagName('meta'));"
     "if (metas.some(m=>(m.getAttribute('http-equiv')||'').toLowerCase()==='refresh')) {"
     "    return true;"
     "}"
     ""
-    # 7. Body contains ONLY a single <iframe>
+    # Body is only a single <iframe>.
     "if (kids.length === 1 && kids[0].tagName === 'IFRAME') {"
     "    return true;"
     "}"

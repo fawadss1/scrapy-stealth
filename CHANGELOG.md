@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+* **Custom DNS overrides (`STEALTH_DNS_OVERRIDES` / `meta["stealth"]["dns"]`)**
+  Pin hostnames to fixed origin IPs so `basic` / `turbo` connect via that address while keeping the hostname for TLS SNI, Host header, and certificate verification. Configure globally via Scrapy settings / `config.STEALTH_DNS_OVERRIDES`, or per-request with a bare IP (`"dns": "203.0.113.10"`) or a `{host: ip}` map. The `browser` driver applies the effective map via a local CONNECT relay that dials the pinned IP (not Chrome `--host-resolver-rules`). Invalid IPs raise `ValueError` at startup / resolve time.
+
+### Changed
+
+* **Dependency: `wreq>=0.12.1`** (was `>=0.11.2`)
+  Required for the `DnsOptions` API used by custom DNS overrides (`ResolverOptions` was renamed in wreq 0.12).
+
+* **Basic engine DNS — apply `dns_options` on `Client(...)`**
+  wreq ignores per-request `dns_options=` on `get()`/`post()`; clients are now cached per `(http2, dns map)` like turbo sessions.
+
+* **Browser engine DNS — local CONNECT relay**
+  Replaced unreliable `--host-resolver-rules` with a DNS-aware local proxy relay (same mechanism as proxy auth injection). Pinned hosts are dialed by IP while Chrome keeps the original hostname for TLS.
+
+* **Browser relay — silence shutdown races / dial IPs without getaddrinfo**
+  Pinned-IP connects use `sock_connect` so Windows Proactor no longer hits `RuntimeError: cannot schedule new futures after shutdown` when Chrome still CONNECT-retries during browser restart. Loop/executor teardown errors in the relay callback are swallowed.
+
+* **Browser engine — blank tab / wait / relay consistency**
+  Disabled `enable_begin_frame_control` on tab create. Browser always uses the local CONNECT relay (even with no DNS/proxy). Replaced nodriver `page.wait()` with `_wait_for_document`. `_wait_for_status` returns ~0.75s after document complete when Navigation Timing never fills. `_smart_wait` long-poll only for short challenge/script-only shells. Challenge HTML heuristics no longer match bare `akamai` / `captcha` / `please wait.` / `enable javascript`.
+
+* **Browser engine — close tab as soon as `_smart_wait` passes**
+  `_smart_wait` returns immediately when body content is ready (`settle` is a max wait for growth, not a sleep after ready). HTML is captured, the fetch tab is closed via CDP, then the response is returned. Chrome is stopped when idle so the window is not left on `about:blank`.
+
+* **Browser splash — show `docs/static/logo.png`**
+  `_splash_url()` loads the package logo via `file://` when the file exists (falls back to `about:blank`).
+
+---
+
+## [0.6.10a2] - 2026-07-03
+
+### Added
+
+* **Automatic PyPI update check**
+  When `StealthDownloaderMiddleware` is loaded, scrapy-stealth checks PyPI once per process in a background thread. If a newer version is published, an info message is printed with `pip install -U scrapy-stealth` and a link to that release on PyPI (e.g. `https://pypi.org/project/scrapy-stealth/0.7.0/`). Network errors are silent and never interrupt crawling.
+
+* **Local CI helper (`scripts/check.py`, `CHECK.md`)**
+  Run the same ruff, format, mypy, and pytest checks as GitHub Actions locally before pushing.
+
+* **`is_browser_session_ban()` — stricter ban detection for browser restarts**
+  New helper in `utils/antibot.py`. HTTP block codes (403, 429, 503) always count; keyword and JS-challenge heuristics apply only to short pages (< 2500 bytes). Large HTTP 200 documents that embed anti-bot scripts (e.g. DataDome on RS Online) are no longer treated as bans.
+
+### Changed
+
+* **`.gitignore`** — ignore `stealth_snapshots/`, the default output directory for browser snapshots saved via the `@snapshot` decorator.
+
+* **`BROWSER_RESTART_COOLDOWN_S`** — default reduced from `60` to `15` seconds and reworked. Cooldown now spaces ban-triggered restarts when every concurrent request keeps returning 403, without blocking the first restart or all subsequent restarts for a full minute. Configurable via `config.BROWSER_RESTART_COOLDOWN_S`.
+
+* **`BanStreakTracker`** — restart is signalled once per ban wave (`_restart_due` flag); bans during an active restart (`_restarting=True`) are ignored; streak resets when restart begins (`acknowledge_restart()` before `_reset_browser()`).
+
+### Fixed
+
+* **Browser engine — false “5 consecutive bans” restarts on HTTP 200**
+  `_maybe_restart` now uses `is_browser_session_ban()` instead of generic `is_blocked()` + `is_js_challenge()`, which matched anti-bot script fragments in otherwise valid product pages.
+
+* **Browser engine — only one restart after 5 bans, then never again**
+  Removed the broken 60s cooldown that treated `_last_restart = 0` as “just restarted” and blocked the first restart; later removed the all-or-nothing cooldown that prevented any second restart within 60s.
+
+* **Browser engine — restart storm every 1–2 seconds under concurrent 403s**
+  Fixed duplicate restart signals when streak exceeded the threshold, bans piling up during Chrome reset, and concurrent threads all triggering `_reset_browser()` in the same ban wave.
+
+* **Browser engine — `CancelledError` and empty “request failed” logs during restart**
+  Fetches cancelled mid-restart now wait for Chrome to come back (`_wait_for_browser_ready()`) and retry up to 5 times. Fixed a deadlock from calling `_wait_for_browser_ready()` while already holding the engine lock.
+
+* **Browser engine — intermittent empty HTML on JS-heavy pages (HTTP 200)**
+  `_smart_wait` no longer skips the settle delay when the body text is already long.
+
+---
+
 ## [0.6.10a1] - 2026-07-01
 
 ### Added

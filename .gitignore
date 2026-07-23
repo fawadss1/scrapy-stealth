@@ -52,6 +52,7 @@ dmypy.json
 
 # Scrapy
 .scrapy/
+stealth_snapshots/
 
 # Distribution / packaging
 *.tar.gz
