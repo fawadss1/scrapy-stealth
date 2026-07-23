@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.6.10] - 2026-07-23
+
 ### Added
 
 * **Custom DNS overrides (`STEALTH_DNS_OVERRIDES` / `meta["stealth"]["dns"]`)**
@@ -16,8 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* **Dependency: `wreq>=0.12.1`** (was `>=0.11.2`)
-  Required for the `DnsOptions` API used by custom DNS overrides (`ResolverOptions` was renamed in wreq 0.12).
+* **Dependency: Required for the `DnsOptions` API used by custom DNS overrides (`ResolverOptions`).
 
 * **Basic engine DNS — apply `dns_options` on `Client(...)`**
   wreq ignores per-request `dns_options=` on `get()`/`post()`; clients are now cached per `(http2, dns map)` like turbo sessions.
@@ -29,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Pinned-IP connects use `sock_connect` so Windows Proactor no longer hits `RuntimeError: cannot schedule new futures after shutdown` when Chrome still CONNECT-retries during browser restart. Loop/executor teardown errors in the relay callback are swallowed.
 
 * **Browser engine — blank tab / wait / relay consistency**
-  Disabled `enable_begin_frame_control` on tab create. Browser always uses the local CONNECT relay (even with no DNS/proxy). Replaced nodriver `page.wait()` with `_wait_for_document`. `_wait_for_status` returns ~0.75s after document complete when Navigation Timing never fills. `_smart_wait` long-poll only for short challenge/script-only shells. Challenge HTML heuristics no longer match bare `akamai` / `captcha` / `please wait.` / `enable javascript`.
+  Disabled `enable_begin_frame_control` on tab create. Browser always uses the local CONNECT relay (even with no DNS/proxy). Replaced nodriver `page.wait()` with `_wait_for_document`. `_wait_for_status` returns ~0.75s after document complete when Navigation Timing never fills. `_smart_wait` long-poll only for short challenge/script-only shells. Challenge HTML heuristics no longer match bare `akamai` / `captcha` / `please wait.` / `enable javascript` / `datadome` / `kasada`.
 
 * **Browser engine — close tab as soon as `_smart_wait` passes**
   `_smart_wait` returns immediately when body content is ready (`settle` is a max wait for growth, not a sleep after ready). HTML is captured, the fetch tab is closed via CDP, then the response is returned. Chrome is stopped when idle so the window is not left on `about:blank`.
@@ -878,6 +881,12 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.10]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10
+
+[0.6.10a2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10a2
+
+[0.6.10a1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10a1
 
 [0.6.8b2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.8b2
 
