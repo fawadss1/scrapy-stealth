@@ -279,7 +279,7 @@ async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
 
 
 async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
-    """Wait until the page looks loaded, then apply a short settle (not a long hang)."""
+    """Wait until the page looks loaded (and not a challenge shell), then short settle."""
     await asyncio.sleep(0.15)
 
     if await page.evaluate(_JS_ERROR_TITLE):
@@ -289,13 +289,16 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
     async def _is_ready() -> bool:
         return bool(await page.evaluate(_JS_PAGE_READY))
 
+    async def _is_challenge() -> bool:
+        return bool(await page.evaluate(_JS_IS_CHALLENGE))
+
     def _settle_after_ready() -> float:
-        # Page already usable — only a brief cushion for late hydration.
         if settle <= 0:
             return 0.0
         return min(settle, _READY_SETTLE_CAP_S)
 
-    if await _is_ready():
+    # Loaded product page (not a challenge shell) → short settle and done.
+    if await _is_ready() and not await _is_challenge():
         delay = _settle_after_ready()
         if delay:
             await asyncio.sleep(delay)
@@ -303,8 +306,9 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
 
     body_len = int(await page.evaluate(_JS_BODY_LEN))
     logger.debug(
-        "_smart_wait: waiting for load (body_len=%d settle=%.1fs)",
+        "_smart_wait: waiting (body_len=%d challenge=%s settle=%.1fs)",
         body_len,
+        await _is_challenge(),
         settle,
     )
 
@@ -318,20 +322,21 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
             if await page.evaluate(_JS_ERROR_TITLE):
                 return
 
-            if await _is_ready():
-                # Confirm once more so we don't race a half-painted frame.
+            # Ready and no longer a challenge shell → done.
+            if await _is_ready() and not await _is_challenge():
                 await asyncio.sleep(0.3)
-                if await _is_ready():
+                if await _is_ready() and not await _is_challenge():
                     return
 
             current = int(await page.evaluate(_JS_BODY_LEN))
             growth = abs(current - last_len)
-            # Treat tiny/analytic growth as stable so we don't reset forever.
             if growth < max(40, int(last_len * 0.03)):
                 stalled += 1
-                # ~1s stable with real content, or ~2.5s if still empty.
-                limit = 3 if current >= 400 else 7
-                if stalled >= limit:
+                # If content is stable and not a challenge shell, stop.
+                if stalled >= 3 and current >= 400 and not await _is_challenge():
+                    return
+                # Empty/challenge shell that stopped changing — give up.
+                if stalled >= 7:
                     logger.debug(
                         "_smart_wait: body stable at %d chars — stopping poll",
                         current,
@@ -348,7 +353,11 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
     except asyncio.TimeoutError:
         logger.debug("_smart_wait: poll timed out after %.1fs", poll_timeout)
 
-    delay = _settle_after_ready() if await _is_ready() else max(settle, 0.0)
+    delay = (
+        _settle_after_ready()
+        if (await _is_ready() and not await _is_challenge())
+        else max(settle, 0.0)
+    )
     if delay > 0:
         await asyncio.sleep(delay)
 
