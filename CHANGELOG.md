@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Browser engine — close tab as soon as `_smart_wait` passes**
   `_smart_wait` returns immediately when body content is ready (`settle` is a max wait for growth, not a sleep after ready). HTML is captured, the fetch tab is closed via CDP, then the response is returned. Chrome is stopped when idle so the window is not left on `about:blank`.
 
+* **Browser splash — show `docs/static/logo.png`**
+  `_splash_url()` loads the package logo via `file://` when the file exists (falls back to `about:blank`).
+
 ---
 
 ## [0.6.10a2] - 2026-07-03
