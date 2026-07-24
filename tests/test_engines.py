@@ -305,6 +305,20 @@ class TestBasicEngine:
                 engine._execute(Request("https://example.com"))
             assert mock_cls.call_count == 1
 
+    def test_rotates_profile_on_session_recycle(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.fingerprint.ProfileRotator.get",
+            staticmethod(lambda: "firefox_147"),
+        )
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine(profile="chrome_147")
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            assert engine._default_profile == "firefox_147"
+
 
 # ---------------------------------------------------------------------------
 # TurboEngine
@@ -508,6 +522,20 @@ class TestTurboEngine:
         for _ in range(5):
             engine._execute(Request("https://example.com"))
         assert mock_cls.call_count == 1
+
+    def test_rotates_profile_on_session_recycle(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.fingerprint.ProfileRotator.get",
+            staticmethod(lambda: "safari_18"),
+        )
+        mock_cls, _ = _turbo_session_ctx(_make_turbo_response(status=403))
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            engine = TurboEngine(profile="chrome_147")
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            assert engine._default_profile == "safari_18"
 
     def test_execute_passes_dns_resolve_on_session(self, session_patch):
         from curl_cffi import CurlOpt
