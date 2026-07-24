@@ -110,8 +110,7 @@ DOWNLOADER_MIDDLEWARES = {
 STEALTH_ENABLED = True
 STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", or "browser"
 
-# 3. (Optional) Proxy list for automatic rotation
-#    Used when rotate_proxy=True (per-request) or when STEALTH_ENABLED=True with rotate_proxy
+# 3. (Optional) Proxy list — seeded as engine default; rotated on ban-streak session recycle
 #    Supported schemes: http, https, socks4, socks5
 STEALTH_PROXIES = [
     "http://proxy1:8080",
@@ -271,12 +270,12 @@ yield scrapy.Request(
     meta={
         "stealth": {
             "driver": "turbo",
+            # optional overrides — otherwise profile/proxy come from defaults and
+            # rotate automatically when the session recycles after consecutive bans
             "profile": "chrome_147",
             "proxy": "http://user:pass@proxy:8080",
             "stealth_timeout": 60,
             "http2": True,
-            "rotate_proxy": True,
-            "rotate_profile": True,
             "dns": "203.0.113.10",  # or {"example.com": "203.0.113.10"}
         }
     },
@@ -286,13 +285,11 @@ yield scrapy.Request(
 | Key                   | Type            | Description                                                                                                                                                                                               |
 |-----------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `driver`              | `str`           | `"basic"`, `"turbo"`, or `"browser"` — overrides `config.STEALTH_DRIVER` per-request                                                                                                                      |
-| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`)                                                                                                                                              |
-| `proxy`               | `str`           | Explicit proxy URL                                                                                                                                                                                        |
+| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`). Omit to use engine default; default rotates on ban-streak session recycle                                                                   |
+| `proxy`               | `str`           | Explicit proxy URL. Omit to use `STEALTH_PROXIES` default; default rotates on ban-streak session recycle                                                                                                  |
 | `dns`                 | `str` or `dict` | Pin DNS: bare IP for this request's hostname, or `{host: ip}` mapping. Merges over `STEALTH_DNS_OVERRIDES`. Works with `basic`/`turbo` per-request; `browser` uses global overrides at Chrome launch only |
 | `stealth_timeout`     | `int`           | Per-request timeout in seconds (overrides default 30s)                                                                                                                                                    |
 | `http2`               | `bool`          | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request)                                                                                                                           |
-| `rotate_proxy`        | `bool`          | Auto-pick a proxy from `STEALTH_PROXIES`                                                                                                                                                                  |
-| `rotate_profile`      | `bool`          | Auto-pick a random browser profile                                                                                                                                                                        |
 | `headless`            | `bool`          | Browser driver only: `True` = headless, `False` = visible window (more stealthy)                                                                                                                          |
 | `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                              |
 | `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                           |
@@ -395,8 +392,8 @@ After `STEALTH_RECYCLE_AFTER_BANS` consecutive banned/challenged responses (as c
 Anti-Bot Detection), scrapy-stealth recycles the driver session:
 
 * **browser** — restarts Chrome (fresh fingerprint, cookies, CDP session)
-* **basic / turbo** — clears cached HTTP clients/sessions and rotates the default fingerprint
-  profile (fresh TLS/cookies + matching request headers)
+* **basic / turbo** — clears cached HTTP clients/sessions and rotates default fingerprint
+  profile + proxy from `STEALTH_PROXIES` (no per-request `rotate_*` needed)
 
 A single clean response resets the streak, so a healthy crawl is never recycled just because it
 has served a lot of requests.
@@ -546,16 +543,17 @@ def parse(self, response):
 
 ## 🔁 Automatic Rotation
 
+Profile + proxy stay stable for speed (session reuse). After
+`STEALTH_RECYCLE_AFTER_BANS` consecutive bans, the session recycles and a new
+default profile + proxy (from `STEALTH_PROXIES`) are chosen automatically.
+
 ```python
-yield scrapy.Request(
-    url,
-    meta={
-        "stealth": {
-            "rotate_proxy": True,
-            "rotate_profile": True,
-        }
-    },
-)
+# settings.py
+STEALTH_PROXIES = ["http://proxy1:8080", "http://proxy2:8080"]
+STEALTH_RECYCLE_AFTER_BANS = 5  # default
+
+# spider
+yield scrapy.Request(url, meta={"stealth": {}})
 ```
 
 ---
@@ -644,12 +642,7 @@ class ExampleSpider(scrapy.Spider):
     def start_requests(self):
         yield scrapy.Request(
             "https://example.com",
-            meta={
-                "stealth": {
-                    "rotate_proxy": True,
-                    "rotate_profile": True,
-                }
-            },
+            meta={"stealth": {}},
         )
 
     def parse(self, response):
