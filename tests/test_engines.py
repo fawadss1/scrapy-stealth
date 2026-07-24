@@ -319,6 +319,39 @@ class TestBasicEngine:
             engine._execute(Request("https://example.com"))
             assert engine._default_profile == "firefox_147"
 
+    def test_rotates_proxy_on_session_recycle(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_PROXIES", ["http://p1:1", "http://p2:2"])
+        picks = iter(["http://p1:1", "http://p2:2", "http://p2:2"])
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.proxy.ProxyRotator.get",
+            lambda self: next(picks),
+        )
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine(profile="chrome_147")
+            engine._default_proxy = "http://p1:1"
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            assert engine._default_proxy == "http://p2:2"
+
+    def test_keeps_meta_proxy_on_recycle_without_proxy_pool(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_PROXIES", [])
+        meta_proxy = "https://user:pass@dc.oxylabs.io:8000"
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine(profile="chrome_147")
+            assert engine._default_proxy is None
+            req = Request(
+                "https://example.com", meta={"stealth": {"proxy": meta_proxy}}
+            )
+            engine._execute(req)
+            engine._execute(req)
+            assert engine._default_proxy == meta_proxy
+
 
 # ---------------------------------------------------------------------------
 # TurboEngine
@@ -1239,7 +1272,9 @@ class TestBanStreakTracker:
         tracker = BanStreakTracker()
         tracker.record(True)
         assert tracker.record(True) is True
-        assert tracker.record(True) is True
+        # Only one claim per ban wave — concurrent threads must not all recycle.
+        assert tracker.record(True) is False
+        assert tracker.record(True) is False
         tracker.acknowledge_restart()
         assert tracker.record(True) is False
 
