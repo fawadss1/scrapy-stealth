@@ -62,14 +62,14 @@ BROWSER_SETTLE_S: float = 4.0
 # Browser engine: max Chrome tabs open simultaneously across concurrent requests.
 BROWSER_MAX_TABS: int = 10
 
-# Browser engine: restart Chrome (fresh fingerprint, cookies, CDP session) after
-# this many *consecutive* banned/challenged responses. A single clean response
-# resets the counter, so a browser sailing through cleanly is never restarted.
-BROWSER_RESTART_AFTER_BANS: int = 5
+# After this many *consecutive* banned/challenged responses:
+# - browser: restart Chrome (fresh fingerprint, cookies, CDP session)
+# - basic / turbo: clear cached HTTP clients/sessions (fresh TLS/cookies)
+STEALTH_RECYCLE_AFTER_BANS: int = 5
 
-# Minimum seconds between ban-triggered browser restarts. Stops restart loops when
-# every concurrent request keeps returning 403; does not block the first restart.
-BROWSER_RESTART_COOLDOWN_S: float = 15.0
+# Minimum seconds between ban-triggered restarts / session recycles. Stops restart
+# loops when every concurrent request keeps returning 403; does not block the
+STEALTH_RECYCLE_COOLDOWN_S: float = 15.0
 
 # Browser engine: block static assets (images, fonts, CSS, media) to speed up
 # page loads and cut bandwidth. Off by default since some anti-bot checks and
