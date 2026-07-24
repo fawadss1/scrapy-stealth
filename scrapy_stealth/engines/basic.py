@@ -13,6 +13,7 @@ try:
 except ImportError as exc:
     StealthDependencyError.check("wreq", exc)
 
+from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
 from ..utils.console import console
@@ -25,7 +26,7 @@ from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
 from ..utils.response import StealthResponse
-from ..utils.session import SessionCache
+from ..utils.session import BanStreakTracker, SessionCache
 from .base import BaseEngine
 
 logger = get_logger()
@@ -44,6 +45,7 @@ class BasicEngine(BaseEngine):
         self._clients: SessionCache[_BasicClientKey, Client] = SessionCache(
             self._make_client
         )
+        self._bans = BanStreakTracker()
 
     @staticmethod
     def _make_client(key: _BasicClientKey) -> Client:
@@ -52,6 +54,20 @@ class BasicEngine(BaseEngine):
         if dns_options := build_wreq_dns_options(dict(dns_items)):
             kwargs["dns_options"] = dns_options
         return Client(**kwargs)
+
+    def _maybe_recycle_sessions(self, response: Response | None) -> None:
+        """Drop cached clients after N consecutive bans (same as browser restart)."""
+        banned = response is not None and AntiBotDetector.is_browser_session_ban(
+            response
+        )
+        if not self._bans.record(banned):
+            return
+        console.info(
+            f"Recycling basic sessions after "
+            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans"
+        )
+        self._bans.acknowledge_restart()
+        self._clients.clear_all()
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
@@ -102,13 +118,15 @@ class BasicEngine(BaseEngine):
                     "switch to driver='browser' to bypass it."
                 )
 
-            return StealthResponse(
+            response = StealthResponse(
                 request=request,
                 status=resp.status.as_int(),
                 headers=resp.headers,
                 body=body,
                 _flags=["basic"],
             )
+            self._maybe_recycle_sessions(response)
+            return response
 
         except TimeoutError:
             raise
