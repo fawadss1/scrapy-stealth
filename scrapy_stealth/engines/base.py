@@ -104,6 +104,21 @@ class BaseEngine(ABC):
             http2=_get_meta_data(request, "http2", config.get("HTTP2")),
         )
 
+    def _rotate_default_profile(self) -> str:
+        """Pick a new default fingerprint profile (prefer different from current)."""
+        from ..strategies.fingerprint import ProfileRotator
+
+        current = self._default_profile
+        new = ProfileRotator.get()
+        if new == current:
+            for _ in range(5):
+                candidate = ProfileRotator.get()
+                if candidate != current:
+                    new = candidate
+                    break
+        self._default_profile = new
+        return new
+
     @staticmethod
     def _timed(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> tuple[_T, float]:
         """
