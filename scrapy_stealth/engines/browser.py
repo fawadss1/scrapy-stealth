@@ -539,7 +539,12 @@ class BrowserEngine(BaseEngine):
             f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans"
         )
         self._bans.acknowledge_restart()
-        self._reset_browser(headless, self._browser, proxy=proxy)
+        # Fresh Chrome fingerprint comes from _random_fingerprint_args on restart;
+        # keep / rotate proxy for subsequent requests without explicit meta.
+        if proxy and not (config.get("STEALTH_PROXIES") or []):
+            self._default_proxy = proxy
+        new_proxy = self._rotate_default_proxy()
+        self._reset_browser(headless, self._browser, proxy=proxy or new_proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)

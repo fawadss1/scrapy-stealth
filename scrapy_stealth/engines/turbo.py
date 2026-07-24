@@ -50,18 +50,20 @@ class TurboEngine(BaseEngine):
             kwargs["curl_options"] = {CurlOpt.RESOLVE: list(resolve_entries)}
         return Session(**kwargs)
 
-    def _maybe_recycle_sessions(self, response: Response | None) -> None:
-        """Drop cached sessions + rotate default profile after N consecutive bans."""
+    def _maybe_recycle_sessions(
+        self, response: Response | None, current_proxy: str | None = None
+    ) -> None:
+        """Drop cached sessions; rotate profile + proxy after N consecutive bans."""
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
         if not self._bans.record(banned):
             return
-        profile = self._rotate_default_profile()
+        profile, proxy = self._recycle_identity(current_proxy=current_proxy)
         console.info(
             f"Recycling turbo sessions after "
             f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans "
-            f"(profile={profile!r})"
+            f"(profile={profile!r} proxy={proxy!r})"
         )
         self._bans.acknowledge_restart()
         self._sessions.clear_all()
@@ -126,7 +128,7 @@ class TurboEngine(BaseEngine):
                 encoding=resp.encoding,
                 _flags=["turbo"],
             )
-            self._maybe_recycle_sessions(response)
+            self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
             return response
 
         except TimeoutError:

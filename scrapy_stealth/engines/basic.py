@@ -55,19 +55,21 @@ class BasicEngine(BaseEngine):
             kwargs["dns_options"] = dns_options
         return Client(**kwargs)
 
-    def _maybe_recycle_sessions(self, response: Response | None) -> None:
-        """Drop cached clients + rotate default profile after N consecutive bans."""
+    def _maybe_recycle_sessions(
+        self, response: Response | None, current_proxy: str | None = None
+    ) -> None:
+        """Drop cached clients; rotate profile + proxy after N consecutive bans."""
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
         if not self._bans.record(banned):
             return
-        profile = self._rotate_default_profile()
+        profile, proxy = self._recycle_identity(current_proxy=current_proxy)
         self.default_profile = resolve_browser(profile)
         console.info(
             f"Recycling basic sessions after "
             f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans "
-            f"(profile={profile!r})"
+            f"(profile={profile!r} proxy={proxy!r})"
         )
         self._bans.acknowledge_restart()
         self._clients.clear_all()
@@ -128,7 +130,7 @@ class BasicEngine(BaseEngine):
                 body=body,
                 _flags=["basic"],
             )
-            self._maybe_recycle_sessions(response)
+            self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
             return response
 
         except TimeoutError:
