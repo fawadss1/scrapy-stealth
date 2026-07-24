@@ -47,18 +47,18 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 
 | Feature                      | scrapy-stealth | scrapy-impersonate | scrapy-playwright | scrapy-splash | Scrapy (default) |
 |------------------------------|:--------------:|:------------------:|:-----------------:|:-------------:|:----------------:|
-| TLS fingerprint spoofing     |       ✅        |         ✅          |         ❌         |       ❌       |        ❌         |
-| HTTP/2 support               |       ✅        |         ✅          |         ✅         |       ❌       |        ❌         |
-| Browser impersonation        |       ✅        |         ✅          |    ⚠️ partial     |       ❌       |        ❌         |
-| Proxy rotation (built-in)    |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
-| Fingerprint rotation         |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
-| Anti-bot detection           |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
-| Smart retry logic            |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
-| Per-request engine switching |       ✅        |         ❌          |         ❌         |       ❌       |        ❌         |
-| Headless browser required    |       ✅        |         ❌          |         ✅         |       ✅       |        ❌         |
-| JavaScript rendering         |       ️✅       |         ❌          |         ✅         |       ✅       |        ❌         |
-| Screenshot / snapshot        |       ✅        |         ❌          |         ✅         |       ✅       |        ❌         |
-| Native Scrapy integration    |       ✅        |         ✅          |         ✅         |       ✅       |        ✅         |
+| TLS fingerprint spoofing     |       ✅       |         ✅         |        ❌         |      ❌       |        ❌        |
+| HTTP/2 support               |       ✅       |         ✅         |        ✅         |      ❌       |        ❌        |
+| Browser impersonation        |       ✅       |         ✅         |    ⚠️ partial     |      ❌       |        ❌        |
+| Proxy rotation (built-in)    |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Fingerprint rotation         |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Anti-bot detection           |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Smart retry logic            |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Per-request engine switching |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Headless browser required    |       ✅       |         ❌         |        ✅         |      ✅       |        ❌        |
+| JavaScript rendering         |       ️✅       |         ❌         |        ✅         |      ✅       |        ❌        |
+| Screenshot / snapshot        |       ✅       |         ❌         |        ✅         |      ✅       |        ❌        |
+| Native Scrapy integration    |       ✅       |         ✅         |        ✅         |      ✅       |        ✅        |
 | Memory footprint             |     🟢 Low     |       🟢 Low       |      🔴 High      |    🔴 High    |      🟢 Low      |
 
 > ⚠️ `scrapy-playwright` passes real browser TLS but does not spoof fingerprint profiles like `scrapy-stealth` does.
@@ -78,7 +78,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
 * ⚡ Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
-* 🔄 Intelligent browser restart — restarts on consecutive bans, not a fixed request count
+* 🔄 Intelligent session recycle — after consecutive bans, browser restarts Chrome; basic/turbo clear HTTP sessions
 * 🚫 Static asset blocking — skip images, fonts, CSS, and media for faster, lighter browser fetches
 * 🎯 Proxy bypass list — send chosen domains straight to the origin instead of through the proxy (`--proxy-bypass-list`)
 * 🧭 Custom DNS overrides — pin hosts to fixed IPs (connect via IP, keep hostname for TLS/SNI/Host) to dodge poisoned or geo-shifted public DNS
@@ -208,7 +208,7 @@ config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
 config.BROWSER_HEADLESS = True  # browser driver: headless mode (False = visible window, more stealthy)
 config.BROWSER_SETTLE_S = 4.0  # browser driver: seconds to wait after navigation for JS to finish
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
-config.BROWSER_RESTART_AFTER_BANS = 5  # restart Chrome (fresh fingerprint) after 5 consecutive bans
+config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle Chrome / HTTP sessions after 5 consecutive bans
 config.BROWSER_STATIC_ASSETS_BLOCK = True  # block images/fonts/CSS/media (skipped when snapshot=True)
 config.BROWSER_PROXY_BYPASS_LIST = ["example.com", "*.internal"]  # these bypass the proxy
 config.STEALTH_DNS_OVERRIDES = {"example.com": "203.0.113.10"}  # pin host → origin IP
@@ -248,7 +248,7 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                                  |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                                  |
 | `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                                      |
-| `BROWSER_RESTART_AFTER_BANS`  | `int`            | `5`                               | Browser driver: restart Chrome (fresh fingerprint/cookies/CDP session) after this many *consecutive* banned/challenged responses. Any clean response resets the count                                                                                                                                     |
+| `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                               | After this many *consecutive* bans: `browser` restarts Chrome; `basic` / `turbo` clear cached HTTP sessions/clients. Any clean response resets the count                                                                                                                                                  |
 | `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                           | Browser driver: block images, fonts, CSS, and media via CDP. Overridable per-request via `meta["stealth"]["static_assets_block"]`; always off when `snapshot=True`                                                                                                                                        |
 | `BROWSER_PROXY_BYPASS_LIST`   | `list[str]`      | `[]`                              | Browser driver: domains/patterns that bypass the proxy and connect to the origin directly, via Chrome's `--proxy-bypass-list`. Supports wildcards (`*.example.com`), IP/CIDR, ports, and `<local>`. Only applies when a proxy is in use; set at browser launch (config/settings, not per-request)         |
 | `STEALTH_DNS_OVERRIDES`       | `dict[str, str]` | `{}`                              | Host→IP map used by `basic` / `turbo` (and Chrome `--host-resolver-rules` for `browser`). Connects to the IP while keeping the hostname for TLS SNI, Host header, and cert verification. Also readable from Scrapy settings as `STEALTH_DNS_OVERRIDES`. Per-request override via `meta["stealth"]["dns"]` |
@@ -389,18 +389,21 @@ BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
 > When `BROWSER_EXECUTABLE_PATH` is `None` (the default), `scrapy-stealth` auto-detects Google Chrome or Chromium from standard system
 > paths. Set it explicitly when using Brave or a non-standard Chrome installation — a clear error is raised if the path does not exist.
 
-**Intelligent restart:**
+**Intelligent restart / session recycle:**
 
-The browser engine restarts Chrome intelligently rather than on a fixed schedule — it only restarts
-(getting a fresh fingerprint, cookies, and CDP session) after `BROWSER_RESTART_AFTER_BANS` consecutive
-banned/challenged responses, as classified by the Anti-Bot Detection module (see below).
-A single clean response resets the streak, so a browser that's sailing through cleanly is left running
-indefinitely — it's never restarted just because it has served a lot of requests.
+After `STEALTH_RECYCLE_AFTER_BANS` consecutive banned/challenged responses (as classified by
+Anti-Bot Detection), scrapy-stealth recycles the driver session:
+
+* **browser** — restarts Chrome (fresh fingerprint, cookies, CDP session)
+* **basic / turbo** — clears cached HTTP clients/sessions (fresh TLS/cookies)
+
+A single clean response resets the streak, so a healthy crawl is never recycled just because it
+has served a lot of requests.
 
 ```python
 from scrapy_stealth.config import config
 
-config.BROWSER_RESTART_AFTER_BANS = 5  # restart after 5 consecutive bans (default)
+config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle after 5 consecutive bans (default)
 ```
 
 **Static asset blocking:**
