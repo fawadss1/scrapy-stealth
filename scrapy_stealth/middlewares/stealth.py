@@ -8,17 +8,11 @@ from scrapy.http import Request, Response
 from ..config import config
 from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
-from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
 from ..utils.console import console
 from ..utils.dns import validate_dns_overrides
 from ..utils.logger import get_logger
-from ..utils.meta import (
-    STEALTH_KEY,
-    _get_meta_data,
-    _is_meta_enabled,
-    _resolve_engine,
-)
+from ..utils.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
 from ..utils.updates import update_available
 
 logger = get_logger()
@@ -32,7 +26,6 @@ class StealthDownloaderMiddleware:
     ) -> None:
         self.manager = EngineManager()
         self._proxy_rotator = ProxyRotator(proxies=proxies or [])
-        self._profile_rotator = ProfileRotator()
         self._stealth_enabled = stealth_enabled
 
     @classmethod
@@ -48,6 +41,8 @@ class StealthDownloaderMiddleware:
         settings = spider.crawler.settings
         proxies = settings.getlist("STEALTH_PROXIES", [])
         self._proxy_rotator = ProxyRotator(proxies=proxies)
+        config.STEALTH_PROXIES = list(self._proxy_rotator.proxies)
+        self.manager.seed_proxies()
         self._stealth_enabled = settings.getbool(
             "STEALTH_ENABLED", self._stealth_enabled
         )
@@ -77,26 +72,6 @@ class StealthDownloaderMiddleware:
             request.meta[STEALTH_KEY] = {}
 
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
-
-        if engine_name == "stealth":
-            stealth_meta = request.meta.setdefault(STEALTH_KEY, {})
-
-            if _is_meta_enabled(request, "rotate_profile"):
-                stealth_meta.setdefault("profile", self._profile_rotator.get())
-                logger.debug("Profile set to: %s", stealth_meta["profile"])
-
-            if _is_meta_enabled(request, "rotate_proxy"):
-                if not self._proxy_rotator.proxies:
-                    console.error(
-                        "rotate_proxy=True but STEALTH_PROXIES is not configured in settings. "
-                        "Add STEALTH_PROXIES to your settings.py."
-                    )
-                else:
-                    proxy = self._proxy_rotator.get()
-                    if proxy:
-                        stealth_meta.setdefault("proxy", proxy)
-                        logger.debug("Proxy set to: %s", stealth_meta["proxy"])
-
         driver = _get_meta_data(request, "driver")
         engine = self.manager.get(engine_name, driver)
 

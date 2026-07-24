@@ -26,16 +26,12 @@ Per-request usage via ``request.meta["stealth"]``::
 
     yield scrapy.Request(
         url,
-        meta={
-            "stealth": {
-                "rotate_profile": True,   # auto-select a browser fingerprint
-                "rotate_proxy": True,     # auto-select a proxy from STEALTH_PROXIES
-            }
-        },
+        meta={"stealth": {}},  # activates stealth; profile/proxy rotate on ban recycle
     )
 
-The presence of the ``stealth`` key activates the stealth engine.
-Omit it entirely to use the default Scrapy engine.
+Optional: ``STEALTH_PROXIES`` in settings — first proxy is used automatically; a new
+profile + proxy are chosen when the session recycles after consecutive bans.
+Explicit ``meta["stealth"]["profile"]`` / ``["proxy"]`` always win.
 """
 
 from .config import StealthConfig, config
