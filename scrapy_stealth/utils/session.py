@@ -57,10 +57,15 @@ class BanStreakTracker:
         self._lock = threading.Lock()
         self._streak = 0
         self._restart_due = False
+        self._claimed = False
         self._last_restart = 0.0
 
     def record(self, banned: bool) -> bool:
-        """Return True once when a restart should be attempted."""
+        """Return True once per ban wave when a restart should be attempted.
+
+        Concurrent threads may all see the streak threshold; only the first
+        caller gets ``True`` until ``acknowledge_restart()`` completes.
+        """
         from ..config import config
 
         with self._lock:
@@ -73,12 +78,13 @@ class BanStreakTracker:
             if self._streak >= config.get("STEALTH_RECYCLE_AFTER_BANS"):
                 self._restart_due = True
 
-            if not self._restart_due:
+            if not self._restart_due or self._claimed:
                 return False
             cooldown = config.get("STEALTH_RECYCLE_COOLDOWN_S")
             if self._last_restart and time.monotonic() - self._last_restart < cooldown:
                 return False
 
+            self._claimed = True
             return True
 
     def acknowledge_restart(self) -> None:
@@ -86,4 +92,5 @@ class BanStreakTracker:
         with self._lock:
             self._streak = 0
             self._restart_due = False
+            self._claimed = False
             self._last_restart = time.monotonic()
