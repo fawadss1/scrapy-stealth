@@ -395,7 +395,8 @@ After `STEALTH_RECYCLE_AFTER_BANS` consecutive banned/challenged responses (as c
 Anti-Bot Detection), scrapy-stealth recycles the driver session:
 
 * **browser** — restarts Chrome (fresh fingerprint, cookies, CDP session)
-* **basic / turbo** — clears cached HTTP clients/sessions (fresh TLS/cookies)
+* **basic / turbo** — clears cached HTTP clients/sessions and rotates the default fingerprint
+  profile (fresh TLS/cookies + matching request headers)
 
 A single clean response resets the streak, so a healthy crawl is never recycled just because it
 has served a lot of requests.
