@@ -44,6 +44,11 @@ STEALTH_DRIVER: str = "basic"
 # Per-request opt-out: meta={"stealth": False}
 STEALTH_ENABLED: bool = False
 
+# Proxy pool (also loaded from Scrapy settings ``STEALTH_PROXIES``). Used as the
+# engine default proxy and rotated automatically on ban-streak session recycle.
+# Explicit meta["stealth"]["proxy"] always wins. Empty = no proxy.
+STEALTH_PROXIES: list[str] = []
+
 # Pin destination hosts to fixed IPs (bypass local/public DNS). Connects to the
 # given IP while keeping the original hostname for TLS SNI, Host header, and
 # certificate verification — useful when public DNS is poisoned, geo-shifted,
