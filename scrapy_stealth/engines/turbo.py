@@ -51,15 +51,17 @@ class TurboEngine(BaseEngine):
         return Session(**kwargs)
 
     def _maybe_recycle_sessions(self, response: Response | None) -> None:
-        """Drop cached sessions after N consecutive bans (same as browser restart)."""
+        """Drop cached sessions + rotate default profile after N consecutive bans."""
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
         if not self._bans.record(banned):
             return
+        profile = self._rotate_default_profile()
         console.info(
             f"Recycling turbo sessions after "
-            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans"
+            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans "
+            f"(profile={profile!r})"
         )
         self._bans.acknowledge_restart()
         self._sessions.clear_all()
