@@ -284,6 +284,74 @@ class TestBasicEngine:
             )
         assert mock_cls.call_count == 2
 
+    def test_recycles_clients_after_consecutive_bans(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 3)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine()
+            for _ in range(3):
+                engine._execute(Request("https://example.com"))
+            assert mock_cls.call_count == 1
+            engine._execute(Request("https://example.com"))
+            assert mock_cls.call_count == 2
+
+    def test_no_recycle_when_responses_are_clean(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 3)
+        mock_cls = MagicMock(return_value=_make_mock_client())
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine()
+            for _ in range(5):
+                engine._execute(Request("https://example.com"))
+            assert mock_cls.call_count == 1
+
+    def test_rotates_profile_on_session_recycle(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.fingerprint.ProfileRotator.get",
+            staticmethod(lambda: "firefox_147"),
+        )
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine(profile="chrome_147")
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            assert engine._default_profile == "firefox_147"
+
+    def test_rotates_proxy_on_session_recycle(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_PROXIES", ["http://p1:1", "http://p2:2"])
+        picks = iter(["http://p1:1", "http://p2:2", "http://p2:2"])
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.proxy.ProxyRotator.get",
+            lambda self: next(picks),
+        )
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine(profile="chrome_147")
+            engine._default_proxy = "http://p1:1"
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            assert engine._default_proxy == "http://p2:2"
+
+    def test_keeps_meta_proxy_on_recycle_without_proxy_pool(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_PROXIES", [])
+        meta_proxy = "https://user:pass@dc.oxylabs.io:8000"
+        mock_cls = MagicMock(return_value=_make_mock_client(status=403))
+        with patch("scrapy_stealth.engines.basic.Client", mock_cls):
+            engine = BasicEngine(profile="chrome_147")
+            assert engine._default_proxy is None
+            req = Request(
+                "https://example.com", meta={"stealth": {"proxy": meta_proxy}}
+            )
+            engine._execute(req)
+            engine._execute(req)
+            assert engine._default_proxy == meta_proxy
+
 
 # ---------------------------------------------------------------------------
 # TurboEngine
@@ -467,6 +535,40 @@ class TestTurboEngine:
         engine._execute(Request("https://example.com"))
         engine._execute(Request("https://example.com"))
         assert mock_cls.call_count == 1
+
+    def test_recycles_sessions_after_consecutive_bans(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 3)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        mock_cls, _ = _turbo_session_ctx(_make_turbo_response(status=403))
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            engine = TurboEngine()
+            for _ in range(3):
+                engine._execute(Request("https://example.com"))
+            assert mock_cls.call_count == 1
+            engine._execute(Request("https://example.com"))
+            assert mock_cls.call_count == 2
+
+    def test_no_recycle_when_responses_are_clean(self, session_patch, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 3)
+        mock_cls, _ = session_patch
+        engine = TurboEngine()
+        for _ in range(5):
+            engine._execute(Request("https://example.com"))
+        assert mock_cls.call_count == 1
+
+    def test_rotates_profile_on_session_recycle(self, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.fingerprint.ProfileRotator.get",
+            staticmethod(lambda: "safari_18"),
+        )
+        mock_cls, _ = _turbo_session_ctx(_make_turbo_response(status=403))
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            engine = TurboEngine(profile="chrome_147")
+            engine._execute(Request("https://example.com"))
+            engine._execute(Request("https://example.com"))
+            assert engine._default_profile == "safari_18"
 
     def test_execute_passes_dns_resolve_on_session(self, session_patch):
         from curl_cffi import CurlOpt
@@ -739,7 +841,7 @@ class TestBrowserEngine:
         )
 
     def test_restart_after_n_consecutive_bans(self, monkeypatch, engine, mock_tab):
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 5)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 5)
         self._set_status(mock_tab, 403)
         with patch.object(engine, "_reset_browser") as mock_reset:
             for _ in range(4):
@@ -751,7 +853,7 @@ class TestBrowserEngine:
     def test_no_restart_on_200_with_antibot_markers_in_large_page(
         self, monkeypatch, engine, mock_tab
     ):
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 5)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 5)
         self._set_status(mock_tab, 200)
         large_body = "x" * 3000 + "datadome"
         mock_tab.evaluate = AsyncMock(
@@ -773,8 +875,8 @@ class TestBrowserEngine:
     def test_restarts_again_after_another_ban_streak(
         self, monkeypatch, engine, mock_tab
     ):
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 5)
-        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 5)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
         self._set_status(mock_tab, 403)
         with patch.object(engine, "_reset_browser") as mock_reset:
             for _ in range(5):
@@ -787,7 +889,7 @@ class TestBrowserEngine:
         assert mock_reset.call_count == 2
 
     def test_clean_response_resets_ban_streak(self, monkeypatch, engine, mock_tab):
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 3)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 3)
         with patch.object(engine, "_reset_browser") as mock_reset:
             self._set_status(mock_tab, 403)
             engine._execute(Request("https://example.com"))
@@ -1135,10 +1237,10 @@ class TestLoopExceptionHandler:
 
 class TestBanStreakTracker:
     def test_can_restart_again_after_new_ban_streak(self, monkeypatch):
-        from scrapy_stealth.utils.browser import BanStreakTracker
+        from scrapy_stealth.utils.session import BanStreakTracker
 
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
-        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
         tracker = BanStreakTracker()
         tracker.record(True)
         assert tracker.record(True) is True
@@ -1149,10 +1251,10 @@ class TestBanStreakTracker:
     def test_cooldown_delays_restart_while_bans_continue(self, monkeypatch):
         import time
 
-        from scrapy_stealth.utils.browser import BanStreakTracker
+        from scrapy_stealth.utils.session import BanStreakTracker
 
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
-        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.5)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.5)
         tracker = BanStreakTracker()
         assert tracker.record(True) is False
         assert tracker.record(True) is True
@@ -1163,21 +1265,23 @@ class TestBanStreakTracker:
         assert tracker.record(True) is True
 
     def test_streak_kept_until_restart_acknowledged(self, monkeypatch):
-        from scrapy_stealth.utils.browser import BanStreakTracker
+        from scrapy_stealth.utils.session import BanStreakTracker
 
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
-        monkeypatch.setattr(config, "BROWSER_RESTART_COOLDOWN_S", 0.0)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
         tracker = BanStreakTracker()
         tracker.record(True)
         assert tracker.record(True) is True
-        assert tracker.record(True) is True
+        # Only one claim per ban wave — concurrent threads must not all recycle.
+        assert tracker.record(True) is False
+        assert tracker.record(True) is False
         tracker.acknowledge_restart()
         assert tracker.record(True) is False
 
     def test_clean_response_resets_streak(self, monkeypatch):
-        from scrapy_stealth.utils.browser import BanStreakTracker
+        from scrapy_stealth.utils.session import BanStreakTracker
 
-        monkeypatch.setattr(config, "BROWSER_RESTART_AFTER_BANS", 2)
+        monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
         tracker = BanStreakTracker()
         tracker.record(True)
         assert tracker.record(False) is False

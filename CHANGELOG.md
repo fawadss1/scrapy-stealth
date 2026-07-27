@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.6.11a1] - 2026-07-27
+
+### Added
+
+* **Basic / turbo — session recycle after consecutive bans**
+  `STEALTH_RECYCLE_AFTER_BANS` (and `STEALTH_RECYCLE_COOLDOWN_S`) apply to `basic` and
+  `turbo`: after N consecutive banned responses, cached HTTP clients/sessions are cleared and
+  the engine default fingerprint profile **and** proxy (from `STEALTH_PROXIES`) are rotated.
+  Same ban heuristics as the browser engine (`is_browser_session_ban`). Explicit meta
+  `profile` / `proxy` still win. `BanStreakTracker` lives in `utils/session.py`.
+
+* **`STEALTH_PROXIES` on config**
+  Proxy pool is loaded from Scrapy settings into `config.STEALTH_PROXIES` and seeded as the
+  engine default; rotated on ban-streak recycle.
+
+### Changed
+
+* **Renamed recycle settings**
+  `BROWSER_RESTART_AFTER_BANS` → `STEALTH_RECYCLE_AFTER_BANS`,
+  `BROWSER_RESTART_COOLDOWN_S` → `STEALTH_RECYCLE_COOLDOWN_S` (apply to all drivers).
+
+* **Removed `rotate_profile` / `rotate_proxy` meta flags**
+  Profile and proxy now change automatically on ban-streak session recycle only.
+  Set `STEALTH_PROXIES` in settings; use explicit `meta["stealth"]["profile"]` /
+  `["proxy"]` when you need a fixed identity.
+
+### Fixed
+
+* **Meta-only proxy cleared to `None` on recycle**
+  When `STEALTH_PROXIES` is empty, recycle keeps the request's `meta["stealth"]["proxy"]`
+  instead of wiping the engine default.
+
+* **Concurrent recycle storm / stuck-together console lines**
+  `BanStreakTracker` claims only once per ban wave so parallel Scrapy threads do not all
+  recycle and print at once. Console output is lock-protected with `flush=True`.
 
 ---
 
@@ -881,6 +915,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.11a1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.11a1
 
 [0.6.10]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10
 

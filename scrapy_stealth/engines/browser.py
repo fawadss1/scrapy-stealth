@@ -23,7 +23,6 @@ from ..utils.browser import (
     _BROWSER_ARGS,
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
-    BanStreakTracker,
     ProxyRelay,
     _block_static_assets,
     _cdp_snapshot,
@@ -50,6 +49,7 @@ from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.patch import patch_nodriver
 from ..utils.response import StealthResponse
+from ..utils.session import BanStreakTracker
 from .base import BaseEngine
 
 patch_nodriver()
@@ -536,10 +536,15 @@ class BrowserEngine(BaseEngine):
 
         console.info(
             f"Restarting browser after "
-            f"{config.get('BROWSER_RESTART_AFTER_BANS')} consecutive bans"
+            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans"
         )
         self._bans.acknowledge_restart()
-        self._reset_browser(headless, self._browser, proxy=proxy)
+        # Fresh Chrome fingerprint comes from _random_fingerprint_args on restart;
+        # keep / rotate proxy for subsequent requests without explicit meta.
+        if proxy and not (config.get("STEALTH_PROXIES") or []):
+            self._default_proxy = proxy
+        new_proxy = self._rotate_default_proxy()
+        self._reset_browser(headless, self._browser, proxy=proxy or new_proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
@@ -647,7 +652,7 @@ class BrowserEngine(BaseEngine):
                 _flags=["browser"],
             )
 
-            # Restart Chrome after BROWSER_RESTART_AFTER_BANS consecutive bans.
+            # Restart Chrome after STEALTH_RECYCLE_AFTER_BANS consecutive bans.
             self._maybe_restart(headless, ctx.proxy or None, response)
 
             return response

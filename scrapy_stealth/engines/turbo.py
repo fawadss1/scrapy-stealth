@@ -12,6 +12,7 @@ try:
 except ImportError as exc:
     StealthDependencyError.check("curl_cffi", exc)
 
+from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
 from ..utils.console import console
@@ -20,7 +21,7 @@ from ..utils.headers import _FINGERPRINT_KEYS
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
 from ..utils.response import StealthResponse
-from ..utils.session import SessionCache
+from ..utils.session import BanStreakTracker, SessionCache
 from .base import BaseEngine
 
 logger = get_logger()
@@ -39,6 +40,7 @@ class TurboEngine(BaseEngine):
         self._sessions: SessionCache[_TurboSessionKey, Session] = SessionCache(
             self._make_session
         )
+        self._bans = BanStreakTracker()
 
     @staticmethod
     def _make_session(key: _TurboSessionKey) -> Session:
@@ -47,6 +49,24 @@ class TurboEngine(BaseEngine):
         if resolve_entries:
             kwargs["curl_options"] = {CurlOpt.RESOLVE: list(resolve_entries)}
         return Session(**kwargs)
+
+    def _maybe_recycle_sessions(
+        self, response: Response | None, current_proxy: str | None = None
+    ) -> None:
+        """Drop cached sessions; rotate profile + proxy after N consecutive bans."""
+        banned = response is not None and AntiBotDetector.is_browser_session_ban(
+            response
+        )
+        if not self._bans.record(banned):
+            return
+        profile, proxy = self._recycle_identity(current_proxy=current_proxy)
+        console.info(
+            f"Recycling turbo sessions after "
+            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans "
+            f"(profile={profile!r} proxy={proxy!r})"
+        )
+        self._bans.acknowledge_restart()
+        self._sessions.clear_all()
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
@@ -100,7 +120,7 @@ class TurboEngine(BaseEngine):
                     "switch to driver='browser' to bypass it."
                 )
 
-            return StealthResponse(
+            response = StealthResponse(
                 request=request,
                 status=resp.status_code,
                 headers=resp_headers,
@@ -108,6 +128,8 @@ class TurboEngine(BaseEngine):
                 encoding=resp.encoding,
                 _flags=["turbo"],
             )
+            self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
+            return response
 
         except TimeoutError:
             raise

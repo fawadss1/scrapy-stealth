@@ -16,9 +16,5 @@ def _resolve_engine(request: Request, default: str) -> str:
     return "stealth" if isinstance(request.meta.get(STEALTH_KEY), dict) else default
 
 
-def _is_meta_enabled(request: Request, key: str) -> bool:
-    return bool(_stealth_meta(request).get(key))
-
-
 def _get_meta_data(request: Request, key: str, default: Any = None) -> Any:
     return _stealth_meta(request).get(key, default)
