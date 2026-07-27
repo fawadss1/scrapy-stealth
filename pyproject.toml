@@ -95,6 +95,10 @@ line-length = 88
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
 
+[tool.ruff.format]
+# Keep prose / example fences as authored — ruff 0.16+ formats Markdown by default.
+exclude = ["CHANGELOG.md", "README.md"]
+
 [tool.mypy]
 ignore_missing_imports = true
 no_site_packages = true
