@@ -94,3 +94,8 @@ class BanStreakTracker:
             self._restart_due = False
             self._claimed = False
             self._last_restart = time.monotonic()
+
+    @property
+    def streak(self) -> int:
+        with self._lock:
+            return self._streak

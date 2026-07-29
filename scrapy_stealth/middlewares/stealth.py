@@ -13,6 +13,7 @@ from ..utils.console import console
 from ..utils.dns import validate_dns_overrides
 from ..utils.logger import get_logger
 from ..utils.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
+from ..utils.stats import StealthStats
 from ..utils.updates import update_available
 
 logger = get_logger()
@@ -22,20 +23,31 @@ class StealthDownloaderMiddleware:
     """Main middleware routing requests through stealth engines."""
 
     def __init__(
-        self, proxies: list[str] | None = None, stealth_enabled: bool = False
+        self,
+        proxies: list[str] | None = None,
+        stealth_enabled: bool = False,
+        crawler: Any | None = None,
     ) -> None:
         self.manager = EngineManager()
         self._proxy_rotator = ProxyRotator(proxies=proxies or [])
         self._stealth_enabled = stealth_enabled
+        self._crawler = crawler
+        self._stealth_stats = StealthStats(
+            crawler.stats if crawler is not None else None
+        )
 
     @classmethod
     def from_crawler(cls, crawler: Any) -> StealthDownloaderMiddleware:
         proxies = crawler.settings.getlist("STEALTH_PROXIES", [])
         stealth_enabled = crawler.settings.getbool("STEALTH_ENABLED", False)
-        mw = cls(proxies=proxies, stealth_enabled=stealth_enabled)
+        mw = cls(proxies=proxies, stealth_enabled=stealth_enabled, crawler=crawler)
         crawler.signals.connect(mw.spider_opened, signal=signals.spider_opened)
+        crawler.signals.connect(mw.spider_closed, signal=signals.spider_closed)
         update_available()
         return mw
+
+    def spider_closed(self, spider: Any) -> None:
+        self.manager.close()
 
     def spider_opened(self, spider: Any) -> None:
         settings = spider.crawler.settings
@@ -43,6 +55,9 @@ class StealthDownloaderMiddleware:
         self._proxy_rotator = ProxyRotator(proxies=proxies)
         config.STEALTH_PROXIES = list(self._proxy_rotator.proxies)
         self.manager.seed_proxies()
+        stats = spider.crawler.stats
+        self._stealth_stats = StealthStats(stats)
+        self.manager.set_stats(stats)
         self._stealth_enabled = settings.getbool(
             "STEALTH_ENABLED", self._stealth_enabled
         )
@@ -74,6 +89,12 @@ class StealthDownloaderMiddleware:
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
         driver = _get_meta_data(request, "driver")
         engine = self.manager.get(engine_name, driver)
+
+        if engine_name == "stealth":
+            driver_label = getattr(engine, "driver_name", None)
+            if not isinstance(driver_label, str):
+                driver_label = config.get("STEALTH_DRIVER") or "basic"
+            self._stealth_stats.record_request(driver_label)
 
         if _get_meta_data(request, "snapshot", False) and not isinstance(
             engine, BrowserEngine
