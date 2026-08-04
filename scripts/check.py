@@ -1,61 +1,91 @@
 #!/usr/bin/env python3
-"""Run the same checks as GitHub Actions (Lint + CI) on your machine.
+"""Run the same checks as GitHub Actions locally.
 
-Usage (from repo root):
-    python scripts/check.py
-
-Requires dev dependencies:
-    pip install -e ".[dev]"
+python scripts/check.py           # all checks
+python scripts/check.py mypy      # one check (ruff|format|mypy|pytest)
+python scripts/check.py --fix    # auto-fix ruff lint + format
 """
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = sys.executable
 
 
-def _py(*args: str) -> list[str]:
-    """Run a tool via ``python -m`` (reliable on Windows with app-control policies)."""
-    return [PYTHON, "-m", *args]
+def py(*a: str) -> list[str]:
+    return [sys.executable, "-m", *a]
 
 
-STEPS: list[tuple[str, list[str]]] = [
-    ("Ruff — lint", _py("ruff", "check", ".")),
-    ("Ruff — format check", _py("ruff", "format", "--check", ".")),
-    ("Mypy — type check", _py("mypy", "scrapy_stealth")),
-    ("Pytest", _py("pytest")),
-]
+# key → (label, command, how_to_fix)
+STEPS = {
+    "ruff": (
+        "Ruff — lint",
+        py("ruff", "check", "."),
+        "Run:  python scripts/check.py --fix",
+    ),
+    "format": (
+        "Ruff — format",
+        py("ruff", "format", "--check", "."),
+        "Run:  python scripts/check.py --fix",
+    ),
+    "mypy": (
+        "Mypy — type check",
+        py("mypy", "scrapy_stealth"),
+        "Open each file:line shown ABOVE, fix the type error, then:\n"
+        "         python scripts/check.py mypy",
+    ),
+    "pytest": (
+        "Pytest",
+        py("pytest"),
+        "Read the failing test output ABOVE, fix code/tests, then:\n"
+        "         python scripts/check.py pytest",
+    ),
+}
 
 
-def _run_step(name: str, command: list[str]) -> bool:
-    bar = "=" * 60
-    print(f"\n{bar}\n{name}\n{bar}", flush=True)
-    result = subprocess.run(command, cwd=ROOT)
-    if result.returncode == 0:
-        print(f"OK  {name}", flush=True)
-        return True
-    print(f"FAIL  {name}  (exit code {result.returncode})", flush=True)
-    return False
+def run(name: str, cmd: list[str]) -> bool:
+    print(f"\n{'=' * 60}\n{name}\n{'=' * 60}", flush=True)
+    ok = subprocess.run(cmd, cwd=ROOT).returncode == 0
+    print(f"{'OK' if ok else 'FAIL'}  {name}", flush=True)
+    return ok
 
 
 def main() -> int:
+    p = argparse.ArgumentParser(description="Run GitHub Actions checks locally.")
+    p.add_argument("check", nargs="?", choices=list(STEPS))
+    p.add_argument("--fix", action="store_true", help="auto-fix ruff lint + format")
+    args = p.parse_args()
     print(f"Running CI checks in {ROOT}", flush=True)
-    failed = [name for name, cmd in STEPS if not _run_step(name, cmd)]
+
+    if args.fix:
+        ok = all(
+            run(n, c)
+            for n, c in (
+                ("Ruff — lint --fix", py("ruff", "check", ".", "--fix")),
+                ("Ruff — format", py("ruff", "format", ".")),
+            )
+        )
+        if ok:
+            print("\nDone. Now run:  python scripts/check.py", flush=True)
+        return int(not ok)
+
+    keys = [args.check] if args.check else list(STEPS)
+    failed = [(k, n, h) for k in keys for n, c, h in [STEPS[k]] if not run(n, c)]
 
     print(f"\n{'=' * 60}", flush=True)
-    if failed:
-        print(f"FAILED ({len(failed)}/{len(STEPS)}):", flush=True)
-        for name in failed:
-            print(f"  - {name}", flush=True)
-        print("\nFix the errors above before pushing to GitHub.", flush=True)
-        return 1
+    if not failed:
+        print(f"ALL CHECKS PASSED ({len(keys)}/{len(keys)})", flush=True)
+        return 0
 
-    print(f"ALL CHECKS PASSED ({len(STEPS)}/{len(STEPS)})", flush=True)
-    return 0
+    print(f"FAILED ({len(failed)}/{len(keys)}). How to fix:\n", flush=True)
+    for i, (_key, name, hint) in enumerate(failed, 1):
+        print(f"  {i}. {name}\n         {hint}\n", flush=True)
+    print("When fixed, run again:  python scripts/check.py", flush=True)
+    return 1
 
 
 if __name__ == "__main__":

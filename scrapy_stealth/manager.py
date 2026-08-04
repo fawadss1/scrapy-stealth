@@ -25,6 +25,21 @@ class EngineManager:
             name: cls() for name, cls in _STEALTH_DRIVERS.items()
         }
 
+    def seed_proxies(self) -> None:
+        """Refresh engine default proxies from ``config.STEALTH_PROXIES``."""
+        for engine in self._stealth.values():
+            engine._default_proxy = None
+            engine.seed_proxy_from_config()
+
+    def set_stats(self, stats: object | None) -> None:
+        """Attach Scrapy stats collector to all stealth engines."""
+        for engine in self._stealth.values():
+            engine.set_stats(stats)
+
+    def close(self) -> None:
+        for engine in self._stealth.values():
+            engine.close()
+
     def get(self, engine_name: str, driver: str | None = None) -> BaseEngine:
         if engine_name == "stealth":
             resolved = driver or config.get("STEALTH_DRIVER")

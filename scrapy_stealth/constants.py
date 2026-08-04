@@ -44,6 +44,20 @@ STEALTH_DRIVER: str = "basic"
 # Per-request opt-out: meta={"stealth": False}
 STEALTH_ENABLED: bool = False
 
+# Proxy pool (also loaded from Scrapy settings ``STEALTH_PROXIES``). Used as the
+# engine default proxy and rotated automatically on ban-streak session recycle.
+# Explicit meta["stealth"]["proxy"] always wins. Empty = no proxy.
+STEALTH_PROXIES: list[str] = []
+
+# Pin destination hosts to fixed IPs (bypass local/public DNS). Connects to the
+# given IP while keeping the original hostname for TLS SNI, Host header, and
+# certificate verification — useful when public DNS is poisoned, geo-shifted,
+# or when you want a stable origin edge. Also readable from Scrapy settings as
+# STEALTH_DNS_OVERRIDES. Per-request override via meta["stealth"]["dns"]
+# (bare IP for the request host, or a {host: ip} mapping).
+# Example: {"example.com": "203.0.113.10", "www.example.com": "203.0.113.10"}
+STEALTH_DNS_OVERRIDES: dict[str, str] = {}
+
 # Browser engine: run Chrome headless by default.
 BROWSER_HEADLESS: bool = True
 
@@ -53,14 +67,14 @@ BROWSER_SETTLE_S: float = 4.0
 # Browser engine: max Chrome tabs open simultaneously across concurrent requests.
 BROWSER_MAX_TABS: int = 10
 
-# Browser engine: restart Chrome (fresh fingerprint, cookies, CDP session) after
-# this many *consecutive* banned/challenged responses. A single clean response
-# resets the counter, so a browser sailing through cleanly is never restarted.
-BROWSER_RESTART_AFTER_BANS: int = 5
+# After this many *consecutive* banned/challenged responses:
+# - browser: restart Chrome (fresh fingerprint, cookies, CDP session)
+# - basic / turbo: clear cached HTTP clients/sessions (fresh TLS/cookies)
+STEALTH_RECYCLE_AFTER_BANS: int = 5
 
-# Minimum seconds between ban-triggered browser restarts. Stops restart loops when
-# every concurrent request keeps returning 403; does not block the first restart.
-BROWSER_RESTART_COOLDOWN_S: float = 15.0
+# Minimum seconds between ban-triggered restarts / session recycles. Stops restart
+# loops when every concurrent request keeps returning 403; does not block the
+STEALTH_RECYCLE_COOLDOWN_S: float = 15.0
 
 # Browser engine: block static assets (images, fonts, CSS, media) to speed up
 # page loads and cut bandwidth. Off by default since some anti-bot checks and

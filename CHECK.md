@@ -16,18 +16,35 @@ From the repo root:
 python scripts/check.py
 ```
 
+If a step fails, the script prints a **re-run / fix command** for that step.
+
 ## What it runs
 
 Same as the **Lint** and **CI** workflows on GitHub:
 
-| Step        | Command                 |
-|-------------|-------------------------|
-| Ruff lint   | `ruff check .`          |
-| Ruff format | `ruff format --check .` |
-| Mypy        | `mypy scrapy_stealth`   |
-| Tests       | `pytest`                |
+| Step        | Command                 | Auto-fix?                         |
+|-------------|-------------------------|-----------------------------------|
+| Ruff lint   | `ruff check .`          | Yes: `ruff check . --fix`         |
+| Ruff format | `ruff format --check .` | Yes: `ruff format .`              |
+| Mypy        | `mypy scrapy_stealth`   | No — fix the reported type errors |
+| Tests       | `pytest`                | No — fix failing tests            |
 
-If any step fails, the script prints which ones failed and exits with code `1`.
+## Run one check
+
+```bash
+python scripts/check.py ruff
+python scripts/check.py format
+python scripts/check.py mypy
+python scripts/check.py pytest
+```
+
+## Auto-fix (ruff only)
+
+```bash
+python scripts/check.py --fix
+```
+
+Then re-run `python scripts/check.py`. Mypy and pytest still need manual fixes.
 
 ## Run steps individually
 
@@ -36,10 +53,4 @@ python -m ruff check .
 python -m ruff format --check .
 python -m mypy scrapy_stealth
 python -m pytest
-```
-
-Auto-fix formatting:
-
-```bash
-python -m ruff format .
 ```

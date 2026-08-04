@@ -17,6 +17,7 @@ from scrapy.http import Request, Response
 
 from ..config import config
 from ..utils.meta import _get_meta_data
+from ..utils.stats import StealthStats
 
 _T = TypeVar("_T")
 
@@ -54,7 +55,47 @@ class BaseEngine(ABC):
 
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
+        self._default_proxy: str | None = None
         self.timeout: int = timeout or config.get("DEFAULT_TIMEOUT")
+        self._stealth_stats = StealthStats()
+        self.seed_proxy_from_config()
+
+    @property
+    def driver_name(self) -> str:
+        """Stealth driver label used in Scrapy stats keys."""
+        return "stealth"
+
+    def set_stats(self, stats: Any | None) -> None:
+        """Attach Scrapy's stats collector (or ``None`` to disable)."""
+        self._stealth_stats = StealthStats(stats)
+
+    def close(self) -> None:
+        """Release engine resources. Override when the engine holds state."""
+
+    def _record_identity(self, profile: str | None, proxy: str | None) -> None:
+        self._stealth_stats.set("stealth/driver", self.driver_name)
+        self._stealth_stats.set_profile(profile)
+        self._stealth_stats.set_proxy(proxy)
+
+    def _record_request_identity(self, profile: str | None, proxy: str | None) -> None:
+        self._record_identity(profile, proxy)
+        if proxy:
+            self._stealth_stats.record_proxy_request(self.driver_name)
+
+    def _record_response(self, response: Response | None, banned: bool) -> None:
+        if response is None:
+            return
+        streak = getattr(self, "_bans", None)
+        current_streak = streak.streak if streak is not None else 0
+        self._stealth_stats.record_response(self.driver_name, response.status, banned)
+        self._stealth_stats.record_ban(self.driver_name, current_streak, banned)
+
+    def _record_dns(self, host_count: int) -> None:
+        self._stealth_stats.record_dns(self.driver_name, host_count)
+
+    def _record_recycle(self, profile: str | None, proxy: str | None) -> None:
+        self._stealth_stats.record_recycle(self.driver_name)
+        self._record_identity(profile, proxy)
 
     async def fetch(self, request: Request, spider: Any) -> Response | None:
         """
@@ -99,10 +140,75 @@ class BaseEngine(ABC):
         """
         return RequestContext(
             profile=_get_meta_data(request, "profile", self._default_profile),
-            proxy=_get_meta_data(request, "proxy"),
+            proxy=_get_meta_data(request, "proxy", self._default_proxy),
             timeout=_get_meta_data(request, "stealth_timeout", self.timeout),
             http2=_get_meta_data(request, "http2", config.get("HTTP2")),
         )
+
+    def seed_proxy_from_config(self) -> None:
+        """Set default proxy from ``STEALTH_PROXIES`` when none is chosen yet."""
+        if self._default_proxy:
+            return
+        proxies = config.get("STEALTH_PROXIES") or []
+        if not proxies:
+            return
+        from ..strategies.proxy import ProxyRotator
+
+        self._default_proxy = ProxyRotator(proxies).get()
+
+    def _rotate_default_profile(self) -> str:
+        """Pick a new default fingerprint profile (prefer different from current)."""
+        from ..strategies.fingerprint import ProfileRotator
+
+        current = self._default_profile
+        new = ProfileRotator.get()
+        if new == current:
+            for _ in range(5):
+                candidate = ProfileRotator.get()
+                if candidate != current:
+                    new = candidate
+                    break
+        self._default_profile = new
+        return new
+
+    def _rotate_default_proxy(self) -> str | None:
+        """Pick a new default proxy from ``STEALTH_PROXIES`` (prefer different).
+
+        When the pool is empty, keep the current default (e.g. a per-request
+        meta proxy remembered on recycle) — never wipe it to ``None``.
+        """
+        from ..strategies.proxy import ProxyRotator
+
+        proxies = config.get("STEALTH_PROXIES") or []
+        if not proxies:
+            return self._default_proxy
+        rotator = ProxyRotator(proxies)
+        current = self._default_proxy
+        new = rotator.get()
+        if new == current and len(proxies) > 1:
+            for _ in range(5):
+                candidate = rotator.get()
+                if candidate != current:
+                    new = candidate
+                    break
+        self._default_proxy = new
+        return new
+
+    def _recycle_identity(
+        self, current_proxy: str | None = None
+    ) -> tuple[str, str | None]:
+        """Rotate profile + proxy used after a ban-streak session recycle.
+
+        ``current_proxy`` is the proxy from the request that hit the ban streak.
+        If ``STEALTH_PROXIES`` is empty, that proxy is kept as the engine default
+        so meta-only proxy setups are not cleared to ``None``.
+        """
+        proxies = config.get("STEALTH_PROXIES") or []
+        if current_proxy and not proxies:
+            self._default_proxy = current_proxy
+        elif current_proxy and not self._default_proxy:
+            self._default_proxy = current_proxy
+        return self._rotate_default_profile(), self._rotate_default_proxy()
 
     @staticmethod
     def _timed(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> tuple[_T, float]:

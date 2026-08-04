@@ -7,6 +7,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.11] - 2026-08-04
+
+### Added
+
+* **Scrapy stealth stats**
+  Request, response, success, failure, status, ban, recycle, proxy-use, and DNS-use
+  counters appear in `crawler.stats`, globally and by driver where useful. Current
+  driver, profile, redacted proxy, ban streak, and active DNS host count are also
+  exposed. Collection reuses existing response / ban checks: no extra body parsing,
+  network requests, or per-domain high-cardinality stats.
+
+* **Middleware closes engines on `spider_closed`**
+  Chrome, the DNS CONNECT relay, and the browser asyncio loop are torn down when
+  the spider finishes instead of lingering until process exit.
+
+* **Full spider example**
+  [`examples/full_spider.py`](examples/full_spider.py) demonstrates settings,
+  per-request drivers, snapshots, ban detection, and stealth stats. README links
+  to it instead of embedding a long copy.
+
+### Changed
+
+* **Faster browser shutdown**
+  `BrowserEngine.close()` / recycle stop Chrome before draining asyncio tasks, use
+  shorter teardown timeouts, and delete nodriver temp data (profiles, caches,
+  cookies, GPU/shader data, and logs) on a background thread via
+  `_cleanup_browser_temp_data()`.
+
+---
+
+## [0.6.11a1] - 2026-07-27
+
+### Added
+
+* **Basic / turbo — session recycle after consecutive bans**
+  `STEALTH_RECYCLE_AFTER_BANS` (and `STEALTH_RECYCLE_COOLDOWN_S`) apply to `basic` and
+  `turbo`: after N consecutive banned responses, cached HTTP clients/sessions are cleared and
+  the engine default fingerprint profile **and** proxy (from `STEALTH_PROXIES`) are rotated.
+  Same ban heuristics as the browser engine (`is_browser_session_ban`). Explicit meta
+  `profile` / `proxy` still win. `BanStreakTracker` lives in `utils/session.py`.
+
+* **`STEALTH_PROXIES` on config**
+  Proxy pool is loaded from Scrapy settings into `config.STEALTH_PROXIES` and seeded as the
+  engine default; rotated on ban-streak recycle.
+
+### Changed
+
+* **Renamed recycle settings**
+  `BROWSER_RESTART_AFTER_BANS` → `STEALTH_RECYCLE_AFTER_BANS`,
+  `BROWSER_RESTART_COOLDOWN_S` → `STEALTH_RECYCLE_COOLDOWN_S` (apply to all drivers).
+
+* **Removed `rotate_profile` / `rotate_proxy` meta flags**
+  Profile and proxy now change automatically on ban-streak session recycle only.
+  Set `STEALTH_PROXIES` in settings; use explicit `meta["stealth"]["profile"]` /
+  `["proxy"]` when you need a fixed identity.
+
+### Fixed
+
+* **Meta-only proxy cleared to `None` on recycle**
+  When `STEALTH_PROXIES` is empty, recycle keeps the request's `meta["stealth"]["proxy"]`
+  instead of wiping the engine default.
+
+* **Concurrent recycle storm / stuck-together console lines**
+  `BanStreakTracker` claims only once per ban wave so parallel Scrapy threads do not all
+  recycle and print at once. Console output is lock-protected with `flush=True`.
+
+---
+
+## [0.6.10] - 2026-07-23
+
+### Added
+
+* **Custom DNS overrides (`STEALTH_DNS_OVERRIDES` / `meta["stealth"]["dns"]`)**
+  Pin hostnames to fixed origin IPs so `basic` / `turbo` connect via that address while keeping the hostname for TLS SNI, Host header, and certificate verification. Configure globally via Scrapy settings / `config.STEALTH_DNS_OVERRIDES`, or per-request with a bare IP (`"dns": "203.0.113.10"`) or a `{host: ip}` map. The `browser` driver applies the effective map via a local CONNECT relay that dials the pinned IP (not Chrome `--host-resolver-rules`). Invalid IPs raise `ValueError` at startup / resolve time.
+
+### Changed
+
+* **Dependency: Required for the `DnsOptions` API used by custom DNS overrides (`ResolverOptions`).
+
+* **Basic engine DNS — apply `dns_options` on `Client(...)`**
+  wreq ignores per-request `dns_options=` on `get()`/`post()`; clients are now cached per `(http2, dns map)` like turbo sessions.
+
+* **Browser engine DNS — local CONNECT relay**
+  Replaced unreliable `--host-resolver-rules` with a DNS-aware local proxy relay (same mechanism as proxy auth injection). Pinned hosts are dialed by IP while Chrome keeps the original hostname for TLS.
+
+* **Browser relay — silence shutdown races / dial IPs without getaddrinfo**
+  Pinned-IP connects use `sock_connect` so Windows Proactor no longer hits `RuntimeError: cannot schedule new futures after shutdown` when Chrome still CONNECT-retries during browser restart. Loop/executor teardown errors in the relay callback are swallowed.
+
+* **Browser engine — blank tab / wait / relay consistency**
+  Disabled `enable_begin_frame_control` on tab create. Browser always uses the local CONNECT relay (even with no DNS/proxy). Replaced nodriver `page.wait()` with `_wait_for_document`. `_wait_for_status` returns ~0.75s after document complete when Navigation Timing never fills. `_smart_wait` long-poll only for short challenge/script-only shells. Challenge HTML heuristics no longer match bare `akamai` / `captcha` / `please wait.` / `enable javascript` / `datadome` / `kasada`.
+
+* **Browser engine — close tab as soon as `_smart_wait` passes**
+  `_smart_wait` returns immediately when body content is ready (`settle` is a max wait for growth, not a sleep after ready). HTML is captured, the fetch tab is closed via CDP, then the response is returned. Chrome is stopped when idle so the window is not left on `about:blank`.
+
+* **Browser splash — show `docs/static/logo.png`**
+  `_splash_url()` loads the package logo via `file://` when the file exists (falls back to `about:blank`).
+
+---
+
 ## [0.6.10a2] - 2026-07-03
 
 ### Added
@@ -130,8 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alongside the existing `10054` (`WSAECONNRESET`); genuine errors are still surfaced. The restart itself was always succeeding — only
   the spurious `ERROR` tracebacks are gone.
 
-* **Temp profiles — `uc_*` dirs accumulating in `%TEMP%`**
-  `_cleanup_browser_profiles()` removes stale nodriver temp dirs on every restart and shutdown.
+* **Temp browser data — `uc_*` dirs accumulating in `%TEMP%`**
+  `_cleanup_browser_temp_data()` removes complete stale nodriver data dirs on every restart and shutdown.
 
 ### Changed
 
@@ -846,6 +945,16 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.11]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.11
+
+[0.6.11a1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.11a1
+
+[0.6.10]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10
+
+[0.6.10a2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10a2
+
+[0.6.10a1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.10a1
 
 [0.6.8b2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.8b2
 

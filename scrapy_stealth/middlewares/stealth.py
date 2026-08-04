@@ -8,16 +8,12 @@ from scrapy.http import Request, Response
 from ..config import config
 from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
-from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy import ProxyRotator
 from ..utils.console import console
+from ..utils.dns import validate_dns_overrides
 from ..utils.logger import get_logger
-from ..utils.meta import (
-    STEALTH_KEY,
-    _get_meta_data,
-    _is_meta_enabled,
-    _resolve_engine,
-)
+from ..utils.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
+from ..utils.stats import StealthStats
 from ..utils.updates import update_available
 
 logger = get_logger()
@@ -27,26 +23,41 @@ class StealthDownloaderMiddleware:
     """Main middleware routing requests through stealth engines."""
 
     def __init__(
-        self, proxies: list[str] | None = None, stealth_enabled: bool = False
+        self,
+        proxies: list[str] | None = None,
+        stealth_enabled: bool = False,
+        crawler: Any | None = None,
     ) -> None:
         self.manager = EngineManager()
         self._proxy_rotator = ProxyRotator(proxies=proxies or [])
-        self._profile_rotator = ProfileRotator()
         self._stealth_enabled = stealth_enabled
+        self._crawler = crawler
+        self._stealth_stats = StealthStats(
+            crawler.stats if crawler is not None else None
+        )
 
     @classmethod
     def from_crawler(cls, crawler: Any) -> StealthDownloaderMiddleware:
         proxies = crawler.settings.getlist("STEALTH_PROXIES", [])
         stealth_enabled = crawler.settings.getbool("STEALTH_ENABLED", False)
-        mw = cls(proxies=proxies, stealth_enabled=stealth_enabled)
+        mw = cls(proxies=proxies, stealth_enabled=stealth_enabled, crawler=crawler)
         crawler.signals.connect(mw.spider_opened, signal=signals.spider_opened)
+        crawler.signals.connect(mw.spider_closed, signal=signals.spider_closed)
         update_available()
         return mw
+
+    def spider_closed(self, spider: Any) -> None:
+        self.manager.close()
 
     def spider_opened(self, spider: Any) -> None:
         settings = spider.crawler.settings
         proxies = settings.getlist("STEALTH_PROXIES", [])
         self._proxy_rotator = ProxyRotator(proxies=proxies)
+        config.STEALTH_PROXIES = list(self._proxy_rotator.proxies)
+        self.manager.seed_proxies()
+        stats = spider.crawler.stats
+        self._stealth_stats = StealthStats(stats)
+        self.manager.set_stats(stats)
         self._stealth_enabled = settings.getbool(
             "STEALTH_ENABLED", self._stealth_enabled
         )
@@ -62,6 +73,13 @@ class StealthDownloaderMiddleware:
             config.BROWSER_PROXY_BYPASS_LIST = settings.getlist(
                 "BROWSER_PROXY_BYPASS_LIST"
             )
+        dns_setting = settings.get("STEALTH_DNS_OVERRIDES")
+        if isinstance(dns_setting, dict):
+            config.STEALTH_DNS_OVERRIDES = validate_dns_overrides(dns_setting)
+            logger.debug(
+                "Loaded %d DNS overrides from spider settings",
+                len(config.STEALTH_DNS_OVERRIDES),
+            )
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     async def process_request(self, request: Request, spider: Any) -> Response | None:
@@ -69,28 +87,14 @@ class StealthDownloaderMiddleware:
             request.meta[STEALTH_KEY] = {}
 
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
-
-        if engine_name == "stealth":
-            stealth_meta = request.meta.setdefault(STEALTH_KEY, {})
-
-            if _is_meta_enabled(request, "rotate_profile"):
-                stealth_meta.setdefault("profile", self._profile_rotator.get())
-                logger.debug("Profile set to: %s", stealth_meta["profile"])
-
-            if _is_meta_enabled(request, "rotate_proxy"):
-                if not self._proxy_rotator.proxies:
-                    console.error(
-                        "rotate_proxy=True but STEALTH_PROXIES is not configured in settings. "
-                        "Add STEALTH_PROXIES to your settings.py."
-                    )
-                else:
-                    proxy = self._proxy_rotator.get()
-                    if proxy:
-                        stealth_meta.setdefault("proxy", proxy)
-                        logger.debug("Proxy set to: %s", stealth_meta["proxy"])
-
         driver = _get_meta_data(request, "driver")
         engine = self.manager.get(engine_name, driver)
+
+        if engine_name == "stealth":
+            driver_label = getattr(engine, "driver_name", None)
+            if not isinstance(driver_label, str):
+                driver_label = config.get("STEALTH_DRIVER") or "basic"
+            self._stealth_stats.record_request(driver_label)
 
         if _get_meta_data(request, "snapshot", False) and not isinstance(
             engine, BrowserEngine

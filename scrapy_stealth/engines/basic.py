@@ -13,17 +13,27 @@ try:
 except ImportError as exc:
     StealthDependencyError.check("wreq", exc)
 
+from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
 from ..utils.console import console
+from ..utils.dns import (
+    build_wreq_dns_options,
+    dns_fingerprint,
+    resolve_dns_overrides,
+)
 from ..utils.headers import get_default_headers, merge_headers
 from ..utils.logger import get_logger
 from ..utils.profiles import resolve_browser
 from ..utils.response import StealthResponse
-from ..utils.session import SessionCache
+from ..utils.session import BanStreakTracker, SessionCache
 from .base import BaseEngine
 
 logger = get_logger()
+
+# Client cache key: (http2, frozen host→IP pairs).
+# dns_options= on get()/post() is ignored.
+_BasicClientKey = tuple[bool, tuple[tuple[str, str], ...]]
 
 
 class BasicEngine(BaseEngine):
@@ -32,12 +42,48 @@ class BasicEngine(BaseEngine):
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         super().__init__(profile, timeout)
         self.default_profile = resolve_browser(self._default_profile)
-        self._clients: SessionCache[bool, Client] = SessionCache(
-            lambda http2: Client(http2_only=http2)
+        self._clients: SessionCache[_BasicClientKey, Client] = SessionCache(
+            self._make_client
         )
+        self._bans = BanStreakTracker()
+
+    @property
+    def driver_name(self) -> str:
+        return "basic"
+
+    @staticmethod
+    def _make_client(key: _BasicClientKey) -> Client:
+        http2, dns_items = key
+        kwargs: dict[str, Any] = {"http2_only": http2}
+        if dns_options := build_wreq_dns_options(dict(dns_items)):
+            kwargs["dns_options"] = dns_options
+        return Client(**kwargs)
+
+    def _maybe_recycle_sessions(
+        self, response: Response | None, current_proxy: str | None = None
+    ) -> None:
+        """Drop cached clients; rotate profile + proxy after N consecutive bans."""
+        banned = response is not None and AntiBotDetector.is_browser_session_ban(
+            response
+        )
+        should_recycle = self._bans.record(banned)
+        self._record_response(response, banned)
+        if not should_recycle:
+            return
+        profile, proxy = self._recycle_identity(current_proxy=current_proxy)
+        self.default_profile = resolve_browser(profile)
+        console.info(
+            f"Recycling basic sessions after "
+            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans "
+            f"(profile={profile!r} proxy={proxy!r})"
+        )
+        self._bans.acknowledge_restart()
+        self._clients.clear_all()
+        self._record_recycle(profile, proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
+        self._record_request_identity(ctx.profile, ctx.proxy)
         try:
             emulation = (
                 self.default_profile
@@ -59,13 +105,24 @@ class BasicEngine(BaseEngine):
             if ctx.proxy:
                 kwargs["proxy"] = Proxy.all(ctx.proxy)
 
+            dns_overrides = resolve_dns_overrides(request)
+            self._record_dns(len(dns_overrides))
+            dns_key = dns_fingerprint(dns_overrides)
+            if dns_key:
+                logger.debug(
+                    "Basic engine DNS override(s): %s",
+                    dns_overrides,
+                )
+
             logger.debug(
                 "Initializing basic stealth client (profile=%s & protocol=%s)",
                 ctx.profile,
                 "HTTP/2" if ctx.http2 else "HTTP/1.1",
             )
 
-            method_fn = getattr(self._clients.get(ctx.http2), request.method.lower())
+            method_fn = getattr(
+                self._clients.get((ctx.http2, dns_key)), request.method.lower()
+            )
             resp = method_fn(request.url, **kwargs)
 
             body = resp.bytes()
@@ -75,13 +132,15 @@ class BasicEngine(BaseEngine):
                     "switch to driver='browser' to bypass it."
                 )
 
-            return StealthResponse(
+            response = StealthResponse(
                 request=request,
                 status=resp.status.as_int(),
                 headers=resp.headers,
                 body=body,
                 _flags=["basic"],
             )
+            self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
+            return response
 
         except TimeoutError:
             raise

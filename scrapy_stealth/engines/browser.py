@@ -23,11 +23,10 @@ from ..utils.browser import (
     _BROWSER_ARGS,
     _JS_HTML,
     _JS_IS_CHROME_ERROR,
-    BanStreakTracker,
     ProxyRelay,
     _block_static_assets,
     _cdp_snapshot,
-    _cleanup_browser_profiles,
+    _cleanup_browser_temp_data,
     _ensure_xvfb,
     _is_browser_crash,
     _make_loop,
@@ -36,15 +35,21 @@ from ..utils.browser import (
     _silence_browser,
     _smart_wait,
     _splash_url,
-    _start_proxy_relay,
+    _start_browser_relay,
     _stop_loop,
     _wait_for_status,
 )
 from ..utils.console import console
+from ..utils.dns import (
+    dns_fingerprint,
+    resolve_dns_overrides,
+    validate_dns_overrides,
+)
 from ..utils.logger import get_logger
 from ..utils.meta import _get_meta_data
 from ..utils.patch import patch_nodriver
 from ..utils.response import StealthResponse
+from ..utils.session import BanStreakTracker
 from .base import BaseEngine
 
 patch_nodriver()
@@ -52,9 +57,9 @@ patch_nodriver()
 logger = get_logger()
 
 
-# Suppress benign asyncio teardown noise when the browser loop is stopped or
-# replaced during restart — the real errors are handled by retry/cancel paths.
 class _AsyncioTeardownFilter(logging.Filter):
+    """Suppress benign asyncio teardown noise during browser restart."""
+
     _TRANSIENT_TASK_MARKERS = (
         "StealthConnectionError",
         "Connection closed",
@@ -103,13 +108,10 @@ def _browser_fetch_timeout(request_timeout: int | float, settle: float) -> float
 
 
 class BrowserEngine(BaseEngine):
-    """
-    Chrome engine via DevTools Protocol (no WebDriver overhead).
+    """Chrome via CDP: one persistent browser; each request opens then closes a tab."""
 
-    - No proxy: one persistent browser; each request opens a new tab then closes it.
-    - With proxy: one persistent browser started with ``--proxy-server`` pointing at a
-      local auth-injecting relay; each request opens a new tab then closes it.
-    """
+    # Benign Windows Proactor teardown WinErrors (10054/995/64).
+    _BENIGN_WINERRORS: frozenset[int] = frozenset({10054, 995, 64})
 
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         super().__init__(profile, timeout)
@@ -131,6 +133,13 @@ class BrowserEngine(BaseEngine):
         # In-flight _run_fetch tasks — cancelled before loop teardown so concurrent
         # Scrapy threads are not left with orphaned coroutines on browser restart.
         self._fetch_tasks: weakref.WeakSet[asyncio.Task[Any]] = weakref.WeakSet()
+        # DNS overrides applied on the *next* Chrome launch (config + per-request).
+        self._dns_overrides: dict[str, str] = {}
+        self._launched_dns: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def driver_name(self) -> str:
+        return "browser"
 
     def _build_args(
         self,
@@ -145,24 +154,32 @@ class BrowserEngine(BaseEngine):
         if headless:
             args.append("--headless=new")
         if sys.platform != "win32":
-            args.append("--disable-gpu")
-            args.append("--disable-gpu-sandbox")
-            args.append("--disable-software-rasterizer")
+            args.extend(
+                (
+                    "--disable-gpu",
+                    "--disable-gpu-sandbox",
+                    "--disable-software-rasterizer",
+                )
+            )
         no_sandbox = config.get("BROWSER_NO_SANDBOX")
         if no_sandbox is None:
             no_sandbox = hasattr(os, "getuid") and os.getuid() == 0
         if no_sandbox:
-            args.append("--no-sandbox")
-            args.append("--disable-setuid-sandbox")
-            args.append("--disable-dev-shm-usage")
+            args.extend(
+                ("--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage")
+            )
         if proxy_port is not None:
             args.append(f"--proxy-server=http://127.0.0.1:{proxy_port}")
-            # Domains the user listed must reach the origin directly, never the
-            # proxy relay. Only meaningful alongside --proxy-server.
+            # DNS-pinned hosts must stay on the relay — do not add them to bypass.
             args.extend(_proxy_bypass_args(config.get("BROWSER_PROXY_BYPASS_LIST")))
         # Append fingerprint args last so they always win over any conflicting base arg.
         args.extend(fingerprint_args or _random_fingerprint_args())
         return args
+
+    def _effective_dns_overrides(self) -> dict[str, str]:
+        """DNS map for the next/current browser relay (request meta wins via preset)."""
+        src = self._dns_overrides or (config.get("STEALTH_DNS_OVERRIDES") or {})
+        return validate_dns_overrides(src)
 
     def _is_root(self) -> bool:
         import os
@@ -175,7 +192,7 @@ class BrowserEngine(BaseEngine):
         proxy_port: int | None = None,
         fingerprint_args: list[str] | None = None,
     ) -> Any:
-        """Start a browser instance with proper error handling for executable path."""
+        """Start nodriver; map missing binary to StealthBrowserNotFoundError."""
         import nodriver as _nd
 
         _ensure_xvfb(headless)
@@ -184,9 +201,7 @@ class BrowserEngine(BaseEngine):
         try:
             kwargs: dict[str, Any] = {
                 "browser_args": self._build_args(
-                    headless,
-                    proxy_port=proxy_port,
-                    fingerprint_args=fingerprint_args,
+                    headless, proxy_port=proxy_port, fingerprint_args=fingerprint_args
                 ),
                 "headless": headless,
                 "sandbox": not self._is_root(),
@@ -209,14 +224,6 @@ class BrowserEngine(BaseEngine):
                 "Browser binary not found. Install Google Chrome or Chromium, or set "
                 "BROWSER_EXECUTABLE_PATH to point to your browser binary (e.g. Brave).",
             )
-
-    # Benign Windows Proactor teardown WinErrors raised when in-flight overlapped
-    # socket ops (the proxy-relay accept loop, tab pipes) are aborted as the event
-    # loop stops during a browser restart/shutdown — not real failures.
-    #   10054 = WSAECONNRESET           (connection reset by peer)
-    #     995 = ERROR_OPERATION_ABORTED (I/O cancelled by thread exit / app request)
-    #      64 = ERROR_NETNAME_DELETED   (network name no longer available)
-    _BENIGN_WINERRORS: frozenset[int] = frozenset({10054, 995, 64})
 
     @staticmethod
     def _loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
@@ -257,16 +264,31 @@ class BrowserEngine(BaseEngine):
             # is safe — the restart/close path in _stop_loop handles cleanup.
             pass
 
+    def _wait_for_browser_ready(self) -> None:
+        with self._lock:
+            while self._restarting:
+                self._restart_cv.wait()
+
     def _ensure_browser(self, headless: bool, proxy: str | None = None) -> None:
-        """
-        Ensure the persistent browser is running.  When a proxy is provided the
-        browser is started with ``--proxy-server`` pointing at the local relay;
-        without a proxy the browser connects directly.
-        """
+        """Ensure the persistent browser is running (proxy/DNS-relay aware)."""
         with self._lock:
             while self._restarting:
                 self._restart_cv.wait()
             self._ensure_browser_unlocked(headless, proxy=proxy)
+
+    def _ensure_browser_for_dns(self, headless: bool, proxy: str | None = None) -> None:
+        """Restart Chrome when the effective DNS map differs from the relay's map."""
+        wanted = dns_fingerprint(self._effective_dns_overrides())
+        with self._lock:
+            while self._restarting:
+                self._restart_cv.wait()
+            needs_restart = self._browser is not None and wanted != self._launched_dns
+            browser = self._browser
+        if needs_restart:
+            logger.debug(
+                "Restarting browser to apply DNS override(s): %s", dict(wanted)
+            )
+            self._reset_browser(headless, browser, proxy=proxy)
 
     def _ensure_browser_unlocked(
         self, headless: bool, proxy: str | None = None
@@ -281,29 +303,42 @@ class BrowserEngine(BaseEngine):
             self._start(headless, proxy=proxy), loop
         )
         self._browser = future.result(timeout=30)
+        self._launched_dns = dns_fingerprint(self._effective_dns_overrides())
+        if self._launched_dns:
+            logger.debug(
+                "Browser launched with DNS override(s) via local relay: %s",
+                dict(self._launched_dns),
+            )
 
     async def _start(self, headless: bool, proxy: str | None = None) -> Any:
         _ensure_xvfb(headless)
         _silence_browser()
 
+        dns_overrides = self._effective_dns_overrides()
         proxy_port: int | None = None
-        if proxy:
-            server, proxy_port = await _start_proxy_relay(proxy)
+        # Local CONNECT relay is required for DNS pins (Chrome host-resolver-rules
+        # is unreliable) and for upstream proxy auth injection.
+        if proxy or dns_overrides:
+            server, proxy_port = await _start_browser_relay(
+                proxy_url=proxy,
+                dns_overrides=dns_overrides or None,
+            )
             self._relay_server = server
             self._relay_port = proxy_port
-            logger.debug("Proxy relay started on 127.0.0.1:%d", proxy_port)
+            logger.debug(
+                "Browser relay started on 127.0.0.1:%d (proxy=%s dns=%s)",
+                proxy_port,
+                bool(proxy),
+                dict(dns_overrides) if dns_overrides else {},
+            )
 
         # Draw a fresh fingerprint for this browser lifetime.  _start_browser
         # passes it to _build_args so the same values end up in the process
         # args — no second random draw happens inside _build_args.
         browser = await self._start_browser(headless, proxy_port=proxy_port)
-
-        # Warm up the renderer on the default tab Chrome opens at startup.
-        try:
+        with contextlib.suppress(Exception):
             await browser.main_tab.get(_splash_url())
             await browser.main_tab.wait()
-        except Exception:
-            pass
 
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
@@ -311,58 +346,53 @@ class BrowserEngine(BaseEngine):
     def close(self) -> None:
         if self._loop is None:
             return
-        try:
-            asyncio.run_coroutine_threadsafe(self._shutdown(), self._loop).result(
-                timeout=10
-            )
-        except Exception:
-            pass
-        _stop_loop(self._loop, self._thread)
+        loop, thread = self._loop, self._thread
+        self._loop = self._thread = None
+        with contextlib.suppress(Exception):
+            asyncio.run_coroutine_threadsafe(self._shutdown(), loop).result(timeout=3)
+        _stop_loop(loop, thread, timeout=2.0)
 
     def _track_fetch_task(self, task: asyncio.Task[Any]) -> None:
         self._fetch_tasks.add(task)
 
     async def _drain_loop_tasks(self) -> None:
-        """Cancel and await every pending task on this loop before teardown."""
         current = asyncio.current_task()
-        pending = [
-            task
-            for task in asyncio.all_tasks()
-            if task is not current and not task.done()
-        ]
+        pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
         for task in pending:
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
-            # Flush timer/callback wakeups (notably asyncio.sleep on Windows).
             await asyncio.sleep(0)
 
     @staticmethod
     def _is_restart_transient(exc: BaseException) -> bool:
-        if isinstance(exc, StealthConnectionError):
-            return True
-        if isinstance(exc, ConnectionError):
-            return True
         if isinstance(
-            exc, (ConnectionRefusedError, ConnectionResetError, BrokenPipeError)
+            exc,
+            (
+                StealthConnectionError,
+                ConnectionError,
+                ConnectionRefusedError,
+                ConnectionResetError,
+                BrokenPipeError,
+            ),
         ):
             return True
         if _is_browser_crash(exc):
             return True
-        module = getattr(type(exc), "__module__", "")
-        return "websockets" in module
+        return "websockets" in getattr(type(exc), "__module__", "")
 
     async def _shutdown(self) -> None:
+        if self._browser is not None:
+            with contextlib.suppress(Exception):
+                self._browser.stop()
+            self._browser = None
+            _cleanup_browser_temp_data()
         await self._drain_loop_tasks()
         if self._relay_server is not None:
-            await self._relay_server.await_closed()
+            with contextlib.suppress(Exception):
+                await self._relay_server.await_closed()
             self._relay_server = None
             self._relay_port = None
-        if self._browser is not None:
-            self._browser.stop()
-            self._browser = None
-            # Final cleanup — wipe all uc_* dirs now that the last session is done.
-            _cleanup_browser_profiles(keep=None)
 
     def _reset_browser(
         self,
@@ -375,42 +405,28 @@ class BrowserEngine(BaseEngine):
             try:
                 if dead_browser is not None and self._browser is not dead_browser:
                     return
-                # Drain in-flight work (fetches, _smart_wait sleeps, nodriver I/O)
-                # before killing Chrome so tasks are not orphaned on loop close.
+                if self._browser is not None:
+                    with contextlib.suppress(Exception):
+                        self._browser.stop()
+                    self._browser = None
+                    _cleanup_browser_temp_data()
+                self._tab_sem = None
+                self._launched_dns = ()
+
                 if self._loop is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         asyncio.run_coroutine_threadsafe(
                             self._drain_loop_tasks(), self._loop
-                        ).result(timeout=10)
-                    except Exception:
-                        pass
+                        ).result(timeout=3)
 
-                if self._browser is not None:
-                    try:
-                        self._browser.stop()
-                    except Exception:
-                        pass
-                    self._browser = None
-
-                    # Clean up stale uc_* temp profile dirs from previous sessions.
-                    _cleanup_browser_profiles(keep=None)
-                self._tab_sem = None
-
-                # Tear down the old relay — must happen on the old loop while it
-                # is still running so await_closed() can cancel/await handle tasks.
                 if self._relay_server is not None and self._loop is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         asyncio.run_coroutine_threadsafe(
                             self._relay_server.await_closed(), self._loop
-                        ).result(timeout=5)
-                    except Exception:
-                        pass
+                        ).result(timeout=2)
                     self._relay_server = None
                     self._relay_port = None
 
-                # Join the old loop/thread before starting a new one — otherwise it
-                # keeps polling its selector after the new loop exists and can crash
-                # on in-flight I/O (see _stop_loop docstring).
                 _stop_loop(self._loop, self._thread)
 
                 loop = _make_loop()
@@ -433,20 +449,7 @@ class BrowserEngine(BaseEngine):
         snapshot: bool = False,
         block_assets: bool = False,
     ) -> tuple[bytes, int, bytes | None]:
-        """
-        Open a new browser tab via CDP target.create_target, fetch *url*,
-        then close the tab.
-
-        We bypass browser.get(url, new_tab=True) entirely.  That helper calls
-        update_targets() and returns a Tab by matching target_id, but under
-        concurrency it sometimes returns the main tab (about:blank) instead of
-        the newly created one — causing a cascade of wrong-tab bugs.
-
-        Instead we call cdp.target.create_target ourselves, get the target_id
-        back immediately, then find the matching Tab object directly.  This
-        gives us a guaranteed 1:1 mapping between the CDP target and the Tab
-        we operate on, with no ambiguity.
-        """
+        """Open a CDP target, fetch *url*, then close the tab."""
         import nodriver.cdp.target as _cdp_target
 
         html: Any = ""
@@ -464,7 +467,9 @@ class BrowserEngine(BaseEngine):
             # create_target returns the new target_id immediately — no
             # update_targets() race, no wrong-tab ambiguity.
             target_id = await browser.send(
-                _cdp_target.create_target(url, enable_begin_frame_control=True)
+                # enable_begin_frame_control=True freezes painting until BeginFrame
+                # is issued (black/blank tab) — leave it off for normal loads.
+                _cdp_target.create_target(url, enable_begin_frame_control=False)
             )
             await browser.update_targets()
             page = next(
@@ -500,34 +505,30 @@ class BrowserEngine(BaseEngine):
                     if snapshot:
                         shot = await _cdp_snapshot(page)
             finally:
-                try:
+                with contextlib.suppress(Exception):
                     await page.close()
-                except Exception:
-                    pass
-                try:
+                with contextlib.suppress(Exception):
                     await page.aclose()
-                except Exception:
-                    pass
 
         return str(html).encode(errors="replace"), int(status), shot
-
-    def _wait_for_browser_ready(self) -> None:
-        with self._lock:
-            while self._restarting:
-                self._restart_cv.wait()
 
     def _maybe_restart(
         self, headless: bool, proxy: str | None, response: Response | None
     ) -> None:
         """Restart Chrome once BanStreakTracker reports N consecutive bans."""
-        with self._lock:
-            if self._restarting:
-                return
-
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
-        if not self._bans.record(banned):
+        with self._lock:
+            if self._restarting:
+                # Restart logic ignores in-flight results, but stats still count
+                # every completed browser response.
+                self._record_response(response, banned)
+                return
+
+        should_recycle = self._bans.record(banned)
+        self._record_response(response, banned)
+        if not should_recycle:
             return
 
         with self._lock:
@@ -536,13 +537,20 @@ class BrowserEngine(BaseEngine):
 
         console.info(
             f"Restarting browser after "
-            f"{config.get('BROWSER_RESTART_AFTER_BANS')} consecutive bans"
+            f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans"
         )
         self._bans.acknowledge_restart()
-        self._reset_browser(headless, self._browser, proxy=proxy)
+        # Fresh Chrome fingerprint comes from _random_fingerprint_args on restart;
+        # keep / rotate proxy for subsequent requests without explicit meta.
+        if proxy and not (config.get("STEALTH_PROXIES") or []):
+            self._default_proxy = proxy
+        new_proxy = self._rotate_default_proxy()
+        self._reset_browser(headless, self._browser, proxy=proxy or new_proxy)
+        self._record_recycle(self._default_profile, proxy or new_proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
+        self._record_request_identity(ctx.profile, ctx.proxy)
         try:
             headless: bool = _get_meta_data(
                 request, "headless", config.get("BROWSER_HEADLESS")
@@ -565,10 +573,13 @@ class BrowserEngine(BaseEngine):
                 settle,
             )
 
-            # Ensure the single persistent browser is up (proxy-aware).
+            # Ensure the single persistent browser is up (proxy / DNS-relay aware).
+            # DNS pins use a local CONNECT relay (not Chrome host-resolver-rules).
             body: bytes = b""
             status: int = 200
             shot: bytes | None = None
+            self._dns_overrides = dict(resolve_dns_overrides(request))
+            self._record_dns(len(self._dns_overrides))
 
             for attempt in range(5):
                 task: asyncio.Task[Any] | None = None
@@ -588,6 +599,7 @@ class BrowserEngine(BaseEngine):
                         self._fetch_tasks.discard(task)
 
                 self._wait_for_browser_ready()
+                self._ensure_browser_for_dns(headless, ctx.proxy or None)
                 with self._lock:
                     self._ensure_browser_unlocked(
                         headless=headless, proxy=ctx.proxy or None
@@ -605,17 +617,14 @@ class BrowserEngine(BaseEngine):
                     # Cancel via the snapshotted loop — if it's already
                     # closed, swallow silently (the task is dead anyway).
                     if task is not None and loop is not None and not loop.is_closed():
-                        try:
+                        with contextlib.suppress(RuntimeError):
                             loop.call_soon_threadsafe(task.cancel)
-                        except RuntimeError:
-                            pass
                     raise
-                except (futures.CancelledError, asyncio.CancelledError):
-                    self._wait_for_browser_ready()
-                    if attempt < 4:
-                        continue
-                    raise
-                except StealthConnectionError:
+                except (
+                    futures.CancelledError,
+                    asyncio.CancelledError,
+                    StealthConnectionError,
+                ):
                     self._wait_for_browser_ready()
                     if attempt < 4:
                         continue
@@ -647,7 +656,7 @@ class BrowserEngine(BaseEngine):
                 _flags=["browser"],
             )
 
-            # Restart Chrome after BROWSER_RESTART_AFTER_BANS consecutive bans.
+            # Restart Chrome after STEALTH_RECYCLE_AFTER_BANS consecutive bans.
             self._maybe_restart(headless, ctx.proxy or None, response)
 
             return response
@@ -657,11 +666,11 @@ class BrowserEngine(BaseEngine):
                 StealthTimeoutError,
                 f"Browser engine timed out after {ctx.timeout}s fetching {request.url!r}",
             )
-        except StealthBrowserNotFoundError:
-            raise
-        except StealthConnectionError:
-            raise
-        except StealthTimeoutError:
+        except (
+            StealthBrowserNotFoundError,
+            StealthConnectionError,
+            StealthTimeoutError,
+        ):
             raise
         except (ConnectionRefusedError, OSError):
             raise_stealth(
@@ -669,26 +678,24 @@ class BrowserEngine(BaseEngine):
                 f"Browser engine connection failed fetching {request.url!r}",
             )
         except Exception as exc:
-            try:
-                from websockets.exceptions import ConnectionClosedError as _WsClosed
-
-                if isinstance(exc, _WsClosed):
-                    raise_stealth(
-                        StealthConnectionError,
-                        f"Browser tab closed unexpectedly fetching {request.url!r}",
-                    )
-            except ImportError:
-                pass
-            try:
-                from nodriver.core.connection import ProtocolException as _ProtoExc
-
-                if isinstance(exc, _ProtoExc):
-                    raise_stealth(
-                        StealthConnectionError,
-                        f"Browser target lost fetching {request.url!r}",
-                    )
-            except ImportError:
-                pass
+            for mod, attr, msg in (
+                (
+                    "websockets.exceptions",
+                    "ConnectionClosedError",
+                    f"Browser tab closed unexpectedly fetching {request.url!r}",
+                ),
+                (
+                    "nodriver.core.connection",
+                    "ProtocolException",
+                    f"Browser target lost fetching {request.url!r}",
+                ),
+            ):
+                try:
+                    cls = getattr(__import__(mod, fromlist=[attr]), attr)
+                except ImportError:
+                    continue
+                if isinstance(exc, cls):
+                    raise_stealth(StealthConnectionError, msg)
             if isinstance(exc, (futures.CancelledError, asyncio.CancelledError)):
                 logger.debug(
                     "Browser fetch cancelled during restart for %s", request.url
