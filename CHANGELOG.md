@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.11] - 2026-08-04
+
+### Added
+
+* **Scrapy stealth stats**
+  Request, response, success, failure, status, ban, recycle, proxy-use, and DNS-use
+  counters appear in `crawler.stats`, globally and by driver where useful. Current
+  driver, profile, redacted proxy, ban streak, and active DNS host count are also
+  exposed. Collection reuses existing response / ban checks: no extra body parsing,
+  network requests, or per-domain high-cardinality stats.
+
+* **Middleware closes engines on `spider_closed`**
+  Chrome, the DNS CONNECT relay, and the browser asyncio loop are torn down when
+  the spider finishes instead of lingering until process exit.
+
+* **Full spider example**
+  [`examples/full_spider.py`](examples/full_spider.py) demonstrates settings,
+  per-request drivers, snapshots, ban detection, and stealth stats. README links
+  to it instead of embedding a long copy.
+
+### Changed
+
+* **Faster browser shutdown**
+  `BrowserEngine.close()` / recycle stop Chrome before draining asyncio tasks, use
+  shorter teardown timeouts, and delete nodriver temp data (profiles, caches,
+  cookies, GPU/shader data, and logs) on a background thread via
+  `_cleanup_browser_temp_data()`.
+
+---
+
 ## [0.6.11a1] - 2026-07-27
 
 ### Added
@@ -199,8 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alongside the existing `10054` (`WSAECONNRESET`); genuine errors are still surfaced. The restart itself was always succeeding — only
   the spurious `ERROR` tracebacks are gone.
 
-* **Temp profiles — `uc_*` dirs accumulating in `%TEMP%`**
-  `_cleanup_browser_profiles()` removes stale nodriver temp dirs on every restart and shutdown.
+* **Temp browser data — `uc_*` dirs accumulating in `%TEMP%`**
+  `_cleanup_browser_temp_data()` removes complete stale nodriver data dirs on every restart and shutdown.
 
 ### Changed
 
@@ -915,6 +945,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.11]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.11
 
 [0.6.11a1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.11a1
 

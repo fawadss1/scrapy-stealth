@@ -556,6 +556,32 @@ STEALTH_RECYCLE_AFTER_BANS = 5  # default
 yield scrapy.Request(url, meta={"stealth": {}})
 ```
 
+**Scrapy stats:** after the crawl (or mid-run via `crawler.stats`), inspect:
+
+| Key                                                | Meaning                                    |
+|----------------------------------------------------|--------------------------------------------|
+| `stealth/requests` / `stealth/requests/{driver}`   | Stealth fetches                            |
+| `stealth/responses` / `stealth/responses/{driver}` | Completed responses                        |
+| `stealth/successes` / `stealth/successes/{driver}` | Non-banned responses below HTTP 400        |
+| `stealth/failures` / `stealth/failures/{driver}`   | Banned responses or HTTP 400+              |
+| `stealth/status/{code}`                            | Response count by HTTP status              |
+| `stealth/bans` / `stealth/bans/{driver}`           | Session-ban responses                      |
+| `stealth/recycles` / `stealth/recycles/{driver}`   | Session / Chrome recycles                  |
+| `stealth/ban_streak`                               | Current consecutive ban streak             |
+| `stealth/driver`                                   | Last stealth driver used                   |
+| `stealth/profile`                                  | Last fingerprint profile used              |
+| `stealth/proxy`                                    | Last proxy as `host:port` (no credentials) |
+| `stealth/proxy/requests/{driver}`                  | Requests sent through a proxy              |
+| `stealth/dns/requests/{driver}`                    | Requests using DNS overrides               |
+| `stealth/dns/hosts`                                | Total pinned hosts applied                 |
+| `stealth/dns/active_hosts`                         | Pinned hosts on latest request             |
+
+```python
+# e.g. in spider_closed
+stats = spider.crawler.stats.get_stats()
+print(stats.get("stealth/bans"), stats.get("stealth/recycles"))
+```
+
 ---
 
 ## 🧩 Strategies
@@ -630,7 +656,28 @@ if detector.is_blocked(response):
 
 ---
 
-## 📊 Example
+## 📊 Full spider example
+
+Keep the README short — the complete working spider lives in
+[`examples/full_spider.py`](examples/full_spider.py).
+
+It shows:
+
+* middleware + `STEALTH_ENABLED` via `custom_settings`
+* default turbo driver
+* per-request `basic` / `browser` overrides
+* optional snapshot with `@snapshot`
+* ban detection and stealth stats on close
+
+```bash
+# from a Scrapy project
+scrapy crawl stealth_demo
+
+# or one-off
+scrapy runspider examples/full_spider.py
+```
+
+Minimal version:
 
 ```python
 import scrapy
@@ -638,18 +685,19 @@ import scrapy
 
 class ExampleSpider(scrapy.Spider):
     name = "example"
+    custom_settings = {
+        "DOWNLOADER_MIDDLEWARES": {
+            "scrapy_stealth.middlewares.StealthDownloaderMiddleware": 950,
+        },
+        "STEALTH_ENABLED": True,
+        "STEALTH_DRIVER": "turbo",
+    }
 
     def start_requests(self):
-        yield scrapy.Request(
-            "https://example.com",
-            meta={"stealth": {}},
-        )
+        yield scrapy.Request("https://example.com")
 
     def parse(self, response):
-        yield {
-            "title": response.css("title::text").get(),
-            "url": response.url,
-        }
+        yield {"title": response.css("title::text").get(), "url": response.url}
 ```
 
 ---
