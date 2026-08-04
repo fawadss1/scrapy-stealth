@@ -31,6 +31,19 @@ class TestStealthDownloaderMiddleware:
             mw = StealthDownloaderMiddleware.from_crawler(crawler)
         assert isinstance(mw, StealthDownloaderMiddleware)
 
+    def test_from_crawler_connects_spider_closed(self):
+        with patch("scrapy_stealth.engines.basic.Client"):
+            crawler = MagicMock()
+            mw = StealthDownloaderMiddleware.from_crawler(crawler)
+        connected = [c.args[0] for c in crawler.signals.connect.call_args_list]
+        assert mw.spider_opened in connected
+        assert mw.spider_closed in connected
+
+    def test_spider_closed_closes_engines(self, middleware, spider):
+        with patch.object(middleware.manager, "close") as mock_close:
+            middleware.spider_closed(spider)
+        mock_close.assert_called_once_with()
+
     def test_default_engine_is_scrapy(self, middleware, spider):
         request = Request("https://example.com")
         with patch.object(middleware.manager, "get") as mock_get:
@@ -44,10 +57,30 @@ class TestStealthDownloaderMiddleware:
         request = Request("https://example.com", meta={"stealth": {}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_engine = MagicMock()
+            mock_engine.driver_name = "basic"
             mock_engine.fetch = AsyncMock(return_value=None)
             mock_get.return_value = mock_engine
             asyncio.run(middleware.process_request(request, spider))
             mock_get.assert_called_once_with("stealth", None)
+
+    def test_stealth_request_stats_use_resolved_driver(self, spider):
+        crawler = MagicMock()
+        with patch("scrapy_stealth.engines.basic.Client"):
+            middleware = StealthDownloaderMiddleware(crawler=crawler)
+        request = Request(
+            "https://example.com",
+            meta={"stealth": {"driver": "turbo"}},
+        )
+        with patch.object(middleware.manager, "get") as mock_get:
+            mock_engine = MagicMock()
+            mock_engine.driver_name = "turbo"
+            mock_engine.fetch = AsyncMock(return_value=None)
+            mock_get.return_value = mock_engine
+            asyncio.run(middleware.process_request(request, spider))
+
+        crawler.stats.inc_value.assert_any_call("stealth/requests", 1)
+        crawler.stats.inc_value.assert_any_call("stealth/requests/turbo", 1)
+        crawler.stats.set_value.assert_called_with("stealth/driver", "turbo")
 
     def test_returns_none_when_engine_returns_none(self, middleware, spider):
         request = Request("https://example.com")

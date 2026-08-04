@@ -47,6 +47,10 @@ class BasicEngine(BaseEngine):
         )
         self._bans = BanStreakTracker()
 
+    @property
+    def driver_name(self) -> str:
+        return "basic"
+
     @staticmethod
     def _make_client(key: _BasicClientKey) -> Client:
         http2, dns_items = key
@@ -62,7 +66,9 @@ class BasicEngine(BaseEngine):
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
-        if not self._bans.record(banned):
+        should_recycle = self._bans.record(banned)
+        self._record_response(response, banned)
+        if not should_recycle:
             return
         profile, proxy = self._recycle_identity(current_proxy=current_proxy)
         self.default_profile = resolve_browser(profile)
@@ -73,9 +79,11 @@ class BasicEngine(BaseEngine):
         )
         self._bans.acknowledge_restart()
         self._clients.clear_all()
+        self._record_recycle(profile, proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
+        self._record_request_identity(ctx.profile, ctx.proxy)
         try:
             emulation = (
                 self.default_profile
@@ -98,6 +106,7 @@ class BasicEngine(BaseEngine):
                 kwargs["proxy"] = Proxy.all(ctx.proxy)
 
             dns_overrides = resolve_dns_overrides(request)
+            self._record_dns(len(dns_overrides))
             dns_key = dns_fingerprint(dns_overrides)
             if dns_key:
                 logger.debug(

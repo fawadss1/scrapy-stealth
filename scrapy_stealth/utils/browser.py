@@ -24,42 +24,45 @@ from .logger import get_logger
 logger = get_logger()
 
 
-def _cleanup_browser_profiles(keep: str | None = None) -> int:
-    """Delete stale ``uc_*`` temp profile dirs; skip *keep* if set."""
-    tmp = tempfile.gettempdir()
-    deleted = errors = 0
-    try:
-        entries = os.scandir(tmp)
-    except OSError as exc:
-        logger.debug("_cleanup_browser_profiles: cannot scan %s: %s", tmp, exc)
-        return 0
+def _cleanup_browser_temp_data() -> None:
+    """Delete stale nodriver ``uc_*`` data in the background.
 
-    with entries:
-        for entry in entries:
-            if not (
-                entry.name.startswith("uc_") and entry.is_dir(follow_symlinks=False)
-            ):
-                continue
-            if keep and os.path.abspath(entry.path) == os.path.abspath(keep):
-                continue
-            try:
-                shutil.rmtree(entry.path, ignore_errors=False)
-                deleted += 1
-                logger.debug("_cleanup_browser_profiles: removed %s", entry.path)
-            except OSError as exc:
-                # Directory is still locked by another Chrome process — skip it.
-                errors += 1
-                logger.debug(
-                    "_cleanup_browser_profiles: could not remove %s: %s",
-                    entry.path,
-                    exc,
-                )
+    Removing the whole directory also removes its cache, cookies, GPU/shader
+    data, logs, and profile files.
+    """
 
-    if deleted or errors:
-        logger.debug(
-            "_cleanup_browser_profiles: deleted=%d skipped_locked=%d", deleted, errors
-        )
-    return deleted
+    def _run() -> None:
+        tmp = tempfile.gettempdir()
+        deleted = errors = 0
+        try:
+            entries = os.scandir(tmp)
+        except OSError as exc:
+            logger.debug("_cleanup_browser_temp_data: cannot scan %s: %s", tmp, exc)
+            return
+
+        with entries:
+            for entry in entries:
+                if not (
+                    entry.name.startswith("uc_") and entry.is_dir(follow_symlinks=False)
+                ):
+                    continue
+                try:
+                    shutil.rmtree(entry.path)
+                    deleted += 1
+                except OSError:
+                    # Still locked by another Chrome process.
+                    errors += 1
+
+        if deleted or errors:
+            logger.debug(
+                "_cleanup_browser_temp_data: deleted=%d skipped_locked=%d",
+                deleted,
+                errors,
+            )
+
+    threading.Thread(
+        target=_run, name="scrapy-stealth-temp-cleanup", daemon=True
+    ).start()
 
 
 _BROWSER_ARGS: list[str] = [

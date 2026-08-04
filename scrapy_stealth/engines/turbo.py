@@ -42,6 +42,10 @@ class TurboEngine(BaseEngine):
         )
         self._bans = BanStreakTracker()
 
+    @property
+    def driver_name(self) -> str:
+        return "turbo"
+
     @staticmethod
     def _make_session(key: _TurboSessionKey) -> Session:
         impersonate, resolve_entries = key
@@ -57,7 +61,9 @@ class TurboEngine(BaseEngine):
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
-        if not self._bans.record(banned):
+        should_recycle = self._bans.record(banned)
+        self._record_response(response, banned)
+        if not should_recycle:
             return
         profile, proxy = self._recycle_identity(current_proxy=current_proxy)
         console.info(
@@ -67,9 +73,11 @@ class TurboEngine(BaseEngine):
         )
         self._bans.acknowledge_restart()
         self._sessions.clear_all()
+        self._record_recycle(profile, proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
+        self._record_request_identity(ctx.profile, ctx.proxy)
         try:
             browser = resolve_browser(ctx.profile, backend="turbo")
 
@@ -92,6 +100,7 @@ class TurboEngine(BaseEngine):
                 kwargs["proxies"] = {"http": ctx.proxy, "https": ctx.proxy}
 
             dns_overrides = resolve_dns_overrides(request)
+            self._record_dns(len(dns_overrides))
             resolve_entries = tuple(build_curl_resolve(dns_overrides, request.url))
             if resolve_entries:
                 logger.debug(

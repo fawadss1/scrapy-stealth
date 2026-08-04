@@ -26,7 +26,7 @@ from ..utils.browser import (
     ProxyRelay,
     _block_static_assets,
     _cdp_snapshot,
-    _cleanup_browser_profiles,
+    _cleanup_browser_temp_data,
     _ensure_xvfb,
     _is_browser_crash,
     _make_loop,
@@ -136,6 +136,10 @@ class BrowserEngine(BaseEngine):
         # DNS overrides applied on the *next* Chrome launch (config + per-request).
         self._dns_overrides: dict[str, str] = {}
         self._launched_dns: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def driver_name(self) -> str:
+        return "browser"
 
     def _build_args(
         self,
@@ -342,28 +346,22 @@ class BrowserEngine(BaseEngine):
     def close(self) -> None:
         if self._loop is None:
             return
+        loop, thread = self._loop, self._thread
+        self._loop = self._thread = None
         with contextlib.suppress(Exception):
-            asyncio.run_coroutine_threadsafe(self._shutdown(), self._loop).result(
-                timeout=10
-            )
-        _stop_loop(self._loop, self._thread)
+            asyncio.run_coroutine_threadsafe(self._shutdown(), loop).result(timeout=3)
+        _stop_loop(loop, thread, timeout=2.0)
 
     def _track_fetch_task(self, task: asyncio.Task[Any]) -> None:
         self._fetch_tasks.add(task)
 
     async def _drain_loop_tasks(self) -> None:
-        """Cancel and await every pending task on this loop before teardown."""
         current = asyncio.current_task()
-        pending = [
-            task
-            for task in asyncio.all_tasks()
-            if task is not current and not task.done()
-        ]
+        pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
         for task in pending:
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
-            # Flush timer/callback wakeups (notably asyncio.sleep on Windows).
             await asyncio.sleep(0)
 
     @staticmethod
@@ -384,15 +382,17 @@ class BrowserEngine(BaseEngine):
         return "websockets" in getattr(type(exc), "__module__", "")
 
     async def _shutdown(self) -> None:
+        if self._browser is not None:
+            with contextlib.suppress(Exception):
+                self._browser.stop()
+            self._browser = None
+            _cleanup_browser_temp_data()
         await self._drain_loop_tasks()
         if self._relay_server is not None:
-            await self._relay_server.await_closed()
+            with contextlib.suppress(Exception):
+                await self._relay_server.await_closed()
             self._relay_server = None
             self._relay_port = None
-        if self._browser is not None:
-            self._browser.stop()
-            self._browser = None
-            _cleanup_browser_profiles()
 
     def _reset_browser(
         self,
@@ -405,29 +405,25 @@ class BrowserEngine(BaseEngine):
             try:
                 if dead_browser is not None and self._browser is not dead_browser:
                     return
-                # Drain in-flight work (fetches, _smart_wait sleeps, nodriver I/O)
-                # before killing Chrome so tasks are not orphaned on loop close.
-                if self._loop is not None:
-                    with contextlib.suppress(Exception):
-                        asyncio.run_coroutine_threadsafe(
-                            self._drain_loop_tasks(), self._loop
-                        ).result(timeout=10)
-
                 if self._browser is not None:
                     with contextlib.suppress(Exception):
                         self._browser.stop()
                     self._browser = None
-                    _cleanup_browser_profiles()
+                    _cleanup_browser_temp_data()
                 self._tab_sem = None
                 self._launched_dns = ()
 
-                # Tear down the old relay — must happen on the old loop while it
-                # is still running so await_closed() can cancel/await handle tasks.
+                if self._loop is not None:
+                    with contextlib.suppress(Exception):
+                        asyncio.run_coroutine_threadsafe(
+                            self._drain_loop_tasks(), self._loop
+                        ).result(timeout=3)
+
                 if self._relay_server is not None and self._loop is not None:
                     with contextlib.suppress(Exception):
                         asyncio.run_coroutine_threadsafe(
                             self._relay_server.await_closed(), self._loop
-                        ).result(timeout=5)
+                        ).result(timeout=2)
                     self._relay_server = None
                     self._relay_port = None
 
@@ -520,14 +516,19 @@ class BrowserEngine(BaseEngine):
         self, headless: bool, proxy: str | None, response: Response | None
     ) -> None:
         """Restart Chrome once BanStreakTracker reports N consecutive bans."""
-        with self._lock:
-            if self._restarting:
-                return
-
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
-        if not self._bans.record(banned):
+        with self._lock:
+            if self._restarting:
+                # Restart logic ignores in-flight results, but stats still count
+                # every completed browser response.
+                self._record_response(response, banned)
+                return
+
+        should_recycle = self._bans.record(banned)
+        self._record_response(response, banned)
+        if not should_recycle:
             return
 
         with self._lock:
@@ -545,9 +546,11 @@ class BrowserEngine(BaseEngine):
             self._default_proxy = proxy
         new_proxy = self._rotate_default_proxy()
         self._reset_browser(headless, self._browser, proxy=proxy or new_proxy)
+        self._record_recycle(self._default_profile, proxy or new_proxy)
 
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
+        self._record_request_identity(ctx.profile, ctx.proxy)
         try:
             headless: bool = _get_meta_data(
                 request, "headless", config.get("BROWSER_HEADLESS")
@@ -576,6 +579,7 @@ class BrowserEngine(BaseEngine):
             status: int = 200
             shot: bytes | None = None
             self._dns_overrides = dict(resolve_dns_overrides(request))
+            self._record_dns(len(self._dns_overrides))
 
             for attempt in range(5):
                 task: asyncio.Task[Any] | None = None

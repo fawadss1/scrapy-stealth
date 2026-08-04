@@ -17,6 +17,7 @@ from scrapy.http import Request, Response
 
 from ..config import config
 from ..utils.meta import _get_meta_data
+from ..utils.stats import StealthStats
 
 _T = TypeVar("_T")
 
@@ -56,7 +57,45 @@ class BaseEngine(ABC):
         self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
         self._default_proxy: str | None = None
         self.timeout: int = timeout or config.get("DEFAULT_TIMEOUT")
+        self._stealth_stats = StealthStats()
         self.seed_proxy_from_config()
+
+    @property
+    def driver_name(self) -> str:
+        """Stealth driver label used in Scrapy stats keys."""
+        return "stealth"
+
+    def set_stats(self, stats: Any | None) -> None:
+        """Attach Scrapy's stats collector (or ``None`` to disable)."""
+        self._stealth_stats = StealthStats(stats)
+
+    def close(self) -> None:
+        """Release engine resources. Override when the engine holds state."""
+
+    def _record_identity(self, profile: str | None, proxy: str | None) -> None:
+        self._stealth_stats.set("stealth/driver", self.driver_name)
+        self._stealth_stats.set_profile(profile)
+        self._stealth_stats.set_proxy(proxy)
+
+    def _record_request_identity(self, profile: str | None, proxy: str | None) -> None:
+        self._record_identity(profile, proxy)
+        if proxy:
+            self._stealth_stats.record_proxy_request(self.driver_name)
+
+    def _record_response(self, response: Response | None, banned: bool) -> None:
+        if response is None:
+            return
+        streak = getattr(self, "_bans", None)
+        current_streak = streak.streak if streak is not None else 0
+        self._stealth_stats.record_response(self.driver_name, response.status, banned)
+        self._stealth_stats.record_ban(self.driver_name, current_streak, banned)
+
+    def _record_dns(self, host_count: int) -> None:
+        self._stealth_stats.record_dns(self.driver_name, host_count)
+
+    def _record_recycle(self, profile: str | None, proxy: str | None) -> None:
+        self._stealth_stats.record_recycle(self.driver_name)
+        self._record_identity(profile, proxy)
 
     async def fetch(self, request: Request, spider: Any) -> Response | None:
         """
