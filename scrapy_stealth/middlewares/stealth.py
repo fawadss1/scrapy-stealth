@@ -11,6 +11,7 @@ from ..manager import EngineManager
 from ..strategies.proxy import ProxyRotator
 from ..utils.console import console
 from ..utils.dns import validate_dns_overrides
+from ..utils.fallback import FALLBACK_DRIVER, mark_fallback_done, should_driver_fallback
 from ..utils.logger import get_logger
 from ..utils.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
 from ..utils.stats import StealthStats
@@ -63,6 +64,10 @@ class StealthDownloaderMiddleware:
         )
         if driver := settings.get("STEALTH_DRIVER"):
             config.STEALTH_DRIVER = driver
+        if settings.get("STEALTH_AUTO_FALLBACK") is not None:
+            config.STEALTH_AUTO_FALLBACK = settings.getbool(
+                "STEALTH_AUTO_FALLBACK", False
+            )
         if (no_sandbox := settings.get("BROWSER_NO_SANDBOX")) is not None:
             config.BROWSER_NO_SANDBOX = no_sandbox
         if (executable_path := settings.get("BROWSER_EXECUTABLE_PATH")) is not None:
@@ -111,4 +116,33 @@ class StealthDownloaderMiddleware:
                 f"{(driver or config.get('STEALTH_DRIVER'))!r}. Snapshot will be ignored."
             )
 
-        return await engine.fetch(request, self._spider)
+        response = await engine.fetch(request, self._spider)
+        if engine_name != "stealth" or response is None:
+            return response
+
+        primary_driver = getattr(engine, "driver_name", None)
+        if not isinstance(primary_driver, str):
+            primary_driver = config.get("STEALTH_DRIVER") or "basic"
+
+        if not should_driver_fallback(response, primary_driver, request):
+            return response
+
+        console.info(
+            f"Driver fallback {primary_driver!r} -> {FALLBACK_DRIVER!r} "
+            f"for {request.url!r} after HTTP {response.status}"
+        )
+        mark_fallback_done(request, primary_driver)
+        self._stealth_stats.record_fallback(primary_driver, FALLBACK_DRIVER)
+        self._stealth_stats.record_request(FALLBACK_DRIVER)
+
+        fallback_engine = self.manager.get(engine_name, FALLBACK_DRIVER)
+        try:
+            fallback_response = await fallback_engine.fetch(request, self._spider)
+        except Exception as exc:
+            console.warning(
+                f"Driver fallback {primary_driver!r} -> {FALLBACK_DRIVER!r} "
+                f"failed for {request.url!r}: {exc}"
+            )
+            return response
+
+        return fallback_response if fallback_response is not None else response

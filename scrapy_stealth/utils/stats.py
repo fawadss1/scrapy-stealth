@@ -86,3 +86,8 @@ class StealthStats:
     def record_recycle(self, driver: str) -> None:
         self.inc("stealth/recycles")
         self.inc(f"stealth/recycles/{driver}")
+
+    def record_fallback(self, from_driver: str, to_driver: str) -> None:
+        self.inc("stealth/fallbacks")
+        self.inc(f"stealth/fallbacks/{from_driver}")
+        self.set("stealth/fallback_driver", to_driver)
