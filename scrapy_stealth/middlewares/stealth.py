@@ -82,7 +82,14 @@ class StealthDownloaderMiddleware:
             )
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
-    async def process_request(self, request: Request, spider: Any) -> Response | None:
+    @property
+    def _spider(self) -> Any:
+        """Active spider from the crawler saved in ``from_crawler``."""
+        if self._crawler is None:
+            return None
+        return getattr(self._crawler, "spider", None)
+
+    async def process_request(self, request: Request) -> Response | None:
         if self._stealth_enabled and STEALTH_KEY not in request.meta:
             request.meta[STEALTH_KEY] = {}
 
@@ -104,4 +111,4 @@ class StealthDownloaderMiddleware:
                 f"{(driver or config.get('STEALTH_DRIVER'))!r}. Snapshot will be ignored."
             )
 
-        return await engine.fetch(request, spider)
+        return await engine.fetch(request, self._spider)
