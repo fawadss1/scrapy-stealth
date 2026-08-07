@@ -119,10 +119,64 @@ class TestStealthDownloaderMiddleware:
         request = Request("https://example.com", meta={"stealth": {}})
         with patch.object(middleware.manager, "get") as mock_get:
             mock_engine = MagicMock()
+            mock_engine.driver_name = "basic"
             mock_engine.fetch = AsyncMock(return_value=response)
             mock_get.return_value = mock_engine
             result = asyncio.run(middleware.process_request(request))
         assert result is response
+
+    def test_driver_fallback_on_js_challenge(self, spider):
+        crawler = MagicMock()
+        challenge = _make_html_response(
+            body=b"<html>Just a moment... cf-browser-verification</html>"
+        )
+        browser_ok = _make_html_response(body=b"<html><body>ok</body></html>")
+        primary = MagicMock()
+        primary.driver_name = "basic"
+        primary.fetch = AsyncMock(return_value=challenge)
+        fallback = MagicMock()
+        fallback.driver_name = "browser"
+        fallback.fetch = AsyncMock(return_value=browser_ok)
+
+        with patch("scrapy_stealth.engines.basic.Client"):
+            middleware = StealthDownloaderMiddleware(crawler=crawler)
+        request = Request("https://example.com", meta={"stealth": {"driver": "auto"}})
+        original_auto = config.STEALTH_AUTO_FALLBACK
+        try:
+            config.STEALTH_AUTO_FALLBACK = True
+            with patch.object(
+                middleware.manager, "get", side_effect=[primary, fallback]
+            ):
+                result = asyncio.run(middleware.process_request(request))
+        finally:
+            config.STEALTH_AUTO_FALLBACK = original_auto
+
+        assert result is browser_ok
+        assert request.meta["stealth"]["_driver_fallback_done"] is True
+        assert request.meta["stealth"]["fallback_from"] == "basic"
+        assert request.meta["stealth"]["headless"] is False
+        crawler.stats.inc_value.assert_any_call("stealth/fallbacks", 1)
+        crawler.stats.inc_value.assert_any_call("stealth/fallbacks/basic", 1)
+        fallback.fetch.assert_awaited_once()
+
+    def test_no_driver_fallback_when_disabled(self, middleware, spider):
+        challenge = _make_html_response(
+            body=b"<html>Just a moment... cf-browser-verification</html>"
+        )
+        request = Request("https://example.com", meta={"stealth": {}})
+        original_auto = config.STEALTH_AUTO_FALLBACK
+        try:
+            config.STEALTH_AUTO_FALLBACK = False
+            with patch.object(middleware.manager, "get") as mock_get:
+                mock_engine = MagicMock()
+                mock_engine.driver_name = "basic"
+                mock_engine.fetch = AsyncMock(return_value=challenge)
+                mock_get.return_value = mock_engine
+                result = asyncio.run(middleware.process_request(request))
+        finally:
+            config.STEALTH_AUTO_FALLBACK = original_auto
+        assert result is challenge
+        mock_get.assert_called_once()
 
     def test_process_request_is_coroutine(self, middleware, spider):
         import inspect
