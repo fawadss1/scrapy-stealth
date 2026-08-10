@@ -53,6 +53,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 | Proxy rotation (built-in)    |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Fingerprint rotation         |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Anti-bot detection           |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Smart browser selection      |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Smart retry logic            |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Per-request engine switching |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Headless browser required    |       ✅       |         ❌         |        ✅         |      ✅       |        ❌        |
@@ -76,6 +77,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🧬 Browser fingerprint rotation
 * 🔁 Smart retry logic
 * 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
+* 🧠 **Smart browser selection** — start with fast `basic` / `turbo`, auto-retry once with visible Chrome when a JS challenge or ban is detected
 * ⚡ Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
 * 🔄 Intelligent session recycle — after consecutive bans, browser restarts Chrome; basic/turbo clear HTTP sessions
@@ -108,7 +110,8 @@ DOWNLOADER_MIDDLEWARES = {
 
 # 2. (Optional) Route ALL requests through stealth automatically — no meta needed per request
 STEALTH_ENABLED = True
-STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", or "browser"
+STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", "browser", or "auto"
+STEALTH_AUTO_FALLBACK = True  # retry basic/turbo JS challenges once with browser (headless=False)
 
 # 3. (Optional) Proxy list — seeded as engine default; rotated on ban-streak session recycle
 #    Supported schemes: http, https, socks4, socks5
@@ -141,6 +144,7 @@ class MySpider(scrapy.Spider):
         },
         "STEALTH_ENABLED": True,
         "STEALTH_DRIVER": "turbo",
+        "STEALTH_AUTO_FALLBACK": True,
         "STEALTH_PROXIES": [
             "http://proxy1:8080",
             "http://user:pass@proxy2:8080",
@@ -174,6 +178,7 @@ yield scrapy.Request(
 # settings.py or custom_settings
 STEALTH_ENABLED = True
 STEALTH_DRIVER = "turbo"
+STEALTH_AUTO_FALLBACK = True  # optional: basic/turbo -> browser on JS challenge
 ```
 
 ```python
@@ -183,6 +188,25 @@ yield scrapy.Request(url="https://example.com")
 # Opt out for a specific request
 yield scrapy.Request(url="https://api.internal/health", meta={"stealth": False})
 ```
+
+**Option C — Smart browser selection** (fast HTTP first, Chrome only when needed):
+
+```python
+# settings.py or custom_settings — enable fallback for all stealth requests
+STEALTH_ENABLED = True
+STEALTH_DRIVER = "turbo"  # primary: fast HTTP driver
+STEALTH_AUTO_FALLBACK = True  # retry once with browser (headless=False) on JS challenge / ban
+```
+
+```python
+# Or per-request — same behaviour without a global setting
+yield scrapy.Request(
+    url="https://example.com",
+    meta={"stealth": {"driver": "auto"}},
+)
+```
+
+See [Smart browser selection](#-smart-browser-selection) for full details.
 
 ---
 
@@ -200,7 +224,8 @@ from scrapy_stealth.config import config
 config.DEFAULT_ENGINE = "stealth"  # "scrapy" (native) or "stealth" (browser impersonation)
 config.DEFAULT_PROFILE = "chrome_147"  # browser profile when meta["stealth"]["profile"] is not set
 config.DEFAULT_TIMEOUT = 30  # stealth request timeout in seconds
-config.STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", or "browser"
+config.STEALTH_DRIVER = "turbo"  # "basic" (default), "turbo", "browser", or "auto"
+config.STEALTH_AUTO_FALLBACK = True  # basic/turbo -> browser on JS challenge (headless=False)
 config.HTTP2 = True  # False for servers that only support HTTP/1.1
 config.BLOCK_CODES |= {407}  # extend blocked status codes (|= keeps defaults)
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
@@ -238,7 +263,8 @@ config.get("MISSING_KEY", "default")  # "default"
 | `DEFAULT_ENGINE`              | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                                                                                                                                                                                                                  |
 | `DEFAULT_PROFILE`             | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                                                                                                                                                                                                               |
 | `DEFAULT_TIMEOUT`             | `int`            | `30`                              | Request timeout in seconds                                                                                                                                                                                                                                                                                |
-| `STEALTH_DRIVER`              | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, or `"browser"`. Also readable from Scrapy settings as `STEALTH_DRIVER`                                                                                                                                                                                              |
+| `STEALTH_DRIVER`              | `str`            | `"basic"`                         | Default driver: `"basic"`, `"turbo"`, `"browser"`, or `"auto"`. Also readable from Scrapy settings as `STEALTH_DRIVER`                                                                                                                                                                                    |
+| `STEALTH_AUTO_FALLBACK`       | `bool`           | `False`                           | **Smart browser selection:** when `True`, `basic` / `turbo` responses that look like a JS challenge or session ban are retried once with `browser` in visible mode (`headless=False`). Per-request equivalent: `meta["stealth"]["driver"] = "auto"`                                                       |
 | `HTTP2`                       | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                                                                                                                                                                                                                       |
 | `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                                                                                                                                                                                                                      |
 | `BLOCK_KEYWORDS`              | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                                                                                                                                                                     |
@@ -282,18 +308,19 @@ yield scrapy.Request(
 )
 ```
 
-| Key                   | Type            | Description                                                                                                                                                                                               |
-|-----------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `driver`              | `str`           | `"basic"`, `"turbo"`, or `"browser"` — overrides `config.STEALTH_DRIVER` per-request                                                                                                                      |
-| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`). Omit to use engine default; default rotates on ban-streak session recycle                                                                   |
-| `proxy`               | `str`           | Explicit proxy URL. Omit to use `STEALTH_PROXIES` default; default rotates on ban-streak session recycle                                                                                                  |
-| `dns`                 | `str` or `dict` | Pin DNS: bare IP for this request's hostname, or `{host: ip}` mapping. Merges over `STEALTH_DNS_OVERRIDES`. Works with `basic`/`turbo` per-request; `browser` uses global overrides at Chrome launch only |
-| `stealth_timeout`     | `int`           | Per-request timeout in seconds (overrides default 30s)                                                                                                                                                    |
-| `http2`               | `bool`          | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request)                                                                                                                           |
-| `headless`            | `bool`          | Browser driver only: `True` = headless, `False` = visible window (more stealthy)                                                                                                                          |
-| `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                              |
-| `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                           |
-| `static_assets_block` | `bool`          | Browser driver only: block images, fonts, CSS, and media for this request (overrides `config.BROWSER_STATIC_ASSETS_BLOCK`). Ignored — always unblocked — when `snapshot` is `True`                        |
+| Key                   | Type            | Description                                                                                                                                                                                                                                           |
+|-----------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `driver`              | `str`           | `"basic"`, `"turbo"`, `"browser"`, or `"auto"` — `"auto"` enables smart browser selection for this request (HTTP first, then browser on challenge/ban). Requires `STEALTH_AUTO_FALLBACK = True` globally, or use `"auto"` alone to opt in per-request |
+| `fallback`            | `bool`          | Set to `False` to opt out of auto-fallback for this request (when `STEALTH_AUTO_FALLBACK` or `driver="auto"` is active)                                                                                                                               |
+| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`). Omit to use engine default; default rotates on ban-streak session recycle                                                                                                               |
+| `proxy`               | `str`           | Explicit proxy URL. Omit to use `STEALTH_PROXIES` default; default rotates on ban-streak session recycle                                                                                                                                              |
+| `dns`                 | `str` or `dict` | Pin DNS: bare IP for this request's hostname, or `{host: ip}` mapping. Merges over `STEALTH_DNS_OVERRIDES`. Works with `basic`/`turbo` per-request; `browser` uses global overrides at Chrome launch only                                             |
+| `stealth_timeout`     | `int`           | Per-request timeout in seconds (overrides default 30s)                                                                                                                                                                                                |
+| `http2`               | `bool`          | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request)                                                                                                                                                                       |
+| `headless`            | `bool`          | Browser driver only: `True` = headless, `False` = visible window (more stealthy)                                                                                                                                                                      |
+| `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                                                                          |
+| `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                                                                       |
+| `static_assets_block` | `bool`          | Browser driver only: block images, fonts, CSS, and media for this request (overrides `config.BROWSER_STATIC_ASSETS_BLOCK`). Ignored — always unblocked — when `snapshot` is `True`                                                                    |
 
 ---
 
@@ -330,6 +357,56 @@ relay with `--proxy-server`; when the DNS map changes, the browser restarts so t
 rebuilt. Do not put DNS-pinned hosts on `BROWSER_PROXY_BYPASS_LIST` or they will skip the relay.
 With an HTTP proxy on `basic`/`turbo`, DNS is often resolved by the proxy — prefer direct
 connections or SOCKS when using overrides.
+
+## 🧠 Smart browser selection
+
+Pick the right driver automatically: stay on fast HTTP impersonation (`basic` / `turbo`) for normal
+pages, and escalate to real Chrome only when the response looks like a JS challenge or session ban
+(403/429/503, Cloudflare “Just a moment”, Akamai, DataDome, and similar signals).
+
+| Phase | Driver                       | When                                            |
+|-------|------------------------------|-------------------------------------------------|
+| 1     | `basic` or `turbo`           | Default — low memory, high throughput           |
+| 2     | `browser` (`headless=False`) | One retry when phase 1 is blocked or challenged |
+
+The fallback always opens a **visible Chrome window** (`headless=False`) for better evasion —
+regardless of `BROWSER_HEADLESS` or any prior `meta["stealth"]["headless"]` value.
+
+**Global (`settings.py` / `custom_settings`):**
+
+```python
+STEALTH_ENABLED = True
+STEALTH_DRIVER = "turbo"  # or "basic" — primary HTTP driver
+STEALTH_AUTO_FALLBACK = True  # off by default; set True to enable smart selection globally
+```
+
+**Per-request** (no global setting — equivalent to enabling fallback for that URL only):
+
+```python
+yield scrapy.Request(
+    url,
+    meta={"stealth": {"driver": "auto"}},  # primary = STEALTH_DRIVER, else basic
+)
+```
+
+**Always use browser** (skip phase 1):
+
+```python
+meta={"stealth": {"driver": "browser"}}
+```
+
+**Opt out** for one request:
+
+```python
+meta={"stealth": {"driver": "auto", "fallback": False}}
+# or globally: STEALTH_AUTO_FALLBACK = False
+```
+
+Each request is retried at most once. If the browser fetch fails, the original `basic` / `turbo`
+response is returned. Console output and stats (`stealth/fallbacks`, `stealth/requests/browser`)
+show when escalation happened.
+
+---
 
 ## 🖥️ Browser Engine
 
