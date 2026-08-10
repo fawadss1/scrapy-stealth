@@ -3,7 +3,7 @@ from __future__ import annotations
 from scrapy.http import Request, Response
 
 from ..detectors.antibot import AntiBotDetector
-from ..utils.retry import build_retry
+from ..utils.engine.retry import build_retry
 
 
 class RetryHandler:

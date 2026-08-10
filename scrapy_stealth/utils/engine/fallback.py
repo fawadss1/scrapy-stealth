@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from scrapy.http import Request, Response
 
-from ..config import config
-from .antibot import is_browser_session_ban, is_js_challenge
-from .meta import STEALTH_KEY, _get_meta_data, _stealth_meta
+from ...config import config
+from ..core.meta import STEALTH_KEY, _get_meta_data, _stealth_meta
+from ..detection.antibot import is_browser_session_ban, is_js_challenge
 
 _HTTP_DRIVERS = frozenset({"basic", "turbo"})
 FALLBACK_DRIVER = "browser"

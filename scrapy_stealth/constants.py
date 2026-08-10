@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .utils.meta_info import _pkg_meta
+from .utils.core.meta_info import _pkg_meta
 
 # HTTP status codes that indicate an anti-bot block or rate-limit.
 # Used by both the retry logic and the anti-bot detector.

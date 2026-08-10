@@ -7,7 +7,7 @@ from typing import Any
 
 from packaging.version import Version
 
-from .meta_info import _pkg_meta
+from ..core.meta_info import _pkg_meta
 
 _lock = threading.Lock()
 _update_check_started = False
@@ -64,7 +64,7 @@ def get_update_url(
 
 
 def _notify_if_update_available() -> None:
-    from .console import console
+    from ..core.console import console
 
     if url := get_update_url():
         console.info(

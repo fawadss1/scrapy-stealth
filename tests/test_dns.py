@@ -4,7 +4,7 @@ import pytest
 from scrapy.http import Request
 
 from scrapy_stealth.config import config
-from scrapy_stealth.utils.dns import (
+from scrapy_stealth.utils.network.dns import (
     build_chrome_host_resolver_args,
     build_curl_resolve,
     build_wreq_dns_options,

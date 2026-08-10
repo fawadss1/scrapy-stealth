@@ -6,8 +6,8 @@ from urllib.parse import urlparse
 
 from scrapy.http import Request
 
-from ..config import config
-from .meta import _get_meta_data
+from ...config import config
+from ..core.meta import _get_meta_data
 
 DnsOverrides = dict[str, str]
 

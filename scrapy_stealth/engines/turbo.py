@@ -15,13 +15,13 @@ except ImportError as exc:
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
-from ..utils.console import console
-from ..utils.dns import build_curl_resolve, resolve_dns_overrides
-from ..utils.headers import _FINGERPRINT_KEYS
-from ..utils.logger import get_logger
-from ..utils.profiles import resolve_browser
-from ..utils.response import StealthResponse
-from ..utils.session import BanStreakTracker, SessionCache
+from ..utils.browser.session import BanStreakTracker, SessionCache
+from ..utils.core.console import console
+from ..utils.core.logger import get_logger
+from ..utils.core.response import StealthResponse
+from ..utils.engine.profiles import resolve_browser
+from ..utils.network.dns import build_curl_resolve, resolve_dns_overrides
+from ..utils.network.headers import _FINGERPRINT_KEYS
 from .base import BaseEngine
 
 logger = get_logger()

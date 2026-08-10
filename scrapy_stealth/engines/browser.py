@@ -39,17 +39,17 @@ from ..utils.browser import (
     _stop_loop,
     _wait_for_status,
 )
-from ..utils.console import console
-from ..utils.dns import (
+from ..utils.browser.patch import patch_nodriver
+from ..utils.browser.session import BanStreakTracker
+from ..utils.core.console import console
+from ..utils.core.logger import get_logger
+from ..utils.core.meta import _get_meta_data
+from ..utils.core.response import StealthResponse
+from ..utils.network.dns import (
     dns_fingerprint,
     resolve_dns_overrides,
     validate_dns_overrides,
 )
-from ..utils.logger import get_logger
-from ..utils.meta import _get_meta_data
-from ..utils.patch import patch_nodriver
-from ..utils.response import StealthResponse
-from ..utils.session import BanStreakTracker
 from .base import BaseEngine
 
 patch_nodriver()

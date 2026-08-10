@@ -4,7 +4,7 @@ import functools
 import os
 from typing import Any, Callable
 
-from ..utils.console import console
+from ..utils.core.console import console
 
 
 def snapshot(fn: Callable | None = None, *, path: str | Callable | None = None) -> Any:

@@ -50,7 +50,7 @@ from .middlewares.stealth import StealthDownloaderMiddleware
 from .strategies.fingerprint import ProfileRotator
 from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
-from .utils.meta_info import _pkg_meta
+from .utils.core.meta_info import _pkg_meta
 
 __version__: str = _pkg_meta.version
 __author__: str = _pkg_meta.author

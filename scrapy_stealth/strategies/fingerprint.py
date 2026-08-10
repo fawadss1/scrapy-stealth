@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from ..utils.fingerprints import POOL, WEIGHTS
+from ..utils.browser.fingerprints import POOL, WEIGHTS
 
 FINGERPRINTS: list[str] = POOL
 

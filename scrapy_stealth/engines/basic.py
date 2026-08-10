@@ -16,17 +16,17 @@ except ImportError as exc:
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
-from ..utils.console import console
-from ..utils.dns import (
+from ..utils.browser.session import BanStreakTracker, SessionCache
+from ..utils.core.console import console
+from ..utils.core.logger import get_logger
+from ..utils.core.response import StealthResponse
+from ..utils.engine.profiles import resolve_browser
+from ..utils.network.dns import (
     build_wreq_dns_options,
     dns_fingerprint,
     resolve_dns_overrides,
 )
-from ..utils.headers import get_default_headers, merge_headers
-from ..utils.logger import get_logger
-from ..utils.profiles import resolve_browser
-from ..utils.response import StealthResponse
-from ..utils.session import BanStreakTracker, SessionCache
+from ..utils.network.headers import get_default_headers, merge_headers
 from .base import BaseEngine
 
 logger = get_logger()

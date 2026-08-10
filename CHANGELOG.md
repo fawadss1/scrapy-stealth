@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+* **Utils package layout**
+  Reorganised `scrapy_stealth.utils` into subpackages: `core`, `detection`,
+  `network`, `browser`, `engine`, and `telemetry`. Import paths updated
+  (e.g. `scrapy_stealth.utils.core.meta`, `scrapy_stealth.utils.network.proxy`).
+
+---
+
 ## [0.6.12] - 2026-08-10
 
 ### Changed

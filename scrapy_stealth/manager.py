@@ -7,8 +7,8 @@ from .engines.basic import BasicEngine
 from .engines.browser import BrowserEngine
 from .engines.scrapy import ScrapyEngine
 from .engines.turbo import TurboEngine
-from .utils.console import console
-from .utils.fallback import resolve_primary_driver
+from .utils.core.console import console
+from .utils.engine.fallback import resolve_primary_driver
 
 _STEALTH_DRIVERS: dict[str, type[BaseEngine]] = {
     "basic": BasicEngine,

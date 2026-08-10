@@ -1,4 +1,4 @@
-from scrapy_stealth.utils.headers import get_default_headers, merge_headers
+from scrapy_stealth.utils.network.headers import get_default_headers, merge_headers
 
 # ---------------------------------------------------------------------------
 # get_default_headers

@@ -9,13 +9,17 @@ from ..config import config
 from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
 from ..strategies.proxy import ProxyRotator
-from ..utils.console import console
-from ..utils.dns import validate_dns_overrides
-from ..utils.fallback import FALLBACK_DRIVER, mark_fallback_done, should_driver_fallback
-from ..utils.logger import get_logger
-from ..utils.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
-from ..utils.stats import StealthStats
-from ..utils.updates import update_available
+from ..utils.core.console import console
+from ..utils.core.logger import get_logger
+from ..utils.core.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
+from ..utils.engine.fallback import (
+    FALLBACK_DRIVER,
+    mark_fallback_done,
+    should_driver_fallback,
+)
+from ..utils.network.dns import validate_dns_overrides
+from ..utils.telemetry.stats import StealthStats
+from ..utils.telemetry.updates import update_available
 
 logger = get_logger()
 

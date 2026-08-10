@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..utils.proxy import pick, validate_proxies
+from ..utils.network.proxy import pick, validate_proxies
 
 
 class ProxyRotator:

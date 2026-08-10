@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..config import config
+from ...config import config
 
 # Signatures that identify JS-only challenge pages (Akamai, Cloudflare, DataDome, etc.)
 _JS_CHALLENGE_SIGS: tuple[str, ...] = (
@@ -14,7 +14,7 @@ _JS_CHALLENGE_SIGS: tuple[str, ...] = (
     "location.reload(true)",  # generic JS reload challenge
 )
 
-# Matches _CONTENT_SHORT_THRESHOLD in utils/browser.py — pages shorter than this
+# Matches _CONTENT_SHORT_THRESHOLD in utils/browser/_core.py — pages shorter than this
 # with anti-bot markers are treated as challenge stubs, not real content.
 _BROWSER_SHORT_BODY = 2500
 

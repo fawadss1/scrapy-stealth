@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import threading
 
-from ..constants import LOGGER_NAME
+from ...constants import LOGGER_NAME
 
 _SYMBOLS: dict[str, str] = {
     "info": "ℹ️",

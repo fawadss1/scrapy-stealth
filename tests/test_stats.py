@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scrapy_stealth.config import config
-from scrapy_stealth.utils.stats import StealthStats, proxy_host_for_stats
+from scrapy_stealth.utils.telemetry.stats import StealthStats, proxy_host_for_stats
 
 
 class TestProxyHostForStats:

@@ -16,8 +16,8 @@ from typing import (
 from scrapy.http import Request, Response
 
 from ..config import config
-from ..utils.meta import _get_meta_data
-from ..utils.stats import StealthStats
+from ..utils.core.meta import _get_meta_data
+from ..utils.telemetry.stats import StealthStats
 
 _T = TypeVar("_T")
 

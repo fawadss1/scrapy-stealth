@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..exceptions import StealthDependencyError
+from ...exceptions import StealthDependencyError
 
 try:
     from wreq.emulation import Emulation, Profile
@@ -13,8 +13,8 @@ except ImportError as _wreq_err:
     Emulation = None  # type: ignore[assignment]
     Profile = None  # type: ignore[assignment]
 
-from ..config import config
-from .console import console
+from ...config import config
+from ..core.console import console
 
 # Order matters: longer/more-specific prefixes must come before shorter ones.
 _PREFIXES: list[tuple[str, str]] = [

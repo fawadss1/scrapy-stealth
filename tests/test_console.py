@@ -3,7 +3,7 @@ import re
 import pytest
 
 from scrapy_stealth.constants import LOGGER_NAME
-from scrapy_stealth.utils.console import Console, console
+from scrapy_stealth.utils.core.console import Console, console
 
 
 def strip_ansi(text: str) -> str:

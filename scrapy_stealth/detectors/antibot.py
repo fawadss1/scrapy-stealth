@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..utils.antibot import (
+from ..utils.detection.antibot import (
     _JS_CHALLENGE_SIGS,
     is_blocked,
     is_browser_session_ban,

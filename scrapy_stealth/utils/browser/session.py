@@ -66,7 +66,7 @@ class BanStreakTracker:
         Concurrent threads may all see the streak threshold; only the first
         caller gets ``True`` until ``acknowledge_restart()`` completes.
         """
-        from ..config import config
+        from ...config import config
 
         with self._lock:
             if not banned:

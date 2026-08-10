@@ -3,7 +3,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scrapy_stealth.utils import updates
+from scrapy_stealth.utils.telemetry import updates
+
+_IMPL = "scrapy_stealth.utils.telemetry.updates"
 
 
 def _pypi_payload(version: str, project_url: str | None = None) -> dict:
@@ -18,35 +20,33 @@ def _pypi_payload(version: str, project_url: str | None = None) -> dict:
 class TestGetUpdateUrl:
     def test_returns_none_when_current_is_latest(self):
         payload = _pypi_payload("1.0.0")
-        with patch.object(updates, "latest_pypi_release", return_value=payload):
+        with patch(f"{_IMPL}.latest_pypi_release", return_value=payload):
             assert updates.get_update_url("1.0.0") is None
 
     def test_returns_url_when_newer_release_exists(self):
         payload = _pypi_payload("2.0.0")
-        with patch.object(updates, "latest_pypi_release", return_value=payload):
+        with patch(f"{_IMPL}.latest_pypi_release", return_value=payload):
             url = updates.get_update_url("1.0.0")
         assert url == "https://pypi.org/project/scrapy-stealth/2.0.0/"
 
     def test_handles_prerelease_versions(self):
         payload = _pypi_payload("0.7.0")
-        with patch.object(updates, "latest_pypi_release", return_value=payload):
+        with patch(f"{_IMPL}.latest_pypi_release", return_value=payload):
             assert (
                 updates.get_update_url("0.6.10a1")
                 == "https://pypi.org/project/scrapy-stealth/0.7.0/"
             )
 
     def test_silent_fail_on_network_error(self):
-        with patch.object(
-            updates,
-            "latest_pypi_release",
+        with patch(
+            f"{_IMPL}.latest_pypi_release",
             side_effect=OSError("network down"),
         ):
             assert updates.get_update_url("1.0.0") is None
 
     def test_raises_when_silent_fail_disabled(self):
-        with patch.object(
-            updates,
-            "latest_pypi_release",
+        with patch(
+            f"{_IMPL}.latest_pypi_release",
             side_effect=OSError("network down"),
         ):
             with pytest.raises(OSError, match="network down"):
@@ -89,10 +89,8 @@ class TestUpdateAvailable:
             return MagicMock()
 
         with (
-            patch.object(updates, "get_update_url", return_value=None) as mock_check,
-            patch.object(
-                updates.threading, "Thread", side_effect=run_target_immediately
-            ),
+            patch(f"{_IMPL}.get_update_url", return_value=None) as mock_check,
+            patch(f"{_IMPL}.threading.Thread", side_effect=run_target_immediately),
         ):
             updates.update_available()
             updates.update_available()
@@ -101,8 +99,8 @@ class TestUpdateAvailable:
     def test_notifies_when_update_exists(self):
         url = "https://pypi.org/project/scrapy-stealth/9.9.9/"
         with (
-            patch.object(updates, "get_update_url", return_value=url),
-            patch("scrapy_stealth.utils.console.console") as mock_console,
+            patch(f"{_IMPL}.get_update_url", return_value=url),
+            patch("scrapy_stealth.utils.core.console.console") as mock_console,
         ):
             updates._notify_if_update_available()
 

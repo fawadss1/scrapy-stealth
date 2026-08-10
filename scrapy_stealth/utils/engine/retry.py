@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from scrapy.http import Request
 
-from ..config import config
+from ...config import config
 
 
 def is_blocked(response) -> bool:

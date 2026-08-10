@@ -18,9 +18,9 @@ from scrapy_stealth.exceptions import (
     StealthConnectionError,
     StealthTimeoutError,
 )
-from scrapy_stealth.utils.headers import _FINGERPRINT_KEYS
-from scrapy_stealth.utils.profiles import _BROWSER_MAP, resolve_browser
-from scrapy_stealth.utils.response import StealthResponse
+from scrapy_stealth.utils.core.response import StealthResponse
+from scrapy_stealth.utils.engine.profiles import _BROWSER_MAP, resolve_browser
+from scrapy_stealth.utils.network.headers import _FINGERPRINT_KEYS
 
 # ---------------------------------------------------------------------------
 # ScrapyEngine
@@ -1237,7 +1237,7 @@ class TestLoopExceptionHandler:
 
 class TestBanStreakTracker:
     def test_can_restart_again_after_new_ban_streak(self, monkeypatch):
-        from scrapy_stealth.utils.session import BanStreakTracker
+        from scrapy_stealth.utils.browser.session import BanStreakTracker
 
         monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
         monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
@@ -1251,7 +1251,7 @@ class TestBanStreakTracker:
     def test_cooldown_delays_restart_while_bans_continue(self, monkeypatch):
         import time
 
-        from scrapy_stealth.utils.session import BanStreakTracker
+        from scrapy_stealth.utils.browser.session import BanStreakTracker
 
         monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
         monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.5)
@@ -1265,7 +1265,7 @@ class TestBanStreakTracker:
         assert tracker.record(True) is True
 
     def test_streak_kept_until_restart_acknowledged(self, monkeypatch):
-        from scrapy_stealth.utils.session import BanStreakTracker
+        from scrapy_stealth.utils.browser.session import BanStreakTracker
 
         monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
         monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
@@ -1279,7 +1279,7 @@ class TestBanStreakTracker:
         assert tracker.record(True) is False
 
     def test_clean_response_resets_streak(self, monkeypatch):
-        from scrapy_stealth.utils.session import BanStreakTracker
+        from scrapy_stealth.utils.browser.session import BanStreakTracker
 
         monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
         tracker = BanStreakTracker()
