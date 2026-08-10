@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+---
+
+## [0.6.12] - 2026-08-10
+
+### Changed
+
+* **Middleware — drop deprecated `spider` arg from `process_request`**
+  Matches current Scrapy downloader middleware API: the spider is read from the
+  crawler saved in `from_crawler()` (`crawler.spider`) instead of a method
+  argument. Removes the `ScrapyDeprecationWarning` about
+  `StealthDownloaderMiddleware.process_request()`.
+
+### Added
+
+* **Smart browser selection (`STEALTH_AUTO_FALLBACK`, `driver="auto"`)**
+  When `basic` or `turbo` returns a JS challenge or session ban, the middleware
+  retries once with the `browser` driver. The fallback always runs with
+  `headless=False` for better evasion. Opt in globally with
+  `STEALTH_AUTO_FALLBACK = True`, per-request with
+  `meta["stealth"]["driver"] = "auto"`, or opt out with
+  `meta["stealth"]["fallback"] = False`. Fallback counters appear under
+  `stealth/fallbacks` in `crawler.stats`.
+
+---
+
 ## [0.6.11] - 2026-08-04
 
 ### Added
@@ -945,6 +970,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.12]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.12
 
 [0.6.11]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.11
 

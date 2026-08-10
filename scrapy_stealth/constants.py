@@ -35,7 +35,9 @@ LOGGER_NAME = _pkg_meta.name
 # Disable if targeting servers that only support HTTP/1.1.
 HTTP2: bool = True
 
-# Default stealth driver. Options: "basic", "turbo", "browser".
+# Default stealth driver. Options: "basic", "turbo", "browser", or "auto".
+# "auto" starts with basic/turbo (see STEALTH_DRIVER when not "auto", else "basic")
+# and retries once with the browser driver on JS challenge / session ban.
 STEALTH_DRIVER: str = "basic"
 
 # When True, all requests are routed through the stealth engine automatically —
@@ -43,6 +45,12 @@ STEALTH_DRIVER: str = "basic"
 # Set to True in settings.py or spider custom_settings to enable globally.
 # Per-request opt-out: meta={"stealth": False}
 STEALTH_ENABLED: bool = False
+
+# When True, basic/turbo responses that look like a JS challenge or session ban
+# are retried once with the browser driver (headless=False). Off by default —
+# enable globally or per-request with meta["stealth"]["driver"] = "auto".
+# Opt out per-request with meta["stealth"]["fallback"] = False.
+STEALTH_AUTO_FALLBACK: bool = False
 
 # Proxy pool (also loaded from Scrapy settings ``STEALTH_PROXIES``). Used as the
 # engine default proxy and rotated automatically on ban-streak session recycle.
