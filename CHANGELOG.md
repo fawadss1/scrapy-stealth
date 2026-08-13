@@ -11,7 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.6.13] - 2026-08-13
+
 ### Changed
+
+* **NodeMaven sponsor materials**
+  Updated README and `AGENTS.md` with new copy, tracking links (`Fawadss1readmegh`, `Fawadss1agentmdgh`, `Fawadss1tools`), and the new horizontal banner (`docs/static/sponsors/nodemaven-banner.png`).
 
 * **Utils package layout**
   Reorganised `scrapy_stealth.utils` into subpackages: `core`, `detection`,
@@ -981,6 +988,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.13]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.13
 
 [0.6.12]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.12
 
