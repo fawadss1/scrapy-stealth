@@ -30,16 +30,15 @@ See [CHECK.md](CHECK.md) for individual commands.
 
 ## Sponsor
 
-**[NodeMaven](https://go.nodemaven.com/Fawadss1agentmd)** — the most reliable proxy provider with the highest-quality IP on the market.
-Best solution for automation, web scraping, SEO research, and social media management.
+**[NodeMaven](https://go.nodemaven.com/Fawadss1agentmdgh)** — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
 
-**Why NodeMaven?**
+**Why [NodeMaven](https://go.nodemaven.com/Fawadss1agentmdgh)?**
 
 - 99.9% uptime
-- Sticky sessions up to 7 days
+- ZIP Targeting
 - IP filtering: all proxies have fraud score <97%
 - No KYC required
-- Cashback on traffic — burn GB and earn up to 10% back
+- Unique free tools: [Proxy Bandwidth Checker](https://go.nodemaven.com/Fawadss1tools), Meta Tag Checker, IP Lookup, and others
 
 Special codes for scrapy-stealth users:
 

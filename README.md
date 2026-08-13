@@ -24,22 +24,23 @@ designed for large-scale, production-grade crawling.
 
 <table>
   <tr>
-    <td width="380" align="center">
-      <a href="https://go.nodemaven.com/Fawadss1readme">
-        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/nodemaven-banner.svg" alt="NodeMaven" width="380"/>
+    <td colspan="2" align="center">
+      <a href="https://go.nodemaven.com/Fawadss1readmegh">
+        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/nodemaven-banner.png" alt="NodeMaven — Best proxy for web scrapping and automation with the highest quality IP" width="720"/>
       </a>
     </td>
-    <td>
-      <strong><a href="https://go.nodemaven.com/Fawadss1readme">NodeMaven</a></strong> — the most reliable proxy provider with the highest-quality IP on the market.
-      Best solution for automation, web scraping, SEO research, and social media management.
+  </tr>
+  <tr>
+    <td colspan="2">
+      <strong><a href="https://go.nodemaven.com/Fawadss1readmegh">NodeMaven</a></strong> — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
       <br/><br/>
-      <strong>Why NodeMaven?</strong>
+      <strong>Why <a href="https://go.nodemaven.com/Fawadss1readmegh">NodeMaven</a>?</strong>
       <ul>
         <li>99.9% uptime</li>
-        <li>Sticky sessions up to 7 days</li>
+        <li>ZIP Targeting</li>
         <li>IP filtering: all proxies have fraud score &lt;97%</li>
         <li>No KYC required</li>
-        <li>Cashback on traffic — burn GB and earn up to 10% back</li>
+        <li>Unique free tools: <a href="https://go.nodemaven.com/Fawadss1tools">Proxy Bandwidth Checker</a>, Meta Tag Checker, IP Lookup, and others</li>
       </ul>
       Special codes for scrapy-stealth users:
       <code>SCRAPYSTEALTH35</code> — 35% off Mobile and Residential Proxies;
