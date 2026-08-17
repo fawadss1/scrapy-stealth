@@ -45,10 +45,10 @@ class EngineManager:
         if engine_name == "stealth":
             resolved = resolve_primary_driver(driver) or config.get("STEALTH_DRIVER")
             if resolved == "auto":
-                resolved = "basic"
+                resolved = "turbo"
             if resolved not in self._stealth:
                 default = (
-                    _DEFAULT_DRIVER if _DEFAULT_DRIVER in self._stealth else "basic"
+                    _DEFAULT_DRIVER if _DEFAULT_DRIVER in self._stealth else "turbo"
                 )
                 console.warning(
                     f"Unknown driver {resolved!r}. Available drivers: "

@@ -19,7 +19,7 @@ def resolve_primary_driver(driver: str | None) -> str | None:
     configured = config.get("STEALTH_DRIVER")
     if configured in _HTTP_DRIVERS:
         return configured
-    return "basic"
+    return "turbo"
 
 
 def should_driver_fallback(
@@ -34,10 +34,7 @@ def should_driver_fallback(
     if meta.get("fallback") is False:
         return False
 
-    auto_mode = _get_meta_data(request, "driver") == "auto" or bool(
-        config.get("STEALTH_AUTO_FALLBACK")
-    )
-    if not auto_mode:
+    if _get_meta_data(request, "driver") != "auto":
         return False
     if primary_driver not in _HTTP_DRIVERS:
         return False
