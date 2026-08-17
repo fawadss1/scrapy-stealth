@@ -159,9 +159,11 @@ def _stop_loop(
 
 def _splash_url() -> str:
     """file:// URL for docs/static/logo.png, or about:blank if the file is missing."""
-    logo = Path(__file__).resolve().parents[2] / "docs" / "static" / "logo.png"
-    if logo.is_file():
-        return logo.as_uri()
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        logo = parent / "docs" / "static" / "logo.png"
+        if logo.is_file():
+            return logo.as_uri()
     return "about:blank"
 
 
