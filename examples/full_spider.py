@@ -26,9 +26,8 @@ class StealthDemoSpider(scrapy.Spider):
         "DOWNLOADER_MIDDLEWARES": {
             "scrapy_stealth.middlewares.StealthDownloaderMiddleware": 950,
         },
-        # Route every request through stealth (no meta needed by default).
+        # Route every request through stealth with driver="auto" (turbo first, browser on ban).
         "STEALTH_ENABLED": True,
-        "STEALTH_DRIVER": "turbo",  # "basic" | "turbo" | "browser"
         # Optional: seeded as engine default; rotated on ban-streak recycle.
         # "STEALTH_PROXIES": [
         #     "http://user:pass@proxy1:8080",
@@ -51,7 +50,7 @@ class StealthDemoSpider(scrapy.Spider):
     ]
 
     def start_requests(self):
-        # 1) Default turbo path (STEALTH_ENABLED + STEALTH_DRIVER).
+        # 1) Default auto path (STEALTH_ENABLED injects driver="auto"; turbo runs first).
         yield scrapy.Request(
             self.start_urls[0],
             callback=self.parse,
