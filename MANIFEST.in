@@ -1,15 +1,18 @@
-# Include core project text files at the root
+# Core project text files
 include AUTHORS
 include LICENSE
 include README.md
 
-# Include documentation or graphics if they exist
-graft docs
+# Browser splash only — not full docs/, sponsors, examples, or scripts
+include docs/static/logo.png
 
-# Exclude testing and local configuration footprints
+# Exclude dev / repo-only trees from sdist and wheel
 prune tests
 prune .github
+prune examples
+prune scripts
+prune docs/static/sponsors
 exclude .gitignore
 
-# Global exclusions to prevent Python bytecode and OS junk from entering the build
+# Global exclusions
 global-exclude *.py[cod] __pycache__ *.so *.dylib .DS_Store

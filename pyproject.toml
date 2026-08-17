@@ -80,7 +80,11 @@ Changelog = "https://github.com/fawadss1/scrapy-stealth/releases"
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tests*", ".venv*"]
+include = ["scrapy_stealth*"]
+exclude = ["tests*"]
+
+[tool.setuptools.data-files]
+"docs/static" = ["docs/static/logo.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
