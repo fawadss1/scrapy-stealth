@@ -13,9 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.6.14a1] - 2026-08-17
+## [0.6.14] - 2026-08-17
 
 ### Changed
+
+* **PyPI wheel/sdist packaging**
+  Ship only `scrapy_stealth` and `docs/static/logo.png` (browser splash). Exclude
+  `examples/`, `scripts/`, sponsor assets, and other docs from installs.
 
 * **`STEALTH_ENABLED` uses smart driver selection by default**
   When global stealth is on, the middleware injects `meta["stealth"]["driver"] = "auto"`
@@ -37,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * **Browser splash logo showed a blank tab on startup**
-  `_splash_url()` loads `docs/static/logo.png` only (PyPI via `MANIFEST.in` `graft docs`).
+  `_splash_url()` loads `docs/static/logo.png` (included in PyPI wheels for splash).
 
 ---
 
