@@ -27,8 +27,7 @@ from .base import BaseEngine
 logger = get_logger()
 
 # Session cache key: (impersonate profile, frozen sorted DNS resolve entries).
-# DNS is applied at Session construction via CurlOpt.RESOLVE (curl_cffi does not
-# accept per-request curl_options on Session.request).
+# DNS is applied at Session construction via CurlOpt.RESOLVE (not per-request).
 _TurboSessionKey = tuple[Any, tuple[str, ...]]
 
 

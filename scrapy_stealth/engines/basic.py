@@ -37,7 +37,7 @@ _BasicClientKey = tuple[bool, tuple[tuple[str, str], ...]]
 
 
 class BasicEngine(BaseEngine):
-    """Stealth HTTP engine powered by wreq with browser profile impersonation."""
+    """Stealth HTTP engine with browser profile impersonation (basic driver)."""
 
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
         super().__init__(profile, timeout)
