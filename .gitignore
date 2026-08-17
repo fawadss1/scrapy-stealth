@@ -57,6 +57,7 @@ stealth_snapshots/
 # Distribution / packaging
 *.tar.gz
 *.zip
+_pip_test/
 
 # OS-generated
 .DS_Store

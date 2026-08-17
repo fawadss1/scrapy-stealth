@@ -13,6 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.14a1] - 2026-08-17
+
+### Changed
+
+* **`STEALTH_ENABLED` uses smart driver selection by default**
+  When global stealth is on, the middleware injects `meta["stealth"]["driver"] = "auto"`
+  on requests that do not already specify a driver. HTTP impersonation (`turbo` by default,
+  or `STEALTH_DRIVER`) runs first; JS challenges and session bans retry once with the
+  `browser` driver.
+
+* **`STEALTH_DRIVER` default is now `"turbo"`**
+  `driver="auto"` and global stealth now start with the turbo driver for stronger TLS
+  impersonation. Set `STEALTH_DRIVER = "basic"` for the lighter HTTP driver.
+
+### Removed
+
+* **`STEALTH_AUTO_FALLBACK` setting**
+  Browser fallback is controlled solely by `driver="auto"` (injected automatically when
+  `STEALTH_ENABLED = True`, or set per-request). Use `meta["stealth"]["fallback"] = False`
+  to opt out for a single URL.
+
+### Fixed
+
+* **Browser splash logo showed a blank tab on startup**
+  `_splash_url()` loads `docs/static/logo.png` only (PyPI via `MANIFEST.in` `graft docs`).
+
+---
+
 ## [0.6.13] - 2026-08-13
 
 ### Changed
