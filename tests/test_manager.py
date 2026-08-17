@@ -36,7 +36,7 @@ class TestEngineManager:
 
     def test_get_stealth_engine_default_driver(self, manager):
         engine = manager.get("stealth")
-        assert isinstance(engine, BasicEngine)
+        assert isinstance(engine, TurboEngine)
 
     def test_unknown_engine_falls_back_to_scrapy(self, manager):
         engine = manager.get("does_not_exist")
@@ -57,7 +57,7 @@ class TestEngineManager:
 
     def test_unknown_driver_falls_back_to_default(self, manager):
         engine = manager.get("stealth", "browsesr")
-        assert isinstance(engine, BasicEngine)
+        assert isinstance(engine, TurboEngine)
 
     def test_unknown_driver_logs_error(self, manager, capsys):
         manager.get("stealth", "browsesr")
@@ -72,7 +72,11 @@ class TestEngineManager:
             engine = manager.get("stealth")
         finally:
             config.STEALTH_DRIVER = original
-        assert isinstance(engine, BasicEngine)
+        assert isinstance(engine, TurboEngine)
+
+    def test_auto_driver_resolves_to_turbo_by_default(self, manager):
+        engine = manager.get("stealth", "auto")
+        assert isinstance(engine, TurboEngine)
 
     def test_invalid_driver_fallback_is_always_valid(self, manager):
         from scrapy_stealth.constants import STEALTH_DRIVER as _DEFAULT_DRIVER
