@@ -11,7 +11,11 @@ from ..manager import EngineManager
 from ..strategies.proxy import ProxyRotator
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
-from ..utils.core.meta import STEALTH_KEY, _get_meta_data, _resolve_engine
+from ..utils.core.meta import (
+    _apply_stealth_enabled_defaults,
+    _get_meta_data,
+    _resolve_engine,
+)
 from ..utils.engine.fallback import (
     FALLBACK_DRIVER,
     mark_fallback_done,
@@ -68,10 +72,6 @@ class StealthDownloaderMiddleware:
         )
         if driver := settings.get("STEALTH_DRIVER"):
             config.STEALTH_DRIVER = driver
-        if settings.get("STEALTH_AUTO_FALLBACK") is not None:
-            config.STEALTH_AUTO_FALLBACK = settings.getbool(
-                "STEALTH_AUTO_FALLBACK", False
-            )
         if (no_sandbox := settings.get("BROWSER_NO_SANDBOX")) is not None:
             config.BROWSER_NO_SANDBOX = no_sandbox
         if (executable_path := settings.get("BROWSER_EXECUTABLE_PATH")) is not None:
@@ -99,8 +99,7 @@ class StealthDownloaderMiddleware:
         return getattr(self._crawler, "spider", None)
 
     async def process_request(self, request: Request) -> Response | None:
-        if self._stealth_enabled and STEALTH_KEY not in request.meta:
-            request.meta[STEALTH_KEY] = {}
+        _apply_stealth_enabled_defaults(request, self._stealth_enabled)
 
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
         driver = _get_meta_data(request, "driver")
@@ -109,7 +108,7 @@ class StealthDownloaderMiddleware:
         if engine_name == "stealth":
             driver_label = getattr(engine, "driver_name", None)
             if not isinstance(driver_label, str):
-                driver_label = config.get("STEALTH_DRIVER") or "basic"
+                driver_label = config.get("STEALTH_DRIVER") or "turbo"
             self._stealth_stats.record_request(driver_label)
 
         if _get_meta_data(request, "snapshot", False) and not isinstance(
@@ -126,7 +125,7 @@ class StealthDownloaderMiddleware:
 
         primary_driver = getattr(engine, "driver_name", None)
         if not isinstance(primary_driver, str):
-            primary_driver = config.get("STEALTH_DRIVER") or "basic"
+            primary_driver = config.get("STEALTH_DRIVER") or "turbo"
 
         if not should_driver_fallback(response, primary_driver, request):
             return response
