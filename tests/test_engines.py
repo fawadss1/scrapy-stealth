@@ -162,6 +162,35 @@ class TestBasicEngine:
         call_kwargs = mock_client.get.call_args.kwargs
         assert "proxy" not in call_kwargs
 
+    def test_execute_passes_body_on_post(self):
+        mock_client = _make_mock_client()
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
+            engine._execute(
+                Request(
+                    "https://example.com/submit",
+                    method="POST",
+                    body=b"a=1",
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            )
+        call_kwargs = mock_client.post.call_args.kwargs
+        assert call_kwargs["body"] == b"a=1"
+        assert (
+            call_kwargs["headers"]["Content-Type"]
+            == "application/x-www-form-urlencoded"
+        )
+
+    def test_execute_passes_cookie_header(self):
+        mock_client = _make_mock_client()
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
+            engine._execute(
+                Request("https://example.com", headers={"Cookie": "session=xyz"})
+            )
+        call_kwargs = mock_client.get.call_args.kwargs
+        assert call_kwargs["headers"]["Cookie"] == "session=xyz"
+
     def test_execute_passes_dns_options(self):
         mock_client = _make_mock_client()
         with patch(
@@ -463,9 +492,25 @@ class TestTurboEngine:
     def test_execute_passes_body_on_post(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
-        engine._execute(Request("https://example.com", method="POST", body=b"payload"))
+        engine._execute(
+            Request(
+                "https://example.com",
+                method="POST",
+                body=b"payload",
+                headers={"Content-Type": "text/plain"},
+            )
+        )
         call_kwargs = mock_session.post.call_args.kwargs
         assert call_kwargs["data"] == b"payload"
+        assert call_kwargs["headers"]["Content-Type"] == "text/plain"
+
+    def test_execute_passes_cookie_header(self, session_patch):
+        mock_cls, mock_session = session_patch
+        engine = TurboEngine()
+        engine._execute(Request("https://example.com", headers={"Cookie": "sid=abc"}))
+        call_kwargs = mock_session.get.call_args.kwargs
+        assert call_kwargs["headers"]["Cookie"] == "sid=abc"
+        assert "user-agent" not in {k.lower() for k in call_kwargs["headers"]}
 
     def test_execute_no_data_on_get_without_body(self, session_patch):
         mock_cls, mock_session = session_patch
@@ -663,6 +708,7 @@ class TestBrowserEngine:
             )
         )
         tab.attach = AsyncMock()
+        tab.get = AsyncMock()
         tab.wait = AsyncMock()
         tab.close = AsyncMock()
         tab.aclose = AsyncMock()
@@ -730,6 +776,142 @@ class TestBrowserEngine:
         engine._execute(Request("https://example.com"))
         mock_tab.close.assert_called_once()
 
+    def test_execute_post_returns_fetch_body(self, engine, mock_tab):
+        import base64
+
+        posted = base64.b64encode(b"created").decode()
+
+        async def evaluate(js, await_promise=False, return_by_value=False):
+            if "fetch(" in js and await_promise:
+                # Nodriver may return a RemoteObject with deep_serialized_value
+                # instead of a plain dict when return_by_value=True.
+                class _Deep:
+                    value = [
+                        ["status", {"type": "number", "value": 201}],
+                        ["bodyB64", {"type": "string", "value": posted}],
+                        [
+                            "headers",
+                            {
+                                "type": "object",
+                                "value": [
+                                    [
+                                        "content-type",
+                                        {
+                                            "type": "string",
+                                            "value": "application/json",
+                                        },
+                                    ]
+                                ],
+                            },
+                        ],
+                    ]
+
+                class _Remote:
+                    value = None
+                    deep_serialized_value = _Deep()
+
+                return _Remote()
+            if "chrome-error://" in js:
+                return False
+            return 200 if "responseStatus" in js else "<html></html>"
+
+        mock_tab.evaluate = AsyncMock(side_effect=evaluate)
+        with patch(
+            "scrapy_stealth.engines.browser.prepare_browser_post_context",
+            new_callable=AsyncMock,
+        ) as mock_origin:
+            response = engine._execute(
+                Request(
+                    "https://example.com/api",
+                    method="POST",
+                    body=b'{"q":"test"}',
+                    headers={"Content-Type": "application/json"},
+                )
+            )
+        mock_origin.assert_awaited_once()
+        assert mock_origin.await_args.args[1] == "https://example.com/api"
+        assert response.status == 201
+        assert response.body == b"created"
+        assert response.headers[b"content-type"] == b"application/json"
+
+    def test_execute_get_with_cookie_uses_blank_tab_then_navigate(
+        self, engine, mock_tab
+    ):
+        with (
+            patch(
+                "scrapy_stealth.engines.browser.apply_browser_cookies",
+                new_callable=AsyncMock,
+            ) as mock_cookies,
+            patch(
+                "scrapy_stealth.engines.browser.apply_browser_headers",
+                new_callable=AsyncMock,
+            ),
+        ):
+            engine._execute(
+                Request(
+                    "https://example.com/page",
+                    headers={"Cookie": "session=abc123"},
+                )
+            )
+        mock_cookies.assert_awaited_once()
+        assert mock_cookies.await_args.args[2] == "session=abc123"
+        mock_tab.get.assert_awaited_once_with("https://example.com/page")
+
+    def test_execute_passes_custom_headers_via_cdp(self, engine, mock_tab):
+        with patch(
+            "scrapy_stealth.engines.browser.apply_browser_headers",
+            new_callable=AsyncMock,
+        ) as mock_headers:
+            engine._execute(
+                Request(
+                    "https://example.com/page",
+                    headers={"Authorization": "Bearer token", "User-Agent": "scrapy"},
+                )
+            )
+        mock_headers.assert_awaited_once()
+        passed = mock_headers.await_args.args[1]
+        assert passed == {"Authorization": "Bearer token"}
+        assert "User-Agent" not in passed
+
+    def test_execute_do_fetch_receives_prepared_request(self, engine):
+        captured = {}
+
+        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
+            captured.update(
+                {
+                    "url": url,
+                    "method": prepared.method,
+                    "headers": prepared.extra_headers,
+                    "body": prepared.body,
+                    "cookie_header": prepared.cookie_header,
+                }
+            )
+            return (
+                b"<html></html>",
+                200,
+                None,
+                {"content-type": "text/html; charset=utf-8"},
+            )
+
+        with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
+            engine._execute(
+                Request(
+                    "https://example.com/submit",
+                    method="POST",
+                    body=b"a=1",
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Cookie": "sid=1",
+                    },
+                )
+            )
+        assert captured["method"] == "POST"
+        assert captured["body"] == b"a=1"
+        assert captured["cookie_header"] == "sid=1"
+        assert captured["headers"] == {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
     def test_execute_returns_none_on_exception(self, engine, mock_browser):
         mock_browser.send = AsyncMock(side_effect=Exception("network error"))
         result = engine._execute(Request("https://example.com"))
@@ -781,7 +963,12 @@ class TestBrowserEngine:
             engine,
             "_do_fetch",
             new_callable=AsyncMock,
-            return_value=(b"<html></html>", 200, None),
+            return_value=(
+                b"<html></html>",
+                200,
+                None,
+                {"content-type": "text/html; charset=utf-8"},
+            ),
         ) as mock_fetch:
             engine._execute(
                 Request(
@@ -796,9 +983,14 @@ class TestBrowserEngine:
     def test_execute_uses_custom_settle_from_meta(self, engine):
         captured = []
 
-        async def fake_fetch(url, settle, snapshot=False, block_assets=False):
+        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
             captured.append(settle)
-            return b"<html></html>", 200, None
+            return (
+                b"<html></html>",
+                200,
+                None,
+                {"content-type": "text/html; charset=utf-8"},
+            )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
             engine._execute(
@@ -809,9 +1001,14 @@ class TestBrowserEngine:
     def test_execute_uses_config_settle_default(self, engine):
         captured = []
 
-        async def fake_fetch(url, settle, snapshot=False, block_assets=False):
+        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
             captured.append(settle)
-            return b"<html></html>", 200, None
+            return (
+                b"<html></html>",
+                200,
+                None,
+                {"content-type": "text/html; charset=utf-8"},
+            )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
             engine._execute(Request("https://example.com"))
@@ -958,7 +1155,12 @@ class TestBrowserEngine:
             calls["count"] += 1
             if calls["count"] == 1:
                 raise asyncio.CancelledError()
-            return b"<html></html>", 200, None
+            return (
+                b"<html></html>",
+                200,
+                None,
+                {"content-type": "text/html; charset=utf-8"},
+            )
 
         with patch.object(engine, "_do_fetch", side_effect=fetch_once_then_cancel):
             response = engine._execute(Request("https://example.com"))
