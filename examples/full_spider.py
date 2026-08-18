@@ -11,6 +11,9 @@ Or as a one-off script::
 
 from __future__ import annotations
 
+import json
+from urllib.parse import urlencode
+
 import scrapy
 
 from scrapy_stealth.decorators import snapshot
@@ -46,7 +49,7 @@ class StealthDemoSpider(scrapy.Spider):
 
     start_urls = [
         "https://example.com",
-        "https://httpbin.org/html",
+        "https://postman-echo.com/get",
     ]
 
     def start_requests(self):
@@ -57,7 +60,7 @@ class StealthDemoSpider(scrapy.Spider):
             dont_filter=True,
         )
 
-        # 2) Force basic for a lightweight page.
+        # 2) Force basic for a lightweight GET.
         yield scrapy.Request(
             self.start_urls[1],
             callback=self.parse,
@@ -65,7 +68,32 @@ class StealthDemoSpider(scrapy.Spider):
             dont_filter=True,
         )
 
-        # 3) Real browser + snapshot for JS / challenge-heavy pages.
+        # 3) JSON POST — same shape on basic, turbo, and browser.
+        post_body = json.dumps({"search": "laptop", "page": 1}).encode()
+        post_headers = {"Content-Type": "application/json"}
+        for driver in ("basic", "turbo", "browser"):
+            yield scrapy.Request(
+                "https://postman-echo.com/post",
+                method="POST",
+                body=post_body,
+                headers=post_headers,
+                callback=self.parse_post_echo,
+                meta={"stealth": {"driver": driver}},
+                dont_filter=True,
+            )
+
+        # 4) Form POST login (browser) — quotes.toscrape tutorial site.
+        yield scrapy.Request(
+            "https://quotes.toscrape.com/login",
+            method="POST",
+            body=urlencode({"username": "admin", "password": "admin"}).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            callback=self.parse_quotes_login,
+            meta={"stealth": {"driver": "browser", "headless": True}},
+            dont_filter=True,
+        )
+
+        # 5) Real browser + snapshot for JS / challenge-heavy pages.
         yield scrapy.Request(
             self.start_urls[0],
             callback=self.parse_browser,
@@ -80,9 +108,9 @@ class StealthDemoSpider(scrapy.Spider):
             dont_filter=True,
         )
 
-        # 4) Opt out of stealth for a specific request.
+        # 6) Opt out of stealth for a specific request.
         # yield scrapy.Request(
-        #     "https://httpbin.org/get",
+        #     "https://postman-echo.com/get",
         #     callback=self.parse,
         #     meta={"stealth": False},
         # )
@@ -97,8 +125,37 @@ class StealthDemoSpider(scrapy.Spider):
             "url": response.url,
             "status": response.status,
             "title": response.css("title::text").get(),
-            "driver": response.flags,  # e.g. ['scrapy-stealth', 'turbo']
+            "driver": response.flags,
             "bytes": len(response.body),
+        }
+
+    def parse_post_echo(self, response: scrapy.http.Response):
+        """postman-echo.com/post returns JSON echoing the request body."""
+        try:
+            payload = json.loads(response.text)
+        except json.JSONDecodeError:
+            self.logger.error(
+                "Non-JSON echo from %s: %s", response.url, response.text[:200]
+            )
+            return
+
+        data = payload.get("data")
+        yield {
+            "url": response.url,
+            "status": response.status,
+            "driver": response.flags,
+            "echo_data": data,
+            "content_type_sent": (payload.get("headers") or {}).get("content-type"),
+        }
+
+    def parse_quotes_login(self, response: scrapy.http.Response):
+        logged_in = "Logout" in response.text
+        yield {
+            "url": response.url,
+            "status": response.status,
+            "driver": response.flags,
+            "logged_in": logged_in,
+            "title": response.css("title::text").get(),
         }
 
     @snapshot  # saves PNG under stealth_snapshots/ when snapshot=True was set
