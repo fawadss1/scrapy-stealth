@@ -30,6 +30,10 @@ class StealthBrowserNotFoundError(StealthException):
     """Raised when the browser binary is not found on the system."""
 
 
+class StealthRequestError(StealthException, ValueError):
+    """Raised when a Scrapy request has invalid or unsupported HTTP fields."""
+
+
 def raise_stealth(exc_type: type[_T], message: str) -> NoReturn:
     """Raise a stealth exception without chaining backend library tracebacks."""
     raise exc_type(message) from None

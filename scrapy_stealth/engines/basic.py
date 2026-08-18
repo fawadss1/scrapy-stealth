@@ -15,7 +15,12 @@ except ImportError as exc:
 
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
-from ..exceptions import StealthConnectionError, StealthTimeoutError, raise_stealth
+from ..exceptions import (
+    StealthConnectionError,
+    StealthRequestError,
+    StealthTimeoutError,
+    raise_stealth,
+)
 from ..utils.browser.session import BanStreakTracker, SessionCache
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
@@ -26,7 +31,7 @@ from ..utils.network.dns import (
     dns_fingerprint,
     resolve_dns_overrides,
 )
-from ..utils.network.headers import get_default_headers, merge_headers
+from ..utils.network.request import build_stealth_request
 from .base import BaseEngine
 
 logger = get_logger()
@@ -90,18 +95,13 @@ class BasicEngine(BaseEngine):
                 if ctx.profile == self._default_profile
                 else resolve_browser(ctx.profile)
             )
-            headers = merge_headers(
-                get_default_headers(ctx.profile),
-                dict(request.headers.to_unicode_dict()),
-            )
+            prepared = build_stealth_request(request, profile=ctx.profile)
 
             kwargs: dict[str, Any] = {
                 "emulation": emulation,
                 "timeout": timedelta(seconds=ctx.timeout),
-                "headers": headers,
+                **prepared.basic_http_kwargs(),
             }
-            if request.body:
-                kwargs["data"] = request.body
             if ctx.proxy:
                 kwargs["proxy"] = Proxy.all(ctx.proxy)
 
@@ -121,9 +121,9 @@ class BasicEngine(BaseEngine):
             )
 
             method_fn = getattr(
-                self._clients.get((ctx.http2, dns_key)), request.method.lower()
+                self._clients.get((ctx.http2, dns_key)), prepared.method_name
             )
-            resp = method_fn(request.url, **kwargs)
+            resp = method_fn(prepared.url, **kwargs)
 
             body = resp.bytes()
             if AntiBotDetector.is_js_challenge_body(body.decode(errors="replace")):
@@ -142,6 +142,9 @@ class BasicEngine(BaseEngine):
             self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
             return response
 
+        except StealthRequestError as exc:
+            logger.error("Basic engine invalid request: %s", exc)
+            return None
         except TimeoutError:
             raise
         except Exception as exc:
@@ -157,7 +160,7 @@ class BasicEngine(BaseEngine):
             if isinstance(exc, (WConn, WProxyConn)):
                 raise_stealth(
                     StealthConnectionError,
-                    f"Basic engine connection failed fetching {request.url!r}",
+                    f"Basic engine connection failed fetching {request.url!r}: {exc}",
                 )
             logger.error("Basic engine request failed: %s", exc)
             return None
