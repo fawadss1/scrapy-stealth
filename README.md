@@ -115,6 +115,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🚫 Static asset blocking — skip images, fonts, CSS, and media for faster, lighter browser fetches
 * 🎯 Proxy bypass list — send chosen domains straight to the origin instead of through the proxy (`--proxy-bypass-list`)
 * 🧭 Custom DNS overrides — pin hosts to fixed IPs (connect via IP, keep hostname for TLS/SNI/Host) to dodge poisoned or geo-shifted public DNS
+* 📤 **Full request fidelity** — `POST`/`PUT`/`PATCH`/`DELETE`, custom headers, and `Cookie` work the same on `basic`, `turbo`, and `browser`
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -351,6 +352,148 @@ yield scrapy.Request(
 | `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                                                                                                |
 | `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                                                                                             |
 | `static_assets_block` | `bool`          | Browser driver only: block images, fonts, CSS, and media for this request (overrides `config.BROWSER_STATIC_ASSETS_BLOCK`). Ignored — always unblocked — when `snapshot` is `True`                                                                                          |
+
+---
+
+## 📤 POST, headers, and cookies
+
+All stealth drivers (`basic`, `turbo`, `browser`, and `driver="auto"`) honor the **same Scrapy
+`Request` fields** — HTTP method, body, `Cookie`, and custom headers. Use normal Scrapy syntax;
+no extra stealth meta keys are required for POST or auth headers.
+
+Internally, every driver calls `build_stealth_request()` to normalize and validate the request
+once (method, URL, body, cookies, headers). Fingerprint headers (`User-Agent`, `Accept`,
+`sec-ch-ua`, etc.) are managed by the engine impersonation layer — set `Authorization`,
+`Content-Type`, `Cookie`, and other app-specific headers on the Scrapy request as usual.
+
+### JSON POST (API login, search, etc.)
+
+Works on **`basic`**, **`turbo`**, and **`browser`**.  
+Use [`postman-echo.com/post`](https://postman-echo.com/post) — it echoes JSON back and stays up
+reliably (avoid `httpbin.org`; it often returns **503**):
+
+```python
+import json
+
+yield scrapy.Request(
+    "https://postman-echo.com/post",
+    method="POST",
+    body=json.dumps({"search": "laptop", "page": 1}).encode(),
+    headers={"Content-Type": "application/json"},
+    meta={"stealth": {"driver": "turbo"}},  # or basic / browser / auto
+)
+```
+
+With global stealth enabled, omit `meta` — the same request shape applies:
+
+```python
+STEALTH_ENABLED = True  # settings.py
+
+yield scrapy.Request(
+    "https://postman-echo.com/post",
+    method="POST",
+    body=json.dumps({"search": "laptop"}).encode(),
+    headers={"Content-Type": "application/json"},
+)
+```
+
+> **Connection failed on turbo?** If you use `STEALTH_PROXIES` or `meta["stealth"]["proxy"]`,
+> the proxy must allow HTTPS POST to the test host. Try without a proxy first, or switch to
+> `driver="basic"`, or set `meta={"stealth": {"http2": False}}`.
+
+### Form POST (login, filters)
+
+[`quotes.toscrape.com/login`](https://quotes.toscrape.com/login) is a public Scrapy tutorial site with a real login form:
+
+```python
+from urllib.parse import urlencode
+
+yield scrapy.Request(
+    "https://quotes.toscrape.com/login",
+    method="POST",
+    body=urlencode({"username": "admin", "password": "admin"}).encode(),
+    headers={"Content-Type": "application/x-www-form-urlencoded"},
+    meta={"stealth": {"driver": "auto"}},
+)
+```
+
+### Cookies and Authorization
+
+Pass session cookies or bearer tokens on the Scrapy request — all drivers forward them.  
+[`postman-echo.com/get`](https://postman-echo.com/get) echoes request headers back:
+
+```python
+yield scrapy.Request(
+    "https://postman-echo.com/get",
+    headers={
+        "Cookie": "session_id=abc123; cart_token=xyz",
+        "Authorization": "Bearer test-token-123",
+    },
+    meta={"stealth": {"driver": "turbo"}},
+)
+```
+
+> **Tip:** You can also use Scrapy's built-in cookie jar (`COOKIES_ENABLED = True`) for GET/POST
+> on `basic` and `turbo`. The `browser` driver applies the `Cookie` header via CDP for each
+> request.
+
+### PUT / PATCH / DELETE
+
+Same pattern — set `method` and optional `body`.  
+[`jsonplaceholder.typicode.com/posts/1`](https://jsonplaceholder.typicode.com/posts/1) accepts PATCH:
+
+```python
+yield scrapy.Request(
+    "https://jsonplaceholder.typicode.com/posts/1",
+    method="PATCH",
+    body=b'{"title": "patched"}',
+    headers={"Content-Type": "application/json"},
+    meta={"stealth": {"driver": "basic"}},
+)
+```
+
+### Driver behaviour summary
+
+| Driver    | GET / HEAD                         | POST / PUT / PATCH / DELETE / …      |
+|-----------|------------------------------------|--------------------------------------|
+| `basic`   | Native HTTP client + profile TLS   | Same — method + body + headers       |
+| `turbo`   | curl-impersonate TLS fingerprint   | Same — method + body + headers       |
+| `browser` | Chrome tab navigation              | In-page `fetch()` with method + body |
+
+For **`driver="auto"`**, phase 1 uses `basic`/`turbo` (including POST). If the response is a
+JS challenge or session ban, phase 2 retries once with **`browser`** using the same method,
+body, and headers.
+
+### What not to set manually
+
+Do **not** override fingerprint headers on the Scrapy request — they are stripped and replaced
+by the active profile:
+
+* `User-Agent`, `Accept`, `Accept-Language`, `Accept-Encoding`
+* `sec-ch-ua*`, `sec-fetch-*`, `Upgrade-Insecure-Requests`, etc.
+
+Set application headers only (`Content-Type`, `Cookie`, `Authorization`, `X-*`, …).
+
+### JS-protected POST flows
+
+When a site requires a real browser for login or API calls behind Cloudflare, point at a live
+endpoint — here [`postman-echo.com/post`](https://postman-echo.com/post) via the browser driver
+(swap in your target URL for production):
+
+```python
+yield scrapy.Request(
+    "https://postman-echo.com/post",
+    method="POST",
+    body=b'{"items": [{"sku": "A1", "qty": 2}]}',
+    headers={"Content-Type": "application/json"},
+    meta={"stealth": {"driver": "browser", "headless": False, "settle": 6}},
+)
+```
+
+For a JS-rendered **GET** smoke test, try [`quotes.toscrape.com`](https://quotes.toscrape.com/)
+with `driver="browser"`.
+
+Or let `driver="auto"` try fast HTTP first and escalate to browser only when needed.
 
 ---
 
@@ -777,6 +920,7 @@ It shows:
 
 * middleware + `STEALTH_ENABLED` via `custom_settings` (auto-injects `driver="auto"`, turbo first)
 * per-request `basic` / `browser` overrides
+* POST requests with JSON body and custom headers (see [POST, headers, and cookies](#-post-headers-and-cookies))
 * optional snapshot with `@snapshot`
 * ban detection and stealth stats on close
 
