@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* **Proxy-Seller sponsor**
+  README and `AGENTS.md` now include Proxy-Seller with affiliate link, promo code `FAWAD15`, and logo assets under `docs/static/sponsors/`.
+
 ---
 
 ## [0.6.15] - 2026-08-18

@@ -20,7 +20,7 @@ designed for large-scale, production-grade crawling.
 
 ---
 
-## 💜 Sponsor
+## 💜 Sponsors
 
 <table>
   <tr>
@@ -45,6 +45,18 @@ designed for large-scale, production-grade crawling.
       Special codes for scrapy-stealth users:
       <code>SCRAPYSTEALTH35</code> — 35% off Mobile and Residential Proxies;
       <code>SCRAPYSTEALTH40</code> — 40% off ISP (Static) Proxies.
+    </td>
+  </tr>
+  <tr>
+    <td width="160" align="center">
+      <a href="https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875">
+        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/proxy-seller-logo.png" alt="Proxy-Seller" width="120"/>
+      </a>
+    </td>
+    <td>
+      <strong><a href="https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875">Proxy-Seller</a></strong> — residential, ISP, mobile, IPv4, and IPv6 proxies across 220+ locations. HTTP(S) and SOCKS5, flexible rotation, and 24/7 support — built for scraping, SEO, and automation at scale.
+      <br/><br/>
+      Use code <code>FAWAD15</code> at <a href="https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875">proxy-seller.com</a>.
     </td>
   </tr>
 </table>

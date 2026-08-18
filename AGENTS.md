@@ -28,7 +28,9 @@ See [CHECK.md](CHECK.md) for individual commands.
 
 ---
 
-## Sponsor
+## Sponsors
+
+### NodeMaven
 
 **[NodeMaven](https://go.nodemaven.com/Fawadss1agentmdgh)** — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
 
@@ -44,3 +46,9 @@ Special codes for scrapy-stealth users:
 
 - `SCRAPYSTEALTH35` — 35% off Mobile and Residential Proxies
 - `SCRAPYSTEALTH40` — 40% off ISP (Static) Proxies
+
+### Proxy-Seller
+
+**[Proxy-Seller](https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875)** — residential, ISP, mobile, IPv4, and IPv6 proxies across 220+ locations. HTTP(S) and SOCKS5, flexible rotation, and 24/7 support.
+
+Use code `FAWAD15` at checkout.
