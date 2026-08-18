@@ -13,6 +13,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.15] - 2026-08-18
+
+### Added
+
+* **POST / PUT / PATCH / DELETE on all drivers**
+  `basic`, `turbo`, and `browser` honor the same Scrapy `Request` fields — method,
+  body, `Cookie`, and custom headers (`Content-Type`, `Authorization`, etc.).
+
+* **Single request builder for all drivers**
+  `build_stealth_request()` in `scrapy_stealth.utils.network.request` validates
+  and normalizes method, URL, body, `Cookie`, and custom headers once. Browser
+  POST uses in-page `fetch()` via `browser_http_fetch()`.
+
+* **README and example spider**
+  New “POST, headers, and cookies” section with live test URLs
+  (`postman-echo.com`, `quotes.toscrape.com`, `jsonplaceholder.typicode.com`).
+  `examples/full_spider.py` demonstrates JSON POST on all three drivers and form
+  login via browser.
+
+### Fixed
+
+* **Browser POST — same-origin setup**
+  Load the target URL (GET), not the site root, before in-page `fetch()`. Fixes
+  `TypeError: Failed to fetch` when the root redirects elsewhere
+  (e.g. `postman-echo.com` → `www.postman.com`).
+
+* **Browser POST — brotli decode error in Scrapy**
+  Strip `content-encoding` and `content-length` from browser fetch responses; the
+  body from `arrayBuffer()` is already decoded.
+
+* **Basic driver — POST body dropped**
+  wreq expects raw bytes as `body=`, not `data=` (turbo/curl_cffi uses `data=`).
+  Added `StealthRequestPayload.basic_http_kwargs()` for the basic engine.
+
+* **Browser CDP headers on POST setup**
+  Do not send `Content-Type` / `Content-Length` via CDP extra headers during
+  origin setup; they are set only on the in-page `fetch()` call.
+
+### Changed
+
+* Browser POST context verifies same-origin after navigation and checks for Chrome
+  error pages before running `fetch()`.
+
+---
+
 ## [0.6.14] - 2026-08-17
 
 ### Changed
