@@ -16,6 +16,7 @@ from ..detectors.antibot import AntiBotDetector
 from ..exceptions import (
     StealthBrowserNotFoundError,
     StealthConnectionError,
+    StealthRequestError,
     StealthTimeoutError,
     raise_stealth,
 )
@@ -40,6 +41,13 @@ from ..utils.browser import (
     _wait_for_status,
 )
 from ..utils.browser.patch import patch_nodriver
+from ..utils.browser.request import (
+    apply_browser_cookies,
+    apply_browser_headers,
+    browser_cdp_headers,
+    browser_http_fetch,
+    prepare_browser_post_context,
+)
 from ..utils.browser.session import BanStreakTracker
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
@@ -50,6 +58,7 @@ from ..utils.network.dns import (
     resolve_dns_overrides,
     validate_dns_overrides,
 )
+from ..utils.network.request import StealthRequestPayload, build_stealth_request
 from .base import BaseEngine
 
 patch_nodriver()
@@ -442,66 +451,94 @@ class BrowserEngine(BaseEngine):
                 self._restarting = False
                 self._restart_cv.notify_all()
 
+    async def _attach_tab(self, browser: Any, url: str = "about:blank") -> Any:
+        """Create a CDP target, attach, and return the tab."""
+        import nodriver.cdp.target as _cdp_target
+
+        target_id = await browser.send(
+            _cdp_target.create_target(url, enable_begin_frame_control=False)
+        )
+        await browser.update_targets()
+        page = next(
+            (t for t in browser.targets if t.target.target_id == target_id),
+            None,
+        )
+        if page is None:
+            raise StealthConnectionError(
+                f"Browser engine could not find new tab for {url!r}"
+            )
+        await page.attach()
+        return page
+
     async def _do_fetch(
         self,
         url: str,
+        prepared: StealthRequestPayload,
         settle: float,
         snapshot: bool = False,
         block_assets: bool = False,
-    ) -> tuple[bytes, int, bytes | None]:
-        """Open a CDP target, fetch *url*, then close the tab."""
-        import nodriver.cdp.target as _cdp_target
-
+    ) -> tuple[bytes, int, bytes | None, dict[str, str]]:
+        """Open a CDP target, perform the request, then close the tab."""
         html: Any = ""
         status: Any = 200
         shot: bytes | None = None
+        resp_headers: dict[str, str] = {"content-type": "text/html; charset=utf-8"}
 
         if self._browser is None:
             raise StealthConnectionError("Browser is not running")
 
         browser = self._browser
         assert self._tab_sem is not None
+        method = prepared.method
 
         async with self._tab_sem:
-            # Create the target and navigate it atomically via CDP.
-            # create_target returns the new target_id immediately — no
-            # update_targets() race, no wrong-tab ambiguity.
-            target_id = await browser.send(
-                # enable_begin_frame_control=True freezes painting until BeginFrame
-                # is issued (black/blank tab) — leave it off for normal loads.
-                _cdp_target.create_target(url, enable_begin_frame_control=False)
-            )
-            await browser.update_targets()
-            page = next(
-                (t for t in browser.targets if t.target.target_id == target_id),
-                None,
-            )
-            if page is None:
-                raise StealthConnectionError(
-                    f"Browser engine could not find new tab for {url!r}"
+            use_setup = prepared.needs_browser_setup
+            direct_nav = method in {"GET", "HEAD"} and not use_setup
+
+            if direct_nav:
+                page = await self._attach_tab(browser, url)
+            else:
+                page = await self._attach_tab(browser)
+                await apply_browser_cookies(page, url, prepared.cookie_header)
+                await apply_browser_headers(
+                    page, browser_cdp_headers(prepared.extra_headers)
                 )
-            await page.attach()
 
             try:
                 async with contextlib.AsyncExitStack() as stack:
-                    if block_assets:
+                    if block_assets and method in {"GET", "HEAD"}:
                         await stack.enter_async_context(_block_static_assets(page))
 
-                    await page.wait()
-
-                    if await page.evaluate(_JS_IS_CHROME_ERROR):
-                        raise StealthConnectionError(
-                            f"Browser engine connection failed fetching {url!r}"
+                    if method not in {"GET", "HEAD"}:
+                        await prepare_browser_post_context(page, url)
+                        if await page.evaluate(_JS_IS_CHROME_ERROR):
+                            raise StealthConnectionError(
+                                f"Browser POST setup failed loading {url!r}"
+                            )
+                        body_bytes, status, resp_headers = await browser_http_fetch(
+                            page, url, prepared
                         )
+                        html = body_bytes.decode(errors="replace")
+                    else:
+                        if not direct_nav:
+                            await page.get(url)
+                        await page.wait()
 
-                    # Poll until Navigation Timing exposes a real (non-zero) status.
-                    status = await _wait_for_status(page)
+                        if await page.evaluate(_JS_IS_CHROME_ERROR):
+                            raise StealthConnectionError(
+                                f"Browser engine connection failed fetching {url!r}"
+                            )
 
-                    # Skip content wait on error responses — return immediately.
-                    if 200 <= status < 300:
-                        await _smart_wait(page, settle)
+                        status = await _wait_for_status(page)
 
-                    html = await page.evaluate(_JS_HTML)
+                        if method == "HEAD":
+                            html = ""
+                        elif 200 <= status < 300:
+                            await _smart_wait(page, settle)
+                            html = await page.evaluate(_JS_HTML)
+                        else:
+                            html = await page.evaluate(_JS_HTML)
+
                     if snapshot:
                         shot = await _cdp_snapshot(page)
             finally:
@@ -510,7 +547,14 @@ class BrowserEngine(BaseEngine):
                 with contextlib.suppress(Exception):
                     await page.aclose()
 
-        return str(html).encode(errors="replace"), int(status), shot
+        if method == "HEAD":
+            body_out = b""
+        elif isinstance(html, bytes):
+            body_out = html
+        else:
+            body_out = str(html).encode(errors="replace")
+
+        return body_out, int(status), shot, resp_headers
 
     def _maybe_restart(
         self, headless: bool, proxy: str | None, response: Response | None
@@ -573,11 +617,14 @@ class BrowserEngine(BaseEngine):
                 settle,
             )
 
+            payload = build_stealth_request(request)
+
             # Ensure the single persistent browser is up (proxy / DNS-relay aware).
             # DNS pins use a local CONNECT relay (not Chrome host-resolver-rules).
             body: bytes = b""
             status: int = 200
             shot: bytes | None = None
+            resp_headers: dict[str, str] = {"content-type": "text/html; charset=utf-8"}
             self._dns_overrides = dict(resolve_dns_overrides(request))
             self._record_dns(len(self._dns_overrides))
 
@@ -585,7 +632,9 @@ class BrowserEngine(BaseEngine):
                 task: asyncio.Task[Any] | None = None
                 loop: asyncio.AbstractEventLoop | None = None
 
-                async def _run_fetch() -> tuple[bytes, int, bytes | None]:
+                async def _run_fetch() -> tuple[
+                    bytes, int, bytes | None, dict[str, str]
+                ]:
                     nonlocal task
                     current = asyncio.current_task()
                     assert current is not None
@@ -593,7 +642,11 @@ class BrowserEngine(BaseEngine):
                     self._track_fetch_task(task)
                     try:
                         return await self._do_fetch(
-                            request.url, settle, snap, block_assets
+                            payload.url,
+                            payload,
+                            settle,
+                            snap,
+                            block_assets,
                         )
                     finally:
                         self._fetch_tasks.discard(task)
@@ -609,7 +662,7 @@ class BrowserEngine(BaseEngine):
                     future = asyncio.run_coroutine_threadsafe(_run_fetch(), loop)
 
                 try:
-                    body, status, shot = future.result(
+                    body, status, shot, resp_headers = future.result(
                         timeout=_browser_fetch_timeout(ctx.timeout, settle)
                     )
                     break
@@ -650,7 +703,7 @@ class BrowserEngine(BaseEngine):
             response = StealthResponse(
                 request=request,
                 status=status,
-                headers={"content-type": "text/html; charset=utf-8"},
+                headers=resp_headers,
                 body=body,
                 _meta={"snapshot_content": shot} if shot is not None else None,
                 _flags=["browser"],
@@ -661,6 +714,9 @@ class BrowserEngine(BaseEngine):
 
             return response
 
+        except StealthRequestError as exc:
+            logger.error("Browser engine invalid request: %s", exc)
+            return None
         except TimeoutError:
             raise_stealth(
                 StealthTimeoutError,
