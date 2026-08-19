@@ -87,9 +87,13 @@ class StealthStats:
         self.inc("stealth/recycles")
         self.inc(f"stealth/recycles/{driver}")
 
-    def record_fallback(self, from_driver: str, to_driver: str) -> None:
+    def record_fallback(
+        self, from_driver: str, to_driver: str, method: str | None = None
+    ) -> None:
         self.inc("stealth/fallbacks")
         self.inc(f"stealth/fallbacks/{from_driver}")
+        if method:
+            self.inc(f"stealth/fallbacks/method/{method.lower()}")
         self.set("stealth/fallback_driver", to_driver)
 
     def record_browser_cookies(self, count: int) -> None:

@@ -21,6 +21,7 @@ from ..utils.core.meta import (
 from ..utils.engine.fallback import (
     FALLBACK_DRIVER,
     mark_fallback_done,
+    request_method,
     should_driver_fallback,
 )
 from ..utils.network.dns import validate_dns_overrides
@@ -137,10 +138,11 @@ class StealthDownloaderMiddleware:
 
         console.info(
             f"Driver fallback {primary_driver!r} -> {FALLBACK_DRIVER!r} "
-            f"for {request.url!r} after HTTP {response.status}"
+            f"for {request.method} {request.url!r} after HTTP {response.status}"
         )
         mark_fallback_done(request, primary_driver)
-        self._stealth_stats.record_fallback(primary_driver, FALLBACK_DRIVER)
+        method = request_method(request)
+        self._stealth_stats.record_fallback(primary_driver, FALLBACK_DRIVER, method)
         self._stealth_stats.record_request(FALLBACK_DRIVER)
 
         fallback_engine = self.manager.get(engine_name, FALLBACK_DRIVER)
