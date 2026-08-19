@@ -9,6 +9,7 @@ from ..config import config
 from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
 from ..strategies.proxy import ProxyRotator
+from ..utils.browser.cookies import merge_browser_cookies_to_jar
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
 from ..utils.core.meta import (
@@ -77,6 +78,8 @@ class StealthDownloaderMiddleware:
             config.BROWSER_NO_SANDBOX = no_sandbox
         if (executable_path := settings.get("BROWSER_EXECUTABLE_PATH")) is not None:
             config.BROWSER_EXECUTABLE_PATH = executable_path
+        if (export_cookies := settings.get("BROWSER_EXPORT_COOKIES")) is not None:
+            config.BROWSER_EXPORT_COOKIES = bool(export_cookies)
         if (assets_block := settings.get("BROWSER_STATIC_ASSETS_BLOCK")) is not None:
             config.BROWSER_STATIC_ASSETS_BLOCK = bool(assets_block)
         if settings.get("BROWSER_PROXY_BYPASS_LIST") is not None:
@@ -151,3 +154,46 @@ class StealthDownloaderMiddleware:
             return response
 
         return fallback_response if fallback_response is not None else response
+
+    def _cookie_jar(self, request: Request) -> Any | None:
+        """Return Scrapy's ``CookiesMiddleware`` jar for this request."""
+        if self._crawler is None:
+            return None
+        try:
+            from scrapy.downloadermiddlewares.cookies import CookiesMiddleware
+
+            downloader = self._crawler.engine.downloader
+            for mw in downloader.middleware.middlewares:
+                if isinstance(mw, CookiesMiddleware):
+                    return mw.jars[request.meta.get("cookiejar")]
+        except Exception:
+            return None
+        return None
+
+    async def process_response(
+        self, request: Request, response: Response, spider: Any
+    ) -> Response:
+        stealth = response.meta.get("stealth")
+        if not isinstance(stealth, dict):
+            return response
+
+        cookies = stealth.get("browser_cookies")
+        if not cookies:
+            return response
+
+        export = _get_meta_data(
+            request, "export_cookies", config.get("BROWSER_EXPORT_COOKIES")
+        )
+        if not export:
+            return response
+
+        if self._crawler is None:
+            return response
+
+        if not self._crawler.settings.getbool("COOKIES_ENABLED", True):
+            return response
+
+        jar = self._cookie_jar(request)
+        merged = merge_browser_cookies_to_jar(jar, request, cookies)
+        self._stealth_stats.record_browser_cookies(merged)
+        return response
