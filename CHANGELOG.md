@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Urlencoded POST bodies on the browser driver automatically merge hidden `<form>` fields
   (e.g. `csrf_token`) from the loaded page before in-page `fetch()`.
 
+* **`driver="auto"` POST fallback**
+  When turbo/basic POST gets a JS challenge or session ban (403/429/503, Cloudflare, etc.),
+  middleware retries once with the browser driver using the same method, body, and headers.
+  Stats: `stealth/fallbacks/method/post` (and `put`, `patch`, `delete`).
+
 * **Proxy-Seller sponsor**
   README and `AGENTS.md` now include Proxy-Seller with affiliate link, promo code `FAWAD15`, and logo assets under `docs/static/sponsors/`.
 

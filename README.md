@@ -546,7 +546,8 @@ yield scrapy.Request(
 
 For **`driver="auto"`**, phase 1 uses `basic`/`turbo` (including POST). If the response is a
 JS challenge or session ban, phase 2 retries once with **`browser`** using the same method,
-body, and headers.
+body, and headers. Fallback counters include the HTTP method (`stealth/fallbacks/method/post`,
+etc.).
 
 ### What not to set manually
 
@@ -664,8 +665,8 @@ meta={"stealth": {"driver": "auto", "fallback": False}}
 ```
 
 Each request is retried at most once. If the browser fetch fails, the original `basic` / `turbo`
-response is returned. Console output and stats (`stealth/fallbacks`, `stealth/requests/browser`)
-show when escalation happened.
+response is returned. Console output and stats (`stealth/fallbacks`, `stealth/fallbacks/method/post`,
+`stealth/requests/browser`) show when escalation happened.
 
 ---
 
@@ -896,25 +897,26 @@ yield scrapy.Request(url, meta={"stealth": {"driver": "turbo"}})
 
 **Scrapy stats:** after the crawl (or mid-run via `crawler.stats`), inspect:
 
-| Key                                                | Meaning                                    |
-|----------------------------------------------------|--------------------------------------------|
-| `stealth/requests` / `stealth/requests/{driver}`   | Stealth fetches                            |
-| `stealth/responses` / `stealth/responses/{driver}` | Completed responses                        |
-| `stealth/successes` / `stealth/successes/{driver}` | Non-banned responses below HTTP 400        |
-| `stealth/failures` / `stealth/failures/{driver}`   | Banned responses or HTTP 400+              |
-| `stealth/status/{code}`                            | Response count by HTTP status              |
-| `stealth/bans` / `stealth/bans/{driver}`           | Session-ban responses                      |
-| `stealth/recycles` / `stealth/recycles/{driver}`   | Session / Chrome recycles                  |
-| `stealth/ban_streak`                               | Current consecutive ban streak             |
-| `stealth/driver`                                   | Last stealth driver used                   |
-| `stealth/profile`                                  | Last fingerprint profile used              |
-| `stealth/proxy`                                    | Last proxy as `host:port` (no credentials) |
-| `stealth/proxy/requests/{driver}`                  | Requests sent through a proxy              |
-| `stealth/dns/requests/{driver}`                    | Requests using DNS overrides               |
-| `stealth/dns/hosts`                                | Total pinned hosts applied                 |
-| `stealth/dns/active_hosts`                         | Pinned hosts on latest request             |
-| `stealth/fallbacks` / `stealth/fallbacks/{driver}` | Browser escalations from `driver="auto"`   |
-| `stealth/browser_cookies_exported`                 | Browser cookies merged into Scrapy's jar   |
+| Key                                                | Meaning                                          |
+|----------------------------------------------------|--------------------------------------------------|
+| `stealth/requests` / `stealth/requests/{driver}`   | Stealth fetches                                  |
+| `stealth/responses` / `stealth/responses/{driver}` | Completed responses                              |
+| `stealth/successes` / `stealth/successes/{driver}` | Non-banned responses below HTTP 400              |
+| `stealth/failures` / `stealth/failures/{driver}`   | Banned responses or HTTP 400+                    |
+| `stealth/status/{code}`                            | Response count by HTTP status                    |
+| `stealth/bans` / `stealth/bans/{driver}`           | Session-ban responses                            |
+| `stealth/recycles` / `stealth/recycles/{driver}`   | Session / Chrome recycles                        |
+| `stealth/ban_streak`                               | Current consecutive ban streak                   |
+| `stealth/driver`                                   | Last stealth driver used                         |
+| `stealth/profile`                                  | Last fingerprint profile used                    |
+| `stealth/proxy`                                    | Last proxy as `host:port` (no credentials)       |
+| `stealth/proxy/requests/{driver}`                  | Requests sent through a proxy                    |
+| `stealth/dns/requests/{driver}`                    | Requests using DNS overrides                     |
+| `stealth/dns/hosts`                                | Total pinned hosts applied                       |
+| `stealth/dns/active_hosts`                         | Pinned hosts on latest request                   |
+| `stealth/fallbacks` / `stealth/fallbacks/{driver}` | Browser escalations from `driver="auto"`         |
+| `stealth/fallbacks/method/{method}`                | Fallback count by HTTP method (`get`, `post`, …) |
+| `stealth/browser_cookies_exported`                 | Browser cookies merged into Scrapy's jar         |
 
 ```python
 # e.g. in spider_closed
