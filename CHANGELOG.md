@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.6.16] - 2026-08-19
+
 ### Changed
 
 * **Browser driver defaults to visible Chrome (`headless=False`)**
@@ -1093,6 +1097,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.6.16]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.16
 
 [0.6.13]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.13
 

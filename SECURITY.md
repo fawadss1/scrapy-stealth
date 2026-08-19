@@ -6,8 +6,8 @@ Only the latest minor series receives security fixes.
 
 | Version          | Supported |
 |------------------|-----------|
-| 0.6.15 (latest)  | ✅        |
-| 0.6.x (< 0.6.13) | ❌        |
+| 0.6.16 (latest)  | ✅        |
+| 0.6.x (< 0.6.16) | ❌        |
 
 ## Reporting a Vulnerability
 
