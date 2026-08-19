@@ -40,6 +40,7 @@ from ..utils.browser import (
     _stop_loop,
     _wait_for_status,
 )
+from ..utils.browser.cookies import collect_browser_cookies, format_cookie_header
 from ..utils.browser.patch import patch_nodriver
 from ..utils.browser.request import (
     apply_browser_cookies,
@@ -51,7 +52,7 @@ from ..utils.browser.request import (
 from ..utils.browser.session import BanStreakTracker
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
-from ..utils.core.meta import _get_meta_data, resolve_browser_headless
+from ..utils.core.meta import _get_meta_data, _stealth_meta, resolve_browser_headless
 from ..utils.core.response import StealthResponse
 from ..utils.network.dns import (
     dns_fingerprint,
@@ -477,12 +478,13 @@ class BrowserEngine(BaseEngine):
         settle: float,
         snapshot: bool = False,
         block_assets: bool = False,
-    ) -> tuple[bytes, int, bytes | None, dict[str, str]]:
+    ) -> tuple[bytes, int, bytes | None, dict[str, str], list[dict[str, Any]]]:
         """Open a CDP target, perform the request, then close the tab."""
         html: Any = ""
         status: Any = 200
         shot: bytes | None = None
         resp_headers: dict[str, str] = {"content-type": "text/html; charset=utf-8"}
+        browser_cookies: list[dict[str, Any]] = []
 
         if self._browser is None:
             raise StealthConnectionError("Browser is not running")
@@ -541,6 +543,8 @@ class BrowserEngine(BaseEngine):
 
                     if snapshot:
                         shot = await _cdp_snapshot(page)
+
+                    browser_cookies = await collect_browser_cookies(page, url)
             finally:
                 with contextlib.suppress(Exception):
                     await page.close()
@@ -554,7 +558,7 @@ class BrowserEngine(BaseEngine):
         else:
             body_out = str(html).encode(errors="replace")
 
-        return body_out, int(status), shot, resp_headers
+        return body_out, int(status), shot, resp_headers, browser_cookies
 
     def _maybe_restart(
         self, headless: bool, proxy: str | None, response: Response | None
@@ -623,6 +627,7 @@ class BrowserEngine(BaseEngine):
             status: int = 200
             shot: bytes | None = None
             resp_headers: dict[str, str] = {"content-type": "text/html; charset=utf-8"}
+            browser_cookies: list[dict[str, Any]] = []
             self._dns_overrides = dict(resolve_dns_overrides(request))
             self._record_dns(len(self._dns_overrides))
 
@@ -631,7 +636,7 @@ class BrowserEngine(BaseEngine):
                 loop: asyncio.AbstractEventLoop | None = None
 
                 async def _run_fetch() -> tuple[
-                    bytes, int, bytes | None, dict[str, str]
+                    bytes, int, bytes | None, dict[str, str], list[dict[str, Any]]
                 ]:
                     nonlocal task
                     current = asyncio.current_task()
@@ -660,7 +665,7 @@ class BrowserEngine(BaseEngine):
                     future = asyncio.run_coroutine_threadsafe(_run_fetch(), loop)
 
                 try:
-                    body, status, shot, resp_headers = future.result(
+                    body, status, shot, resp_headers, browser_cookies = future.result(
                         timeout=_browser_fetch_timeout(ctx.timeout, settle)
                     )
                     break
@@ -698,12 +703,25 @@ class BrowserEngine(BaseEngine):
                 status,
                 len(body),
             )
+            response_meta: dict[str, Any] | None = None
+            if shot is not None or browser_cookies:
+                response_meta = {}
+                if shot is not None:
+                    response_meta["snapshot_content"] = shot
+                if browser_cookies:
+                    stealth_meta = dict(_stealth_meta(request))
+                    stealth_meta["browser_cookies"] = browser_cookies
+                    stealth_meta["browser_cookie_header"] = format_cookie_header(
+                        browser_cookies
+                    )
+                    response_meta["stealth"] = stealth_meta
+
             response = StealthResponse(
                 request=request,
                 status=status,
                 headers=resp_headers,
                 body=body,
-                _meta={"snapshot_content": shot} if shot is not None else None,
+                _meta=response_meta,
                 _flags=["browser"],
             )
 

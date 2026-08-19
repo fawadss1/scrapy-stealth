@@ -74,15 +74,41 @@ async def apply_browser_headers(page: Any, headers: dict[str, str]) -> None:
     await page.send(network.set_extra_http_headers(network.Headers(headers)))
 
 
+def _form_urlencoded_body_js(payload: StealthRequestPayload) -> str | None:
+    """Merge hidden form fields (e.g. csrf_token) into urlencoded POST bodies."""
+    content_type = payload.headers.get("Content-Type") or payload.extra_headers.get(
+        "Content-Type", ""
+    )
+    if "application/x-www-form-urlencoded" not in content_type.lower():
+        return None
+    explicit = payload.body.decode(errors="replace") if payload.body else ""
+    return (
+        "const form = document.querySelector('form');"
+        f"const explicit = new URLSearchParams({json.dumps(explicit)});"
+        "if (form) {"
+        "  const params = new URLSearchParams();"
+        "  for (const [k, v] of new FormData(form).entries()) params.set(k, v);"
+        "  for (const [k, v] of explicit.entries()) params.set(k, v);"
+        "  init.body = params.toString();"
+        "} else if (explicit.size) {"
+        "  init.body = explicit.toString();"
+        "}"
+    )
+
+
 def _build_fetch_expression(payload: StealthRequestPayload, url: str) -> str:
     body_b64 = base64.b64encode(payload.body).decode("ascii") if payload.body else None
     headers = dict(payload.extra_headers)
-    body_line = (
-        f"init.body = Uint8Array.from(atob({json.dumps(body_b64)}), "
-        "c => c.charCodeAt(0));"
-        if body_b64
-        else ""
-    )
+    form_body_js = _form_urlencoded_body_js(payload)
+    if form_body_js:
+        body_line = form_body_js
+    elif body_b64:
+        body_line = (
+            f"init.body = Uint8Array.from(atob({json.dumps(body_b64)}), "
+            "c => c.charCodeAt(0));"
+        )
+    else:
+        body_line = ""
     return (
         "(async () => {"
         f"const headers = {json.dumps(headers)};"
