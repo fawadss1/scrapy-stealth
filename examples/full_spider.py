@@ -39,7 +39,7 @@ class StealthDemoSpider(scrapy.Spider):
         # Optional: pin hosts to fixed origin IPs.
         # "STEALTH_DNS_OVERRIDES": {"example.com": "93.184.216.34"},
         "STEALTH_RECYCLE_AFTER_BANS": 5,
-        "BROWSER_HEADLESS": True,
+        "BROWSER_HEADLESS": False,
         "BROWSER_SETTLE_S": 4.0,
         "BROWSER_STATIC_ASSETS_BLOCK": True,
         "LOG_LEVEL": "INFO",
@@ -89,7 +89,7 @@ class StealthDemoSpider(scrapy.Spider):
             body=urlencode({"username": "admin", "password": "admin"}).encode(),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             callback=self.parse_quotes_login,
-            meta={"stealth": {"driver": "browser", "headless": True}},
+            meta={"stealth": {"driver": "browser"}},
             dont_filter=True,
         )
 
