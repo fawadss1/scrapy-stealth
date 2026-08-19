@@ -128,6 +128,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🎯 Proxy bypass list — send chosen domains straight to the origin instead of through the proxy (`--proxy-bypass-list`)
 * 🧭 Custom DNS overrides — pin hosts to fixed IPs (connect via IP, keep hostname for TLS/SNI/Host) to dodge poisoned or geo-shifted public DNS
 * 📤 **Full request fidelity** — `POST`/`PUT`/`PATCH`/`DELETE`, custom headers, and `Cookie` work the same on `basic`, `turbo`, and `browser`
+* 🍪 **Browser cookie handoff** — after browser login/navigation, session cookies export to response meta and merge into Scrapy's cookie jar for follow-up `basic`/`turbo` requests
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -318,6 +319,7 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                                      |
 | `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                               | After this many *consecutive* bans: `browser` restarts Chrome; `basic` / `turbo` clear cached HTTP sessions/clients. Any clean response resets the count                                                                                                                                                  |
 | `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                           | Browser driver: block images, fonts, CSS, and media via CDP. Overridable per-request via `meta["stealth"]["static_assets_block"]`; always off when `snapshot=True`                                                                                                                                        |
+| `BROWSER_EXPORT_COOKIES`      | `bool`           | `True`                            | After each browser response, merge tab cookies into Scrapy's cookie jar when `COOKIES_ENABLED` is on. Per-request opt-out: `meta["stealth"]["export_cookies"] = False`. Cookies are always exposed on the response either way (see [Browser cookie handoff](#browser-cookie-handoff))                     |
 | `BROWSER_PROXY_BYPASS_LIST`   | `list[str]`      | `[]`                              | Browser driver: domains/patterns that bypass the proxy and connect to the origin directly, via Chrome's `--proxy-bypass-list`. Supports wildcards (`*.example.com`), IP/CIDR, ports, and `<local>`. Only applies when a proxy is in use; set at browser launch (config/settings, not per-request)         |
 | `STEALTH_DNS_OVERRIDES`       | `dict[str, str]` | `{}`                              | Host→IP map used by `basic` / `turbo` (and Chrome `--host-resolver-rules` for `browser`). Connects to the IP while keeping the hostname for TLS SNI, Host header, and cert verification. Also readable from Scrapy settings as `STEALTH_DNS_OVERRIDES`. Per-request override via `meta["stealth"]["dns"]` |
 
@@ -364,6 +366,14 @@ yield scrapy.Request(
 | `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                                                                                                |
 | `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                                                                                             |
 | `static_assets_block` | `bool`          | Browser driver only: block images, fonts, CSS, and media for this request (overrides `config.BROWSER_STATIC_ASSETS_BLOCK`). Ignored — always unblocked — when `snapshot` is `True`                                                                                          |
+| `export_cookies`      | `bool`          | Browser driver only: merge tab cookies into Scrapy's cookie jar on the response (default follows `BROWSER_EXPORT_COOKIES`). Set `False` to skip jar merge while still receiving `browser_cookies` / `browser_cookie_header` on the response                                 |
+
+**Response meta (browser driver):** after each browser fetch, the response includes:
+
+| Key                                                 | Type         | Description                                                                |
+|-----------------------------------------------------|--------------|----------------------------------------------------------------------------|
+| `response.meta["stealth"]["browser_cookies"]`       | `list[dict]` | Cookies read from the tab (name, value, domain, path, secure, httpOnly, …) |
+| `response.meta["stealth"]["browser_cookie_header"]` | `str`        | Ready-to-use `Cookie` request header string                                |
 
 ---
 
@@ -425,9 +435,73 @@ yield scrapy.Request(
     method="POST",
     body=urlencode({"username": "admin", "password": "admin"}).encode(),
     headers={"Content-Type": "application/x-www-form-urlencoded"},
-    meta={"stealth": {"driver": "auto"}},
+    meta={"stealth": {"driver": "browser"}},  # browser merges hidden csrf_token from the form
 )
 ```
+
+> **Browser form POST:** the engine loads the login page first, then merges hidden `<form>` fields (e.g. `csrf_token`) into urlencoded bodies before in-page `fetch()`. You only need to send the visible fields (`username`, `password`, …).
+
+### Browser cookie handoff
+
+After a browser request (login POST, JS navigation, etc.), scrapy-stealth reads cookies from the Chrome tab and exposes them on the response. When `COOKIES_ENABLED = True` (Scrapy default) and `BROWSER_EXPORT_COOKIES = True` (default), those cookies are merged into Scrapy's cookie jar so the next `basic` or `turbo` request reuses the session automatically.
+
+**Typical flow: login with browser → scrape with turbo**
+
+```python
+from urllib.parse import urlencode
+
+class LoginSpider(scrapy.Spider):
+    custom_settings = {
+        "DOWNLOADER_MIDDLEWARES": {
+            "scrapy_stealth.middlewares.StealthDownloaderMiddleware": 950,
+        },
+        "COOKIES_ENABLED": True,
+    }
+
+    async def start(self):
+        yield scrapy.Request(
+            "https://quotes.toscrape.com/login",
+            method="POST",
+            body=urlencode({"username": "admin", "password": "admin"}).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            meta={"stealth": {"driver": "browser"}},
+            callback=self.after_login,
+        )
+
+    def after_login(self, response):
+        # Optional: inspect exported cookies
+        stealth = response.meta.get("stealth") or {}
+        self.logger.info("cookie header: %s", stealth.get("browser_cookie_header"))
+
+        # Jar merge is automatic — turbo/basic pick up the session
+        yield scrapy.Request(
+            "https://quotes.toscrape.com/",
+            meta={"stealth": {"driver": "turbo"}},
+            callback=self.parse_home,
+        )
+
+    def parse_home(self, response):
+        assert "Logout" in response.text  # still logged in via turbo
+```
+
+Or pass cookies explicitly on the next request:
+
+```python
+cookie_header = response.meta["stealth"]["browser_cookie_header"]
+yield scrapy.Request(
+    url,
+    headers={"Cookie": cookie_header},
+    meta={"stealth": {"driver": "turbo"}},
+)
+```
+
+Opt out of jar merge per request (meta is still populated):
+
+```python
+meta={"stealth": {"driver": "browser", "export_cookies": False}}
+```
+
+Stats: `stealth/browser_cookies_exported` counts cookies merged into the jar.
 
 ### Cookies and Authorization
 
@@ -445,9 +519,7 @@ yield scrapy.Request(
 )
 ```
 
-> **Tip:** You can also use Scrapy's built-in cookie jar (`COOKIES_ENABLED = True`) for GET/POST
-> on `basic` and `turbo`. The `browser` driver applies the `Cookie` header via CDP for each
-> request.
+> **Tip:** With `COOKIES_ENABLED = True`, browser-exported session cookies flow into Scrapy's jar automatically (`BROWSER_EXPORT_COOKIES = True` by default). You can also set the `Cookie` header manually on any driver — all engines forward it.
 
 ### PUT / PATCH / DELETE
 
@@ -842,6 +914,7 @@ yield scrapy.Request(url, meta={"stealth": {"driver": "turbo"}})
 | `stealth/dns/hosts`                                | Total pinned hosts applied                 |
 | `stealth/dns/active_hosts`                         | Pinned hosts on latest request             |
 | `stealth/fallbacks` / `stealth/fallbacks/{driver}` | Browser escalations from `driver="auto"`   |
+| `stealth/browser_cookies_exported`                 | Browser cookies merged into Scrapy's jar   |
 
 ```python
 # e.g. in spider_closed

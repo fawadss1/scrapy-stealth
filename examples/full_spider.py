@@ -39,6 +39,7 @@ class StealthDemoSpider(scrapy.Spider):
         # Optional: pin hosts to fixed origin IPs.
         # "STEALTH_DNS_OVERRIDES": {"example.com": "93.184.216.34"},
         "STEALTH_RECYCLE_AFTER_BANS": 5,
+        "COOKIES_ENABLED": True,  # required for browser → turbo cookie jar handoff
         "BROWSER_HEADLESS": False,
         "BROWSER_SETTLE_S": 4.0,
         "BROWSER_STATIC_ASSETS_BLOCK": True,
@@ -156,6 +157,25 @@ class StealthDemoSpider(scrapy.Spider):
             "driver": response.flags,
             "logged_in": logged_in,
             "title": response.css("title::text").get(),
+        }
+
+        if not logged_in:
+            return
+
+        # Cookie handoff: browser session → turbo (via Scrapy cookie jar + COOKIES_ENABLED)
+        yield scrapy.Request(
+            "https://quotes.toscrape.com/",
+            meta={"stealth": {"driver": "turbo"}},
+            callback=self.parse_quotes_home,
+            dont_filter=True,
+        )
+
+    def parse_quotes_home(self, response: scrapy.http.Response):
+        yield {
+            "url": response.url,
+            "status": response.status,
+            "driver": response.flags,
+            "logged_in_after_turbo": "Logout" in response.text,
         }
 
     @snapshot  # saves PNG under stealth_snapshots/ when snapshot=True was set

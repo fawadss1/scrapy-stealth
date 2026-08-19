@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Browser cookie handoff**
+  After each browser response, tab cookies are read via CDP and exposed on the response as
+  `meta["stealth"]["browser_cookies"]` and `meta["stealth"]["browser_cookie_header"]`.
+  When `COOKIES_ENABLED` and `BROWSER_EXPORT_COOKIES` are on (both default), cookies merge
+  into Scrapy's jar so follow-up `basic`/`turbo` requests reuse the session (login with
+  browser → scrape with turbo). Stats: `stealth/browser_cookies_exported`.
+
+* **Browser form POST — hidden field merge**
+  Urlencoded POST bodies on the browser driver automatically merge hidden `<form>` fields
+  (e.g. `csrf_token`) from the loaded page before in-page `fetch()`.
+
 * **Proxy-Seller sponsor**
   README and `AGENTS.md` now include Proxy-Seller with affiliate link, promo code `FAWAD15`, and logo assets under `docs/static/sponsors/`.
 
