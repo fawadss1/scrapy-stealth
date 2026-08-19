@@ -6,6 +6,7 @@ from .constants import (
     BLOCK_CODES,
     BLOCK_KEYWORDS,
     BROWSER_EXECUTABLE_PATH,
+    BROWSER_EXPORT_COOKIES,
     BROWSER_HEADLESS,
     BROWSER_MAX_TABS,
     BROWSER_NO_SANDBOX,
@@ -62,6 +63,7 @@ class StealthConfig:
     BROWSER_PROXY_BYPASS_LIST: list[str] = BROWSER_PROXY_BYPASS_LIST
     BROWSER_NO_SANDBOX: bool | None = BROWSER_NO_SANDBOX
     BROWSER_EXECUTABLE_PATH: str | None = BROWSER_EXECUTABLE_PATH
+    BROWSER_EXPORT_COOKIES: bool = BROWSER_EXPORT_COOKIES
 
     def get(self, key: str, default: Any = None) -> Any:
         """Return a config value by name, with an optional fallback."""

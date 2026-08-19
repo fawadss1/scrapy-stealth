@@ -107,3 +107,9 @@ BROWSER_NO_SANDBOX: bool | None = None
 #   config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"
 #   config.BROWSER_EXECUTABLE_PATH = "/opt/chrome/chrome"
 BROWSER_EXECUTABLE_PATH: str | None = None
+
+# Browser engine: after each browser response, merge tab cookies into Scrapy's cookie
+# jar when COOKIES_ENABLED is on. Per-request opt-out:
+# meta["stealth"]["export_cookies"] = False. Cookies are always exposed on the
+# response as meta["stealth"]["browser_cookies"] and ["browser_cookie_header"].
+BROWSER_EXPORT_COOKIES: bool = True
