@@ -91,3 +91,8 @@ class StealthStats:
         self.inc("stealth/fallbacks")
         self.inc(f"stealth/fallbacks/{from_driver}")
         self.set("stealth/fallback_driver", to_driver)
+
+    def record_browser_cookies(self, count: int) -> None:
+        if count <= 0:
+            return
+        self.inc("stealth/browser_cookies_exported", count)
