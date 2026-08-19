@@ -150,7 +150,38 @@ class TestStealthDownloaderMiddleware:
         assert request.meta["stealth"]["headless"] is False
         crawler.stats.inc_value.assert_any_call("stealth/fallbacks", 1)
         crawler.stats.inc_value.assert_any_call("stealth/fallbacks/turbo", 1)
+        crawler.stats.inc_value.assert_any_call("stealth/fallbacks/method/get", 1)
         fallback.fetch.assert_awaited_once()
+
+    def test_driver_fallback_on_post_403(self, spider):
+        crawler = MagicMock()
+        challenge = _make_html_response(body=b"Forbidden", status=403)
+        browser_ok = _make_html_response(body=b"<html><body>ok</body></html>")
+        primary = MagicMock()
+        primary.driver_name = "turbo"
+        primary.fetch = AsyncMock(return_value=challenge)
+        fallback = MagicMock()
+        fallback.driver_name = "browser"
+        fallback.fetch = AsyncMock(return_value=browser_ok)
+
+        with patch("scrapy_stealth.engines.basic.Client"):
+            middleware = StealthDownloaderMiddleware(crawler=crawler)
+        request = Request(
+            "https://example.com/login",
+            method="POST",
+            body=b"user=1&pass=2",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            meta={"stealth": {"driver": "auto"}},
+        )
+        with patch.object(middleware.manager, "get", side_effect=[primary, fallback]):
+            result = asyncio.run(middleware.process_request(request))
+
+        assert result is browser_ok
+        assert request.method == "POST"
+        assert request.body == b"user=1&pass=2"
+        crawler.stats.inc_value.assert_any_call("stealth/fallbacks/method/post", 1)
+        fallback.fetch.assert_awaited_once()
+        assert fallback.fetch.await_args.args[0] is request
 
     def test_browser_driver_defaults_to_visible_window(self, middleware, spider):
         request = Request(
