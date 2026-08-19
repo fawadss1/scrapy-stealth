@@ -234,3 +234,20 @@ async def browser_http_fetch(
         {str(k): str(v) for k, v in (payload_result.get("headers") or {}).items()}
     )
     return base64.b64decode(body_b64), status, resp_headers
+
+
+async def browser_binary_fetch(
+    page: Any, url: str
+) -> tuple[bytes, int, dict[str, str]]:
+    """GET raw bytes for an asset URL via in-page ``fetch()`` (same-origin cookies)."""
+    from ..network.request import StealthRequestPayload
+
+    payload = StealthRequestPayload(
+        url=url,
+        method="GET",
+        headers={},
+        body=None,
+        cookie_header=None,
+        extra_headers={},
+    )
+    return await browser_http_fetch(page, url, payload)

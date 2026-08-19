@@ -400,6 +400,39 @@ async def _smart_wait(
         await asyncio.sleep(delay)
 
 
+def _mime_looks_binary(headers: dict[str, str]) -> bool:
+    content_type = str(headers.get("content-type", "")).lower()
+    return content_type.startswith(
+        ("image/", "application/pdf", "application/octet-stream", "video/", "audio/")
+    )
+
+
+def _is_binary_body(body: bytes) -> bool:
+    if not body:
+        return False
+    if body.lstrip().startswith(b"<"):
+        return False
+    if body.startswith(b"\xff\xd8\xff"):
+        return True
+    if body.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if body.startswith(b"GIF87a") or body.startswith(b"GIF89a"):
+        return True
+    if body.startswith(b"RIFF") and len(body) > 12 and body[8:12] == b"WEBP":
+        return True
+    return False
+
+
+def _should_replace_capture_status(current: int, new: int) -> bool:
+    if current <= 0:
+        return True
+    if current >= 400 and 200 <= new < 300:
+        return True
+    if 200 <= current < 300:
+        return False
+    return new >= current
+
+
 def _url_looks_binary(url: str) -> bool:
     path = urlparse(url).path.lower()
     return any(path.endswith(suffix) for suffix in _BINARY_URL_SUFFIXES)
@@ -432,14 +465,20 @@ class _MainDocumentCapture:
 
         async def _on_response(event: network.ResponseReceived, *_: Any) -> None:
             try:
-                if event.type_.value not in ("Document", "Image"):
-                    return
                 resp_url = event.response.url or ""
                 if not _urls_match(resp_url, self._url):
                     return
+                if not _url_looks_binary(self._url) and event.type_.value not in (
+                    "Document",
+                    "Image",
+                ):
+                    return
+                new_status = int(event.response.status or 0)
+                if not _should_replace_capture_status(self._status, new_status):
+                    return
                 self._request_id = event.request_id
                 self._mime_type = event.response.mime_type or self._mime_type
-                self._status = int(event.response.status or 0)
+                self._status = new_status
             except Exception:
                 pass
 
@@ -478,6 +517,45 @@ class _MainDocumentCapture:
             body = bytes(body_raw)
         headers = {"content-type": self._mime_type}
         return body, headers, self._status or 200
+
+
+async def resolve_browser_get_body(
+    page: Any,
+    url: str,
+    capture: _MainDocumentCapture,
+    *,
+    default_status: int = 200,
+) -> tuple[bytes | str, dict[str, str], int]:
+    """Return raw bytes for asset URLs; HTML pages fall back to DOM HTML."""
+    from .request import browser_binary_fetch
+
+    net_body, net_headers, net_status = await capture.get_body()
+    status = net_status or default_status
+
+    if net_body and (_is_binary_body(net_body) or _mime_looks_binary(net_headers)):
+        return net_body, net_headers, status
+
+    if _url_looks_binary(url):
+        try:
+            fetch_body, fetch_status, fetch_headers = await browser_binary_fetch(
+                page, url
+            )
+            if fetch_body and (_is_binary_body(fetch_body) or fetch_status == 200):
+                return fetch_body, fetch_headers, fetch_status or status
+        except Exception as exc:
+            logger.debug("browser_binary_fetch failed for %r: %s", url, exc)
+
+        if net_body and not net_body.lstrip().startswith(b"<"):
+            return net_body, net_headers, status
+
+    html = await page.evaluate(_JS_HTML)
+    if _url_looks_binary(url):
+        logger.warning(
+            "Browser driver returned HTML for binary URL %r — "
+            "response may be a challenge page or Chrome viewer shell",
+            url,
+        )
+    return html, {"content-type": "text/html; charset=utf-8"}, status
 
 
 @contextlib.asynccontextmanager

@@ -25,6 +25,7 @@ from ._core import (
     _stop_loop,
     _url_looks_binary,
     _wait_for_status,
+    resolve_browser_get_body,
 )
 from .fingerprints import POOL, WEIGHTS
 from .patch import patch_nodriver
@@ -57,5 +58,6 @@ __all__ = [
     "_stop_loop",
     "_url_looks_binary",
     "_wait_for_status",
+    "resolve_browser_get_body",
     "patch_nodriver",
 ]

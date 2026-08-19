@@ -22,7 +22,6 @@ from ..exceptions import (
 )
 from ..utils.browser import (
     _BROWSER_ARGS,
-    _JS_HTML,
     _JS_IS_CHROME_ERROR,
     ProxyRelay,
     _block_static_assets,
@@ -40,8 +39,8 @@ from ..utils.browser import (
     _splash_url,
     _start_browser_relay,
     _stop_loop,
-    _url_looks_binary,
     _wait_for_status,
+    resolve_browser_get_body,
 )
 from ..utils.browser.cookies import collect_browser_cookies, format_cookie_header
 from ..utils.browser.patch import patch_nodriver
@@ -556,20 +555,12 @@ class BrowserEngine(BaseEngine):
                                 )
                                 status = await _wait_for_status(page, timeout=3.0)
 
-                            net_body, net_headers, net_status = await capture.get_body()
-                            prefer_network = net_body is not None and (
-                                _url_looks_binary(url)
-                                or not str(net_headers.get("content-type", ""))
-                                .lower()
-                                .startswith("text/html")
+                            html, resp_headers, status = await resolve_browser_get_body(
+                                page,
+                                url,
+                                capture,
+                                default_status=int(status),
                             )
-                            if prefer_network:
-                                html = net_body
-                                resp_headers = net_headers
-                                if net_status:
-                                    status = net_status
-                            else:
-                                html = await page.evaluate(_JS_HTML)
                         else:
                             html = ""
 
