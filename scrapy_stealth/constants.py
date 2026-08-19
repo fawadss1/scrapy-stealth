@@ -68,6 +68,10 @@ BROWSER_HEADLESS: bool = False
 # Browser engine: seconds to wait after navigation for JS to finish rendering.
 BROWSER_SETTLE_S: float = 4.0
 
+# Browser engine: max seconds to wait on JS challenge / Cloudflare interstitials
+# (403/503 "Just a moment" pages) before capturing the response.
+BROWSER_CHALLENGE_TIMEOUT_S: float = 30.0
+
 # Browser engine: max Chrome tabs open simultaneously across concurrent requests.
 BROWSER_MAX_TABS: int = 10
 
