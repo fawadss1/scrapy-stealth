@@ -272,7 +272,7 @@ config.STEALTH_DRIVER = "turbo"  # "turbo" (default), "basic", "browser", or "au
 config.HTTP2 = True  # False for servers that only support HTTP/1.1
 config.BLOCK_CODES |= {407}  # extend blocked status codes (|= keeps defaults)
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
-config.BROWSER_HEADLESS = True  # browser driver: headless mode (False = visible window, more stealthy)
+config.BROWSER_HEADLESS = False  # browser driver: False = visible window (default)
 config.BROWSER_SETTLE_S = 4.0  # browser driver: seconds to wait after navigation for JS to finish
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
 config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle Chrome / HTTP sessions after 5 consecutive bans
@@ -311,7 +311,7 @@ config.get("MISSING_KEY", "default")  # "default"
 | `HTTP2`                       | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                                                                                                                                                                                                                       |
 | `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                                                                                                                                                                                                                      |
 | `BLOCK_KEYWORDS`              | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                                                                                                                                                                     |
-| `BROWSER_HEADLESS`            | `bool`           | `True`                            | Browser driver: headless mode (`False` = visible window, more stealthy)                                                                                                                                                                                                                                   |
+| `BROWSER_HEADLESS`            | `bool`           | `False`                           | Browser driver: headless mode (`False` = visible window, default and more stealthy)                                                                                                                                                                                                                       |
 | `BROWSER_SETTLE_S`            | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                                                                                                                                                                               |
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                                  |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                                  |
@@ -360,7 +360,7 @@ yield scrapy.Request(
 | `dns`                 | `str` or `dict` | Pin DNS: bare IP for this request's hostname, or `{host: ip}` mapping. Merges over `STEALTH_DNS_OVERRIDES`. Works with `basic`/`turbo` per-request; `browser` uses global overrides at Chrome launch only                                                                   |
 | `stealth_timeout`     | `int`           | Per-request timeout in seconds (overrides default 30s)                                                                                                                                                                                                                      |
 | `http2`               | `bool`          | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request)                                                                                                                                                                                             |
-| `headless`            | `bool`          | Browser driver only: `True` = headless, `False` = visible window (more stealthy)                                                                                                                                                                                            |
+| `headless`            | `bool`          | Browser driver only: `False` = visible window (default), `True` = headless                                                                                                                                                                                                  |
 | `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                                                                                                |
 | `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                                                                                             |
 | `static_assets_block` | `bool`          | Browser driver only: block images, fonts, CSS, and media for this request (overrides `config.BROWSER_STATIC_ASSETS_BLOCK`). Ignored — always unblocked — when `snapshot` is `True`                                                                                          |
@@ -611,7 +611,7 @@ yield scrapy.Request(
     meta={
         "stealth": {
             "driver": "browser",
-            "headless": False,  # visible window — harder to detect (default: True)
+            "headless": False,  # visible window — default for browser driver
             "settle": 4.0,  # seconds to wait for JS after page load
         }
     },

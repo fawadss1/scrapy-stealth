@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **Browser driver defaults to visible Chrome (`headless=False`)**
+  Explicit `driver="browser"` and `driver="auto"` browser fallback now open a visible
+  window by default. Set `meta={"stealth": {"headless": True}}` or `BROWSER_HEADLESS = True`
+  to opt into headless mode.
+
 ### Added
 
 * **Proxy-Seller sponsor**
