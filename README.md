@@ -129,6 +129,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🧭 Custom DNS overrides — pin hosts to fixed IPs (connect via IP, keep hostname for TLS/SNI/Host) to dodge poisoned or geo-shifted public DNS
 * 📤 **Full request fidelity** — `POST`/`PUT`/`PATCH`/`DELETE`, custom headers, and `Cookie` work the same on `basic`, `turbo`, and `browser`
 * 🍪 **Browser cookie handoff** — after browser login/navigation, session cookies export to response meta and merge into Scrapy's cookie jar for follow-up `basic`/`turbo` requests
+* ☁️ **Cloudflare challenge handling** — browser driver waits through 403/503 interstitials and Turnstile-style pages (up to `BROWSER_CHALLENGE_TIMEOUT_S`); returns raw bytes for CDN images (`.jpg`, `.png`, …) instead of Chrome’s HTML viewer shell
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -275,6 +276,7 @@ config.BLOCK_CODES |= {407}  # extend blocked status codes (|= keeps defaults)
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
 config.BROWSER_HEADLESS = False  # browser driver: False = visible window (default)
 config.BROWSER_SETTLE_S = 4.0  # browser driver: seconds to wait after navigation for JS to finish
+config.BROWSER_CHALLENGE_TIMEOUT_S = 30.0  # max wait on Cloudflare / JS challenge pages (403/503)
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
 config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle Chrome / HTTP sessions after 5 consecutive bans
 config.BROWSER_STATIC_ASSETS_BLOCK = True  # block images/fonts/CSS/media (skipped when snapshot=True)
@@ -314,6 +316,7 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BLOCK_KEYWORDS`              | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                                                                                                                                                                     |
 | `BROWSER_HEADLESS`            | `bool`           | `False`                           | Browser driver: headless mode (`False` = visible window, default and more stealthy)                                                                                                                                                                                                                       |
 | `BROWSER_SETTLE_S`            | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                                                                                                                                                                               |
+| `BROWSER_CHALLENGE_TIMEOUT_S` | `float`          | `30.0`                            | Browser driver: max seconds to wait on JS challenge / Cloudflare interstitial pages (403/503, “Just a moment”, Turnstile). Uses `challenge_mode` polling — longer than `BROWSER_SETTLE_S`                                                                                                                 |
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                                  |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                                  |
 | `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                                      |
@@ -538,11 +541,11 @@ yield scrapy.Request(
 
 ### Driver behaviour summary
 
-| Driver    | GET / HEAD                         | POST / PUT / PATCH / DELETE / …      |
-|-----------|------------------------------------|--------------------------------------|
-| `basic`   | Native HTTP client + profile TLS   | Same — method + body + headers       |
-| `turbo`   | curl-impersonate TLS fingerprint   | Same — method + body + headers       |
-| `browser` | Chrome tab navigation              | In-page `fetch()` with method + body |
+| Driver    | GET / HEAD                                                              | POST / PUT / PATCH / DELETE / …      |
+|-----------|-------------------------------------------------------------------------|--------------------------------------|
+| `basic`   | Native HTTP client + profile TLS                                        | Same — method + body + headers       |
+| `turbo`   | curl-impersonate TLS fingerprint                                        | Same — method + body + headers       |
+| `browser` | Chrome tab navigation; binary URLs (`.jpg`, `.png`, …) return raw bytes | In-page `fetch()` with method + body |
 
 For **`driver="auto"`**, phase 1 uses `basic`/`turbo` (including POST). If the response is a
 JS challenge or session ban, phase 2 retries once with **`browser`** using the same method,
@@ -691,10 +694,40 @@ yield scrapy.Request(
 )
 ```
 
-**Heavy Cloudflare sites — increase settle time:**
+**Heavy Cloudflare sites — increase settle and challenge timeout:**
 
 ```python
-meta = {"stealth": {"driver": "browser", "headless": False, "settle": 12}}
+meta = {
+    "stealth": {
+        "driver": "browser",
+        "headless": False,
+        "settle": 12,
+    }
+}
+
+# Or globally:
+# BROWSER_CHALLENGE_TIMEOUT_S = 45
+```
+
+On 403/503 challenge pages (“Just a moment”, “Performing security verification”, Turnstile),
+the browser driver waits up to `BROWSER_CHALLENGE_TIMEOUT_S` (default 30s) for the challenge
+to clear before capturing the response — not only on HTTP 2xx.
+
+**CDN images / binary assets behind Cloudflare:**
+
+Direct GET to `.jpg`, `.png`, and other asset URLs returns **raw file bytes** in
+`response.body` (not Chrome’s HTML image-viewer wrapper). Useful for CDN hosts like
+`scdn.autodoc.de`:
+
+```python
+yield scrapy.Request(
+    "https://scdn.autodoc.de/vehicles/800x287/8145.jpg",
+    meta={"stealth": {"driver": "browser", "headless": False, "settle": 8}},
+    callback=self.save_image,
+)
+
+def save_image(self, response):
+    assert response.body[:3] == b"\xff\xd8\xff"  # JPEG magic bytes
 ```
 
 **Global default (all stealth requests use browser engine):**
