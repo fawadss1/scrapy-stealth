@@ -951,12 +951,33 @@ class TestBrowserEngine:
             )
         assert mock_ensure.call_args.kwargs["headless"] is False
 
+    def test_execute_uses_visible_browser_by_default(self, engine):
+        with patch.object(engine, "_ensure_browser_unlocked") as mock_ensure:
+            engine._execute(
+                Request(
+                    "https://example.com",
+                    meta={"stealth": {"driver": "browser"}},
+                )
+            )
+        assert mock_ensure.call_args.kwargs["headless"] is False
+
     def test_execute_uses_config_headless_default(self, engine):
         with patch.object(engine, "_ensure_browser_unlocked") as mock_ensure:
             engine._execute(Request("https://example.com"))
         assert mock_ensure.call_args.kwargs["headless"] == config.get(
             "BROWSER_HEADLESS"
         )
+        assert mock_ensure.call_args.kwargs["headless"] is False
+
+    def test_execute_respects_headless_true_in_meta(self, engine):
+        with patch.object(engine, "_ensure_browser_unlocked") as mock_ensure:
+            engine._execute(
+                Request(
+                    "https://example.com",
+                    meta={"stealth": {"driver": "browser", "headless": True}},
+                )
+            )
+        assert mock_ensure.call_args.kwargs["headless"] is True
 
     def test_execute_passes_proxy_to_do_fetch(self, engine):
         with patch.object(

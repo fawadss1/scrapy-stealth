@@ -152,6 +152,19 @@ class TestStealthDownloaderMiddleware:
         crawler.stats.inc_value.assert_any_call("stealth/fallbacks/turbo", 1)
         fallback.fetch.assert_awaited_once()
 
+    def test_browser_driver_defaults_to_visible_window(self, middleware, spider):
+        request = Request(
+            "https://example.com",
+            meta={"stealth": {"driver": "browser"}},
+        )
+        with patch.object(middleware.manager, "get") as mock_get:
+            mock_engine = MagicMock()
+            mock_engine.driver_name = "browser"
+            mock_engine.fetch = AsyncMock(return_value=_make_html_response())
+            mock_get.return_value = mock_engine
+            asyncio.run(middleware.process_request(request))
+        assert request.meta["stealth"]["headless"] is False
+
     def test_no_driver_fallback_without_auto_driver(self, middleware, spider):
         challenge = _make_html_response(
             body=b"<html>Just a moment... cf-browser-verification</html>"
