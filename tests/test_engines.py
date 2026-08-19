@@ -891,6 +891,7 @@ class TestBrowserEngine:
                 200,
                 None,
                 {"content-type": "text/html; charset=utf-8"},
+                [],
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -911,6 +912,41 @@ class TestBrowserEngine:
         assert captured["headers"] == {
             "Content-Type": "application/x-www-form-urlencoded"
         }
+
+    def test_execute_exports_browser_cookies_on_response(self, engine):
+        cookies = [
+            {
+                "name": "session",
+                "value": "abc123",
+                "domain": "example.com",
+                "path": "/",
+                "secure": False,
+                "httpOnly": True,
+                "session": False,
+                "expires": None,
+            }
+        ]
+
+        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
+            return (
+                b"<html></html>",
+                200,
+                None,
+                {"content-type": "text/html; charset=utf-8"},
+                cookies,
+            )
+
+        with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
+            response = engine._execute(
+                Request(
+                    "https://example.com/login",
+                    method="POST",
+                    body=b"user=admin&pass=secret",
+                )
+            )
+
+        assert response.meta["stealth"]["browser_cookies"] == cookies
+        assert response.meta["stealth"]["browser_cookie_header"] == "session=abc123"
 
     def test_execute_returns_none_on_exception(self, engine, mock_browser):
         mock_browser.send = AsyncMock(side_effect=Exception("network error"))
@@ -989,6 +1025,7 @@ class TestBrowserEngine:
                 200,
                 None,
                 {"content-type": "text/html; charset=utf-8"},
+                [],
             ),
         ) as mock_fetch:
             engine._execute(
@@ -1011,6 +1048,7 @@ class TestBrowserEngine:
                 200,
                 None,
                 {"content-type": "text/html; charset=utf-8"},
+                [],
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -1029,6 +1067,7 @@ class TestBrowserEngine:
                 200,
                 None,
                 {"content-type": "text/html; charset=utf-8"},
+                [],
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -1181,6 +1220,7 @@ class TestBrowserEngine:
                 200,
                 None,
                 {"content-type": "text/html; charset=utf-8"},
+                [],
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fetch_once_then_cancel):

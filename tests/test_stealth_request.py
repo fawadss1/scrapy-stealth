@@ -113,6 +113,22 @@ class TestBuildStealthRequest:
         assert "application/json" in expr
         assert base64.b64encode(b'{"ok":true}').decode() in expr
 
+    def test_build_fetch_expression_merges_form_hidden_fields(self):
+        from scrapy_stealth.utils.browser.request import _build_fetch_expression
+
+        payload = StealthRequestPayload(
+            url="https://quotes.toscrape.com/login",
+            method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            body=b"username=admin&password=admin",
+            cookie_header=None,
+            extra_headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        expr = _build_fetch_expression(payload, payload.url)
+        assert "FormData(form)" in expr
+        assert "username=admin&password=admin" in expr
+        assert "init.body = Uint8Array" not in expr
+
     def test_coerce_fetch_result_from_deep_serialized_remote_object(self):
         from scrapy_stealth.utils.browser.request import _coerce_fetch_result
 
