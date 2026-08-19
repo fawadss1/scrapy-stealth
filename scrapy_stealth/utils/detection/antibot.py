@@ -9,6 +9,8 @@ _JS_CHALLENGE_SIGS: tuple[str, ...] = (
     "cf-browser-verification",  # Cloudflare
     "just a moment",  # Cloudflare
     "__cf_chl",  # Cloudflare
+    "challenges.cloudflare.com",  # Cloudflare managed challenge
+    "cf-turnstile",  # Cloudflare Turnstile
     "datadome",  # DataDome
     "px-captcha",  # PerimeterX
     "location.reload(true)",  # generic JS reload challenge
