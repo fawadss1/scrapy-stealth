@@ -4,6 +4,8 @@ from typing import Any
 
 from scrapy.http import Request
 
+from ...config import config
+
 STEALTH_KEY = "stealth"
 
 
@@ -18,6 +20,22 @@ def _resolve_engine(request: Request, default: str) -> str:
 
 def _get_meta_data(request: Request, key: str, default: Any = None) -> Any:
     return _stealth_meta(request).get(key, default)
+
+
+def resolve_browser_headless(request: Request) -> bool:
+    """Browser runs visible by default; per-request meta or config can opt into headless."""
+    stealth = _stealth_meta(request)
+    if "headless" in stealth:
+        return bool(stealth["headless"])
+    return bool(config.get("BROWSER_HEADLESS"))
+
+
+def apply_browser_driver_defaults(request: Request) -> None:
+    """Ensure explicit ``driver="browser"`` requests default to a visible window."""
+    stealth = _stealth_meta(request)
+    if stealth.get("driver") != "browser":
+        return
+    stealth.setdefault("headless", False)
 
 
 def _apply_stealth_enabled_defaults(request: Request, stealth_enabled: bool) -> None:

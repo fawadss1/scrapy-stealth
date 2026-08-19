@@ -62,8 +62,8 @@ STEALTH_PROXIES: list[str] = []
 # Example: {"example.com": "203.0.113.10", "www.example.com": "203.0.113.10"}
 STEALTH_DNS_OVERRIDES: dict[str, str] = {}
 
-# Browser engine: run Chrome headless by default.
-BROWSER_HEADLESS: bool = True
+# Browser engine: visible window by default (more stealthy than headless).
+BROWSER_HEADLESS: bool = False
 
 # Browser engine: seconds to wait after navigation for JS to finish rendering.
 BROWSER_SETTLE_S: float = 4.0

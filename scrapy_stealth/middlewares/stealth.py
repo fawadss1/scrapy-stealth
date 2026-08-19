@@ -15,6 +15,7 @@ from ..utils.core.meta import (
     _apply_stealth_enabled_defaults,
     _get_meta_data,
     _resolve_engine,
+    apply_browser_driver_defaults,
 )
 from ..utils.engine.fallback import (
     FALLBACK_DRIVER,
@@ -100,6 +101,7 @@ class StealthDownloaderMiddleware:
 
     async def process_request(self, request: Request) -> Response | None:
         _apply_stealth_enabled_defaults(request, self._stealth_enabled)
+        apply_browser_driver_defaults(request)
 
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
         driver = _get_meta_data(request, "driver")

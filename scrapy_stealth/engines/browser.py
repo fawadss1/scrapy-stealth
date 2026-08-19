@@ -51,7 +51,7 @@ from ..utils.browser.request import (
 from ..utils.browser.session import BanStreakTracker
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
-from ..utils.core.meta import _get_meta_data
+from ..utils.core.meta import _get_meta_data, resolve_browser_headless
 from ..utils.core.response import StealthResponse
 from ..utils.network.dns import (
     dns_fingerprint,
@@ -596,9 +596,7 @@ class BrowserEngine(BaseEngine):
         ctx = self._ctx(request)
         self._record_request_identity(ctx.profile, ctx.proxy)
         try:
-            headless: bool = _get_meta_data(
-                request, "headless", config.get("BROWSER_HEADLESS")
-            )
+            headless: bool = resolve_browser_headless(request)
             settle: float = _get_meta_data(
                 request, "settle", config.get("BROWSER_SETTLE_S")
             )
