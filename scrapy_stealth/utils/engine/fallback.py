@@ -22,12 +22,25 @@ def resolve_primary_driver(driver: str | None) -> str | None:
     return "turbo"
 
 
+def request_method(request: Request) -> str:
+    return (request.method or "GET").upper()
+
+
+def should_fallback_response(response: Response) -> bool:
+    """True when an HTTP driver response looks like a challenge or session ban."""
+    try:
+        body = response.text
+    except Exception:
+        return is_browser_session_ban(response)
+    return is_js_challenge(body) or is_browser_session_ban(response)
+
+
 def should_driver_fallback(
     response: Response,
     primary_driver: str,
     request: Request,
 ) -> bool:
-    """True when this response should be retried once with the fallback driver."""
+    """True when this response should be retried once with the browser driver."""
     meta = _stealth_meta(request)
     if meta.get(FALLBACK_DONE_KEY):
         return False
@@ -39,11 +52,7 @@ def should_driver_fallback(
     if primary_driver not in _HTTP_DRIVERS:
         return False
 
-    try:
-        body = response.text
-    except Exception:
-        return is_browser_session_ban(response)
-    return is_js_challenge(body) or is_browser_session_ban(response)
+    return should_fallback_response(response)
 
 
 def mark_fallback_done(request: Request, primary_driver: str) -> None:
