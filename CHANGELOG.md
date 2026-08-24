@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+* **Browser driver — Cloudflare challenge wait on 403/503**
+  The browser engine now runs the JS challenge wait loop on 403/503 interstitials
+  (e.g. Cloudflare “Just a moment” or “Performing security verification”), not
+  only on HTTP 2xx. Challenge pages poll for up to `BROWSER_CHALLENGE_TIMEOUT_S`
+  (default 30s) instead of returning challenge HTML immediately.
+
+* **Browser driver — JPG/PNG/binary asset bodies**
+  Chrome’s built-in image viewer returns HTML (`<img src="...jpg">`) in the DOM.
+  Direct GET/HEAD to asset URLs (`.jpg`, `.png`, `.gif`, `.pdf`, …) now return
+  raw bytes: CDP `Network.getResponseBody` first, then in-page `fetch()` when the
+  network/DOM response is HTML. Prefers the latest 2xx network response over an
+  earlier 403 challenge body. Fixes CDN assets behind Cloudflare (e.g.
+  `scdn.autodoc.de/.../*.jpg`).
+
+### Added
+
+* **`BROWSER_CHALLENGE_TIMEOUT_S`** — max seconds to wait on JS challenge /
+  Cloudflare interstitial pages (default `30.0`). Configurable via settings /
+  `scrapy_stealth.config.config`.
+
+* **Cloudflare Turnstile / managed-challenge detection** — expanded signatures
+  for `challenges.cloudflare.com`, `cf-turnstile`, “Verify you are human”, and
+  “Performing security verification” titles.
+
 ---
 
 ## [0.6.16] - 2026-08-19
