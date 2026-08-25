@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.7.0] - 2026-08-25
+
 ### Changed
 
 * **Random default browser profile**
@@ -34,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   network/DOM response is HTML. Prefers the latest 2xx network response over an
   earlier 403 challenge body. Fixes CDN assets behind Cloudflare (e.g.
   `scdn.autodoc.de/.../*.jpg`).
+
+* **`wreq.emulation` import typo**
+  Fixed `from wreq.eulation import Profile` in profile resolution that caused
+  startup failure with a misleading Visual C++ runtime error on Windows.
 
 ### Added
 
@@ -1147,6 +1155,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.7.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.7.0
 
 [0.6.16]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.16
 
