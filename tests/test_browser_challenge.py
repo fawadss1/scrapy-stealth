@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from scrapy_stealth.utils.browser._core import (
     _is_binary_body,
     _MainDocumentCapture,
@@ -32,6 +34,7 @@ class TestBinaryBodyHelpers:
 
 
 class TestResolveBrowserGetBody:
+    @pytest.mark.asyncio
     async def test_binary_url_uses_fetch_when_network_body_is_html(self):
         page = AsyncMock()
         capture = _MainDocumentCapture(
@@ -68,6 +71,7 @@ class TestResolveBrowserGetBody:
 
 
 class TestMainDocumentCapture:
+    @pytest.mark.asyncio
     async def test_get_body_decodes_base64(self):
         capture = _MainDocumentCapture(
             "https://scdn.autodoc.de/catalog/categories/100x100/10564.png"
