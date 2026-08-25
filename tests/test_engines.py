@@ -41,8 +41,8 @@ class TestScrapyEngine:
 
 
 class TestResolveBrowser:
-    def test_default_profile_string_resolves(self):
-        assert resolve_browser(config.get("DEFAULT_PROFILE")) == Emulation.Chrome147
+    def test_chrome_147_resolves(self):
+        assert resolve_browser("chrome_147") == Emulation.Chrome147
 
     def test_enum_passthrough(self):
         assert resolve_browser(Emulation.Chrome147) == Emulation.Chrome147
@@ -62,8 +62,12 @@ class TestResolveBrowser:
     def test_string_opera_119(self):
         assert resolve_browser("opera_119") == Emulation.Opera119
 
-    def test_unknown_string_falls_back_to_default(self):
-        assert resolve_browser("unknown_browser_99") == Emulation.Chrome147
+    def test_unknown_string_falls_back_to_random_pool(self):
+        with patch(
+            "scrapy_stealth.utils.engine.profiles.ProfileRotator.get",
+            return_value="chrome_147",
+        ):
+            assert resolve_browser("unknown_browser_99") == Emulation.Chrome147
 
     def test_backward_compat_chrome_120(self):
         assert resolve_browser("chrome_120") == Emulation.Chrome120
@@ -288,10 +292,13 @@ class TestBasicEngine:
             ):
                 engine._execute(Request("https://example.com"))
 
-    def test_default_profile_matches_config(self):
+    def test_default_profile_picked_from_pool(self):
+        from scrapy_stealth.strategies.fingerprint import FINGERPRINTS
+
         with patch("scrapy_stealth.engines.basic.Client"):
             engine = BasicEngine()
-        assert engine.default_profile == resolve_browser(config.get("DEFAULT_PROFILE"))
+        assert engine._default_profile in FINGERPRINTS
+        assert engine.default_profile == resolve_browser(engine._default_profile)
 
     def test_client_reused_within_thread(self):
         mock_cls = MagicMock(return_value=_make_mock_client())
@@ -509,8 +516,27 @@ class TestTurboEngine:
         engine = TurboEngine()
         engine._execute(Request("https://example.com", headers={"Cookie": "sid=abc"}))
         call_kwargs = mock_session.get.call_args.kwargs
-        assert call_kwargs["headers"]["Cookie"] == "sid=abc"
-        assert "user-agent" not in {k.lower() for k in call_kwargs["headers"]}
+        assert call_kwargs["cookies"] == {"sid": "abc"}
+        assert "Cookie" not in call_kwargs.get("headers", {})
+        assert "user-agent" not in {k.lower() for k in call_kwargs.get("headers", {})}
+
+    def test_execute_uses_http3_version(self, session_patch):
+        mock_cls, mock_session = session_patch
+        engine = TurboEngine()
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"http3": True}})
+        )
+        call_kwargs = mock_session.get.call_args.kwargs
+        assert call_kwargs["http_version"] == CurlHttpVersion.V3
+
+    def test_execute_resolves_chrome150_profile(self, session_patch):
+        mock_cls, mock_session = session_patch
+        engine = TurboEngine()
+        engine._execute(
+            Request("https://example.com", meta={"stealth": {"profile": "chrome_147"}})
+        )
+        impersonate_arg = mock_cls.call_args.kwargs.get("impersonate")
+        assert impersonate_arg == "chrome150"
 
     def test_execute_no_data_on_get_without_body(self, session_patch):
         mock_cls, mock_session = session_patch
