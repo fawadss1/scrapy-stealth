@@ -20,6 +20,11 @@ def py(*a: str) -> list[str]:
     return [sys.executable, "-m", *a]
 
 
+# Match GitHub CI: dev deps only (pytest + pytest-asyncio), not pytest-twisted
+# which may be installed locally via Scrapy and masks unmarked async tests.
+PYTEST_CMD = py("pytest", "-p", "no:twisted")
+
+
 # key → (label, command, how_to_fix)
 STEPS = {
     "ruff": (
@@ -40,7 +45,7 @@ STEPS = {
     ),
     "pytest": (
         "Pytest",
-        py("pytest"),
+        PYTEST_CMD,
         "Read the failing test output ABOVE, fix code/tests, then:\n"
         "         python scripts/check.py pytest",
     ),

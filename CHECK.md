@@ -27,7 +27,7 @@ Same as the **Lint** and **CI** workflows on GitHub:
 | Ruff lint   | `ruff check .`          | Yes: `ruff check . --fix`         |
 | Ruff format | `ruff format --check .` | Yes: `ruff format .`              |
 | Mypy        | `mypy scrapy_stealth`   | No — fix the reported type errors |
-| Tests       | `pytest`                | No — fix failing tests            |
+| Tests       | `pytest -p no:twisted`  | No — fix failing tests            |
 
 ## Run one check
 
@@ -46,11 +46,14 @@ python scripts/check.py --fix
 
 Then re-run `python scripts/check.py`. Mypy and pytest still need manual fixes.
 
+Pytest runs with `-p no:twisted` so local runs match GitHub CI (`pip install -e ".[dev]"` only).
+If you have `pytest-twisted` installed from Scrapy, plain `pytest` can pass async tests that CI rejects.
+
 ## Run steps individually
 
 ```bash
 python -m ruff check .
 python -m ruff format --check .
 python -m mypy scrapy_stealth
-python -m pytest
+python -m pytest -p no:twisted
 ```
