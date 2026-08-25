@@ -6,6 +6,7 @@ from scrapy.http import Request
 from scrapy_stealth.config import config
 from scrapy_stealth.strategies.fingerprint import FINGERPRINTS, ProfileRotator
 from scrapy_stealth.strategies.proxy import ProxyRotator
+from scrapy_stealth.strategies.proxy_health import ProxyHealthRegistry
 from scrapy_stealth.strategies.retry import RetryHandler
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,94 @@ class TestProxyRotator:
     def test_invalid_proxy_in_mixed_list_raises(self):
         with pytest.raises(ValueError):
             ProxyRotator(proxies=["http://proxy1:8080", "bad-proxy"])
+
+
+# ---------------------------------------------------------------------------
+# ProxyHealthRegistry
+# ---------------------------------------------------------------------------
+
+
+class TestProxyHealthRegistry:
+    @pytest.fixture
+    def registry(self):
+        reg = ProxyHealthRegistry()
+        yield reg
+        reg.reset()
+
+    def test_success_improves_score(self, registry):
+        registry.record(
+            "http://p1:8080",
+            "example.com",
+            success=True,
+            status=200,
+        )
+        assert registry.score("http://p1:8080", "example.com") == 1.0
+
+    def test_repeated_403_opens_circuit(self, registry, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_PROXY_CIRCUIT_AFTER", 2)
+        monkeypatch.setattr(config, "STEALTH_PROXY_COOLDOWN_S", 60.0)
+        proxy = "http://p1:8080"
+        domain = "blocked.example"
+        registry.record(proxy, domain, success=False, status=403)
+        assert registry.is_available(proxy, domain)
+        registry.record(proxy, domain, success=False, status=403)
+        assert not registry.is_available(proxy, domain)
+
+    def test_pick_skips_proxy_on_domain_cooldown(self, registry, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_PROXY_CIRCUIT_AFTER", 1)
+        monkeypatch.setattr(config, "STEALTH_PROXY_COOLDOWN_S", 300.0)
+        proxies = ["http://p1:8080", "http://p2:8080"]
+        registry.record("http://p1:8080", "example.com", success=False, status=403)
+        rotator = ProxyRotator(proxies, health=registry)
+        assert rotator.get(domain="example.com") == "http://p2:8080"
+
+    def test_cooldown_expires(self, registry, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_PROXY_CIRCUIT_AFTER", 1)
+        monkeypatch.setattr(config, "STEALTH_PROXY_COOLDOWN_S", 0.01)
+        proxy = "http://p1:8080"
+        domain = "example.com"
+        registry.record(proxy, domain, success=False, status=403)
+        assert not registry.is_available(proxy, domain)
+        import time
+
+        time.sleep(0.02)
+        assert registry.is_available(proxy, domain)
+
+    def test_connection_failure_opens_circuit(self, registry, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_PROXY_CIRCUIT_AFTER", 2)
+        monkeypatch.setattr(config, "STEALTH_PROXY_COOLDOWN_S", 60.0)
+        proxy = "http://p1:8080"
+        domain = "cdn.example"
+        registry.record(proxy, domain, success=False, connection_failed=True)
+        assert registry.is_available(proxy, domain)
+        assert registry.record(proxy, domain, success=False, connection_failed=True)
+        assert not registry.is_available(proxy, domain)
+
+    def test_cooldown_does_not_relog_on_subsequent_failures(
+        self, registry, monkeypatch
+    ):
+        monkeypatch.setattr(config, "STEALTH_PROXY_CIRCUIT_AFTER", 2)
+        monkeypatch.setattr(config, "STEALTH_PROXY_COOLDOWN_S", 300.0)
+        proxy = "http://p1:8080"
+        domain = "cdn.example"
+        warnings: list[str] = []
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.proxy_health.console.warning",
+            lambda msg: warnings.append(msg),
+        )
+        registry.record(proxy, domain, success=False, connection_failed=True)
+        registry.record(proxy, domain, success=False, connection_failed=True)
+        assert len(warnings) == 1
+        assert not registry.record(
+            proxy, domain, success=False, connection_failed=True
+        )
+        assert len(warnings) == 1
+
+    def test_health_disabled_uses_random_pick(self, registry, monkeypatch):
+        monkeypatch.setattr(config, "STEALTH_PROXY_HEALTH", False)
+        proxies = [f"http://p{i}:8080" for i in range(5)]
+        rotator = ProxyRotator(proxies, health=registry)
+        assert rotator.get(domain="example.com") in proxies
 
 
 # ---------------------------------------------------------------------------

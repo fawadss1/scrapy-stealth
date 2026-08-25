@@ -89,6 +89,33 @@ class TestStealthStats:
         collector.inc_value.assert_any_call("stealth/proxy/requests", 1)
         collector.inc_value.assert_any_call("stealth/proxy/requests/turbo", 1)
 
+    def test_records_proxy_connection_failure(self):
+        collector = MagicMock()
+        s = StealthStats(collector)
+        s.record_proxy_connection_failure(
+            "turbo", "http://user:secret@dc.oxylabs.io:8000"
+        )
+        collector.inc_value.assert_any_call("stealth/proxy/connection_failures", 1)
+        collector.inc_value.assert_any_call(
+            "stealth/proxy/connection_failures/turbo", 1
+        )
+        collector.set_value.assert_any_call(
+            "stealth/proxy/last_connection_failure", "dc.oxylabs.io:8000"
+        )
+
+    def test_records_proxy_cooldown_and_rotation(self):
+        collector = MagicMock()
+        s = StealthStats(collector)
+        s.record_proxy_cooldown("basic", "http://user:pass@proxy.example:8080")
+        s.record_proxy_rotation("basic")
+        collector.inc_value.assert_any_call("stealth/proxy/cooldowns", 1)
+        collector.inc_value.assert_any_call("stealth/proxy/cooldowns/basic", 1)
+        collector.set_value.assert_any_call(
+            "stealth/proxy/last_cooldown", "proxy.example:8080"
+        )
+        collector.inc_value.assert_any_call("stealth/proxy/rotations", 1)
+        collector.inc_value.assert_any_call("stealth/proxy/rotations/basic", 1)
+
 
 def _make_mock_client(status=200, content=b"<html><body>ok</body></html>"):
     mock_status = MagicMock()
