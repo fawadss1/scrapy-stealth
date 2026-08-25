@@ -19,8 +19,6 @@ BLOCK_KEYWORDS: list[str] = [
     "unusual traffic",
 ]
 
-# Default browser profile used when no profile is specified.
-DEFAULT_PROFILE: str = "chrome_147"
 
 # Default engine used when no engine is specified in request meta.
 DEFAULT_ENGINE: str = "scrapy"
@@ -34,6 +32,11 @@ LOGGER_NAME = _pkg_meta.name
 # Whether the stealth engine uses HTTP/2.
 # Disable if targeting servers that only support HTTP/1.1.
 HTTP2: bool = True
+
+# Turbo driver: use HTTP/3 (QUIC) when True.
+# UDP-capable proxy for QUIC (most HTTP proxies only support HTTP/1.1–2).
+# Overridable per-request via meta["stealth"]["http3"].
+HTTP3: bool = False
 
 # Default stealth driver. Options: "basic", "turbo", "browser", or "auto".
 # "auto" uses this as the primary HTTP driver (default "turbo"), then retries once

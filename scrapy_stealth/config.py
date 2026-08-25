@@ -15,9 +15,9 @@ from .constants import (
     BROWSER_SETTLE_S,
     BROWSER_STATIC_ASSETS_BLOCK,
     DEFAULT_ENGINE,
-    DEFAULT_PROFILE,
     DEFAULT_TIMEOUT,
     HTTP2,
+    HTTP3,
     LOGGER_NAME,
     STEALTH_DNS_OVERRIDES,
     STEALTH_DRIVER,
@@ -35,9 +35,8 @@ class StealthConfig:
 
         from scrapy_stealth.config import config
 
-        config.DEFAULT_PROFILE = "chrome_147"
-        config.DEFAULT_TIMEOUT = 30
         config.DEFAULT_ENGINE = "stealth"
+        config.DEFAULT_TIMEOUT = 30
         config.STEALTH_DRIVER = "turbo"
         config.STEALTH_DNS_OVERRIDES = {"example.com": "203.0.113.10"}
         config.BLOCK_CODES |= {403}
@@ -45,12 +44,12 @@ class StealthConfig:
     """
 
     DEFAULT_ENGINE: str = DEFAULT_ENGINE
-    DEFAULT_PROFILE: str = DEFAULT_PROFILE
     DEFAULT_TIMEOUT: int = DEFAULT_TIMEOUT
     BLOCK_CODES: frozenset[int] = BLOCK_CODES
     BLOCK_KEYWORDS: list[str] = BLOCK_KEYWORDS
     LOGGER_NAME: Final[str] = LOGGER_NAME
     HTTP2: bool = HTTP2
+    HTTP3: bool = HTTP3
     STEALTH_DRIVER: str = STEALTH_DRIVER
     STEALTH_ENABLED: bool = STEALTH_ENABLED
     STEALTH_PROXIES: list[str] = list(STEALTH_PROXIES)
