@@ -175,7 +175,11 @@ class StealthDownloaderMiddleware:
     async def process_response(
         self, request: Request, response: Response, spider: Any
     ) -> Response:
-        stealth = response.meta.get("stealth")
+        try:
+            stealth = response.meta.get("stealth")
+        except AttributeError:
+            # Failed downloads may pass a response object not tied to the request.
+            return response
         if not isinstance(stealth, dict):
             return response
 
