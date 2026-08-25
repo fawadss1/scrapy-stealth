@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **Random default browser profile**
+  Removed static `DEFAULT_PROFILE` (`chrome_147`). When no profile is set on a
+  request, engines pick a weighted random profile from the fingerprint pool via
+  `ProfileRotator`. Pin a profile with `meta["stealth"]["profile"]` or
+  `BasicEngine(profile="chrome_147")`.
+
 ### Fixed
 
 * **Browser driver — Cloudflare challenge wait on 403/503**
@@ -36,6 +44,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Cloudflare Turnstile / managed-challenge detection** — expanded signatures
   for `challenges.cloudflare.com`, `cf-turnstile`, “Verify you are human”, and
   “Performing security verification” titles.
+
+* **Turbo driver — HTTP/3 (QUIC) support**
+  Opt-in via `config.HTTP3 = True` or `meta["stealth"]["http3"] = True`.
+  Uses curl_cffi `CurlHttpVersion.V3` with HTTP/3-capable impersonate presets
+  (e.g. `chrome150`). Requires a UDP-capable proxy for QUIC.
+
+* **Turbo driver — browser header order**
+  Turbo sends cookies through curl_cffi’s cookies API (not a raw `Cookie`
+  header) so they don’t disrupt the header order applied by the impersonate
+  preset.
+
+* **Turbo impersonate presets bumped to `chrome150`**
+  Chromium-family profiles now map to curl_cffi’s latest Chrome preset.
+
+* **Dependency: `curl_cffi>=0.16.1`**
+  Required for HTTP/3 options and updated curl-impersonate backend.
 
 ---
 
