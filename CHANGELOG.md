@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* **Smart Proxy Management**
+  Per-domain proxy health tracking for turbo/basic engines: dead proxies (407,
+  CONNECT aborted, tunnel errors) and repeated blocks (403 by default) open a
+  temporary cooldown, skip the bad entry during rotation, and automatically
+  switch to the next proxy in `STEALTH_PROXIES`. Telemetry is exposed in
+  `crawler.stats`: `stealth/proxy/connection_failures`,
+  `stealth/proxy/cooldowns`, `stealth/proxy/rotations` (each with a `{driver}`
+  breakdown), plus `stealth/proxy/last_connection_failure` and
+  `stealth/proxy/last_cooldown` (`host:port` only — credentials never appear
+  in stats). Controlled by `STEALTH_PROXY_HEALTH`, `STEALTH_PROXY_CIRCUIT_AFTER`,
+  `STEALTH_PROXY_COOLDOWN_S`, and `STEALTH_PROXY_CIRCUIT_CODES`.
+
+### Fixed
+
+* **Smart Proxy Management — cooldown log spam**
+  Repeated failures on a proxy already in cooldown no longer re-print the
+  cooldown warning on every request.
+
 ---
 
 ## [0.7.0] - 2026-08-25
