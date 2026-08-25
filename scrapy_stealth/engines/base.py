@@ -16,6 +16,7 @@ from typing import (
 from scrapy.http import Request, Response
 
 from ..config import config
+from ..strategies.fingerprint import ProfileRotator
 from ..utils.core.meta import _get_meta_data
 from ..utils.telemetry.stats import StealthStats
 
@@ -34,12 +35,14 @@ class RequestContext:
         timeout (int | float): The maximum duration for the request to wait for
             a response, expressed in seconds.
         http2 (bool): Indicates whether the request should use HTTP/2 or not.
+        http3 (bool): When True, prefer HTTP/3 (QUIC) on the turbo driver.
     """
 
     profile: str
     proxy: str | None
     timeout: int | float
     http2: bool
+    http3: bool
 
 
 class BaseEngine(ABC):
@@ -54,7 +57,7 @@ class BaseEngine(ABC):
     """
 
     def __init__(self, profile: str | None = None, timeout: int | None = None) -> None:
-        self._default_profile: str = profile or config.get("DEFAULT_PROFILE")
+        self._default_profile: str = profile or ProfileRotator.get()
         self._default_proxy: str | None = None
         self.timeout: int = timeout or config.get("DEFAULT_TIMEOUT")
         self._stealth_stats = StealthStats()
@@ -143,6 +146,7 @@ class BaseEngine(ABC):
             proxy=_get_meta_data(request, "proxy", self._default_proxy),
             timeout=_get_meta_data(request, "stealth_timeout", self.timeout),
             http2=_get_meta_data(request, "http2", config.get("HTTP2")),
+            http3=_get_meta_data(request, "http3", config.get("HTTP3")),
         )
 
     def seed_proxy_from_config(self) -> None:
