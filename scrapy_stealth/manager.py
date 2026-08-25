@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .config import config
-from .constants import STEALTH_DRIVER as _DEFAULT_DRIVER
 from .engines.base import BaseEngine
 from .engines.basic import BasicEngine
 from .engines.browser import BrowserEngine
@@ -47,9 +46,8 @@ class EngineManager:
             if resolved == "auto":
                 resolved = "turbo"
             if resolved not in self._stealth:
-                default = (
-                    _DEFAULT_DRIVER if _DEFAULT_DRIVER in self._stealth else "turbo"
-                )
+                fallback = config.get("STEALTH_DRIVER") or "turbo"
+                default = fallback if fallback in self._stealth else "turbo"
                 console.warning(
                     f"Unknown driver {resolved!r}. Available drivers: "
                     f"{', '.join(repr(k) for k in self._stealth)}. Falling back to {default!r}."

@@ -13,6 +13,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-08-25
+
+### Changed
+
+* **Random default browser profile**
+  Removed static `DEFAULT_PROFILE` (`chrome_147`). When no profile is set on a
+  request, engines pick a weighted random profile from the fingerprint pool via
+  `ProfileRotator`. Pin a profile with `meta["stealth"]["profile"]` or
+  `BasicEngine(profile="chrome_147")`.
+
+### Fixed
+
+* **Browser driver — Cloudflare challenge wait on 403/503**
+  The browser engine now runs the JS challenge wait loop on 403/503 interstitials
+  (e.g. Cloudflare “Just a moment” or “Performing security verification”), not
+  only on HTTP 2xx. Challenge pages poll for up to `BROWSER_CHALLENGE_TIMEOUT_S`
+  (default 30s) instead of returning challenge HTML immediately.
+
+* **Browser driver — JPG/PNG/binary asset bodies**
+  Chrome’s built-in image viewer returns HTML (`<img src="...jpg">`) in the DOM.
+  Direct GET/HEAD to asset URLs (`.jpg`, `.png`, `.gif`, `.pdf`, …) now return
+  raw bytes: CDP `Network.getResponseBody` first, then in-page `fetch()` when the
+  network/DOM response is HTML. Prefers the latest 2xx network response over an
+  earlier 403 challenge body. Fixes CDN assets behind Cloudflare (e.g.
+  `scdn.autodoc.de/.../*.jpg`).
+
+* **`wreq.emulation` import typo**
+  Fixed `from wreq.eulation import Profile` in profile resolution that caused
+  startup failure with a misleading Visual C++ runtime error on Windows.
+
+### Added
+
+* **`BROWSER_CHALLENGE_TIMEOUT_S`** — max seconds to wait on JS challenge /
+  Cloudflare interstitial pages (default `30.0`). Configurable via settings /
+  `scrapy_stealth.config.config`.
+
+* **Cloudflare Turnstile / managed-challenge detection** — expanded signatures
+  for `challenges.cloudflare.com`, `cf-turnstile`, “Verify you are human”, and
+  “Performing security verification” titles.
+
+* **Turbo driver — HTTP/3 (QUIC) support**
+  Opt-in via `config.HTTP3 = True` or `meta["stealth"]["http3"] = True`.
+  Uses curl_cffi `CurlHttpVersion.V3` with HTTP/3-capable impersonate presets
+  (e.g. `chrome150`). Requires a UDP-capable proxy for QUIC.
+
+* **Turbo driver — browser header order**
+  Turbo sends cookies through curl_cffi’s cookies API (not a raw `Cookie`
+  header) so they don’t disrupt the header order applied by the impersonate
+  preset.
+
+* **Turbo impersonate presets bumped to `chrome150`**
+  Chromium-family profiles now map to curl_cffi’s latest Chrome preset.
+
+* **Dependency: `curl_cffi>=0.16.1`**
+  Required for HTTP/3 options and updated curl-impersonate backend.
+
+---
+
 ## [0.6.16] - 2026-08-19
 
 ### Changed
@@ -1097,6 +1155,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.7.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.7.0
 
 [0.6.16]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.6.16
 

@@ -19,8 +19,6 @@ BLOCK_KEYWORDS: list[str] = [
     "unusual traffic",
 ]
 
-# Default browser profile used when no profile is specified.
-DEFAULT_PROFILE: str = "chrome_147"
 
 # Default engine used when no engine is specified in request meta.
 DEFAULT_ENGINE: str = "scrapy"
@@ -34,6 +32,11 @@ LOGGER_NAME = _pkg_meta.name
 # Whether the stealth engine uses HTTP/2.
 # Disable if targeting servers that only support HTTP/1.1.
 HTTP2: bool = True
+
+# Turbo driver: use HTTP/3 (QUIC) when True.
+# UDP-capable proxy for QUIC (most HTTP proxies only support HTTP/1.1–2).
+# Overridable per-request via meta["stealth"]["http3"].
+HTTP3: bool = False
 
 # Default stealth driver. Options: "basic", "turbo", "browser", or "auto".
 # "auto" uses this as the primary HTTP driver (default "turbo"), then retries once
@@ -67,6 +70,10 @@ BROWSER_HEADLESS: bool = False
 
 # Browser engine: seconds to wait after navigation for JS to finish rendering.
 BROWSER_SETTLE_S: float = 4.0
+
+# Browser engine: max seconds to wait on JS challenge / Cloudflare interstitials
+# (403/503 "Just a moment" pages) before capturing the response.
+BROWSER_CHALLENGE_TIMEOUT_S: float = 30.0
 
 # Browser engine: max Chrome tabs open simultaneously across concurrent requests.
 BROWSER_MAX_TABS: int = 10

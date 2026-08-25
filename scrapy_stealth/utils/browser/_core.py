@@ -95,6 +95,12 @@ _JS_HTML = "document.querySelector('.json-formatter-container') ? document.body.
 _JS_STATUS = "performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0"
 _JS_IS_CHROME_ERROR = "window.location.href.startsWith('chrome-error://')"
 _JS_BODY_LEN = "document.body ? document.body.innerText.trim().length : 0"
+_JS_IS_BINARY_VIEWER = (
+    "(() => {"
+    "  const ct = (document.contentType || '').toLowerCase();"
+    "  return Boolean(ct && !ct.includes('html'));"
+    "})()"
+)
 _JS_ERROR_TITLE = (
     "(() => {"
     "  const t = (document.title || '').toLowerCase();"
@@ -115,6 +121,24 @@ _JS_PAGE_READY = (
 )
 
 _STATIC_ASSET_RESOURCE_TYPES: tuple[str, ...] = ("Image", "Font", "Stylesheet", "Media")
+_BINARY_URL_SUFFIXES: frozenset[str] = frozenset(
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".ico",
+        ".svg",
+        ".pdf",
+        ".zip",
+        ".gz",
+        ".mp4",
+        ".mp3",
+        ".woff",
+        ".woff2",
+    }
+)
 # Kept in sync with utils/antibot.py short-page heuristic.
 _CONTENT_SHORT_THRESHOLD = 2500
 # After the page looks ready, don't burn the full user settle — just a short cushion.
@@ -283,7 +307,13 @@ async def _wait_for_status(page: Any, timeout: float = 8.0) -> int:
         return 200
 
 
-async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
+async def _smart_wait(
+    page: Any,
+    settle: float,
+    timeout: float = 20.0,
+    *,
+    challenge_mode: bool = False,
+) -> None:
     """Wait until the page looks loaded (and not a challenge shell), then short settle."""
     await asyncio.sleep(0.15)
 
@@ -297,13 +327,21 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
     async def _is_challenge() -> bool:
         return bool(await page.evaluate(_JS_IS_CHALLENGE))
 
+    async def _is_binary_viewer() -> bool:
+        return bool(await page.evaluate(_JS_IS_BINARY_VIEWER))
+
+    async def _page_settled() -> bool:
+        return (
+            await _is_ready() or await _is_binary_viewer()
+        ) and not await _is_challenge()
+
     def _settle_after_ready() -> float:
         if settle <= 0:
             return 0.0
         return min(settle, _READY_SETTLE_CAP_S)
 
-    # Loaded product page (not a challenge shell) → short settle and done.
-    if await _is_ready() and not await _is_challenge():
+    # Loaded product page or binary viewer (not a challenge shell) → short settle.
+    if await _page_settled():
         delay = _settle_after_ready()
         if delay:
             await asyncio.sleep(delay)
@@ -311,15 +349,16 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
 
     body_len = int(await page.evaluate(_JS_BODY_LEN))
     logger.debug(
-        "_smart_wait: waiting (body_len=%d challenge=%s settle=%.1fs)",
+        "_smart_wait: waiting (body_len=%d challenge=%s challenge_mode=%s settle=%.1fs)",
         body_len,
         await _is_challenge(),
+        challenge_mode,
         settle,
     )
 
     last_len = body_len
     stalled = 0
-    poll_timeout = min(timeout, max(6.0, settle + 2.0))
+    poll_timeout = timeout if challenge_mode else min(timeout, max(6.0, settle + 2.0))
 
     async def _poll() -> None:
         nonlocal last_len, stalled
@@ -327,26 +366,24 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
             if await page.evaluate(_JS_ERROR_TITLE):
                 return
 
-            # Ready and no longer a challenge shell → done.
-            if await _is_ready() and not await _is_challenge():
+            if await _page_settled():
                 await asyncio.sleep(0.3)
-                if await _is_ready() and not await _is_challenge():
+                if await _page_settled():
                     return
 
             current = int(await page.evaluate(_JS_BODY_LEN))
             growth = abs(current - last_len)
             if growth < max(40, int(last_len * 0.03)):
                 stalled += 1
-                # If content is stable and not a challenge shell, stop.
-                if stalled >= 3 and current >= 400 and not await _is_challenge():
-                    return
-                # Empty/challenge shell that stopped changing — give up.
-                if stalled >= 7:
-                    logger.debug(
-                        "_smart_wait: body stable at %d chars — stopping poll",
-                        current,
-                    )
-                    return
+                if not await _is_challenge():
+                    if stalled >= 3 and (current >= 400 or await _is_binary_viewer()):
+                        return
+                    if not challenge_mode and stalled >= 7:
+                        logger.debug(
+                            "_smart_wait: body stable at %d chars — stopping poll",
+                            current,
+                        )
+                        return
             else:
                 stalled = 0
                 last_len = current
@@ -358,13 +395,194 @@ async def _smart_wait(page: Any, settle: float, timeout: float = 20.0) -> None:
     except asyncio.TimeoutError:
         logger.debug("_smart_wait: poll timed out after %.1fs", poll_timeout)
 
-    delay = (
-        _settle_after_ready()
-        if (await _is_ready() and not await _is_challenge())
-        else max(settle, 0.0)
-    )
+    delay = _settle_after_ready() if await _page_settled() else max(settle, 0.0)
     if delay > 0:
         await asyncio.sleep(delay)
+
+
+def _mime_looks_binary(headers: dict[str, str]) -> bool:
+    content_type = str(headers.get("content-type", "")).lower()
+    return content_type.startswith(
+        ("image/", "application/pdf", "application/octet-stream", "video/", "audio/")
+    )
+
+
+def _is_binary_body(body: bytes) -> bool:
+    if not body:
+        return False
+    if body.lstrip().startswith(b"<"):
+        return False
+    if body.startswith(b"\xff\xd8\xff"):
+        return True
+    if body.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if body.startswith(b"GIF87a") or body.startswith(b"GIF89a"):
+        return True
+    if body.startswith(b"RIFF") and len(body) > 12 and body[8:12] == b"WEBP":
+        return True
+    return False
+
+
+def _should_replace_capture_status(current: int, new: int) -> bool:
+    if current <= 0:
+        return True
+    if current >= 400 and 200 <= new < 300:
+        return True
+    if 200 <= current < 300:
+        return False
+    return new >= current
+
+
+def _url_looks_binary(url: str) -> bool:
+    path = urlparse(url).path.lower()
+    return any(path.endswith(suffix) for suffix in _BINARY_URL_SUFFIXES)
+
+
+def _urls_match(a: str, b: str) -> bool:
+    left, right = urlparse(a), urlparse(b)
+    return (
+        left.scheme.lower() == right.scheme.lower()
+        and left.netloc.lower() == right.netloc.lower()
+        and left.path == right.path
+    )
+
+
+class _MainDocumentCapture:
+    """Track the main navigation response for CDP ``Network.getResponseBody``."""
+
+    def __init__(self, url: str) -> None:
+        self._url = url
+        self._request_id: Any = None
+        self._mime_type = "text/html; charset=utf-8"
+        self._status = 0
+        self._page: Any = None
+        self._on_response: Any = None
+
+    async def start(self, page: Any) -> None:
+        import nodriver.cdp.network as network
+
+        self._page = page
+
+        async def _on_response(event: network.ResponseReceived, *_: Any) -> None:
+            try:
+                resp_url = event.response.url or ""
+                if not _urls_match(resp_url, self._url):
+                    return
+                if not _url_looks_binary(self._url) and event.type_.value not in (
+                    "Document",
+                    "Image",
+                ):
+                    return
+                new_status = int(event.response.status or 0)
+                if not _should_replace_capture_status(self._status, new_status):
+                    return
+                self._request_id = event.request_id
+                self._mime_type = event.response.mime_type or self._mime_type
+                self._status = new_status
+            except Exception:
+                pass
+
+        self._on_response = _on_response
+        await page.send(network.enable())
+        page.add_handler(network.ResponseReceived, _on_response)
+
+    async def stop(self) -> None:
+        if self._page is None:
+            return
+        import nodriver.cdp.network as network
+
+        if self._on_response is not None:
+            self._page.remove_handler(network.ResponseReceived, self._on_response)
+        with contextlib.suppress(Exception):
+            await self._page.send(network.disable())
+        self._page = None
+        self._on_response = None
+
+    async def get_body(self) -> tuple[bytes | None, dict[str, str], int]:
+        if self._page is None or self._request_id is None:
+            return None, {}, self._status
+        import nodriver.cdp.network as network
+
+        try:
+            result = await self._page.send(network.get_response_body(self._request_id))
+        except Exception as exc:
+            logger.debug("_MainDocumentCapture.get_body failed: %s", exc)
+            return None, {}, self._status
+        body_raw = result.body
+        if result.base64_encoded:
+            body = base64.b64decode(body_raw)
+        elif isinstance(body_raw, str):
+            body = body_raw.encode("latin-1")
+        else:
+            body = bytes(body_raw)
+        headers = {"content-type": self._mime_type}
+        return body, headers, self._status or 200
+
+
+async def resolve_browser_get_body(
+    page: Any,
+    url: str,
+    capture: _MainDocumentCapture,
+    *,
+    default_status: int = 200,
+) -> tuple[bytes | str, dict[str, str], int]:
+    """Return raw bytes for asset URLs; HTML pages fall back to DOM HTML."""
+    from .request import browser_binary_fetch
+
+    net_body, net_headers, net_status = await capture.get_body()
+    status = net_status or default_status
+
+    if net_body and (_is_binary_body(net_body) or _mime_looks_binary(net_headers)):
+        return net_body, net_headers, status
+
+    if _url_looks_binary(url):
+        try:
+            fetch_body, fetch_status, fetch_headers = await browser_binary_fetch(
+                page, url
+            )
+            if fetch_body and (_is_binary_body(fetch_body) or fetch_status == 200):
+                return fetch_body, fetch_headers, fetch_status or status
+        except Exception as exc:
+            logger.debug("browser_binary_fetch failed for %r: %s", url, exc)
+
+        if net_body and not net_body.lstrip().startswith(b"<"):
+            return net_body, net_headers, status
+
+    html = await page.evaluate(_JS_HTML)
+    if _url_looks_binary(url):
+        logger.warning(
+            "Browser driver returned HTML for binary URL %r — "
+            "response may be a challenge page or Chrome viewer shell",
+            url,
+        )
+    return html, {"content-type": "text/html; charset=utf-8"}, status
+
+
+@contextlib.asynccontextmanager
+async def _main_document_capture(page: Any, url: str):
+    capture = _MainDocumentCapture(url)
+    await capture.start(page)
+    try:
+        yield capture
+    finally:
+        await capture.stop()
+
+
+async def _should_wait_for_page(
+    page: Any, status: int, *, challenge_timeout: float
+) -> tuple[bool, bool, float]:
+    """Return (should_wait, challenge_mode, wait_timeout)."""
+    if await page.evaluate(_JS_ERROR_TITLE):
+        return False, False, 20.0
+    is_challenge = bool(await page.evaluate(_JS_IS_CHALLENGE))
+    challenge_mode = is_challenge or status in (403, 503)
+    should_wait = challenge_mode or 200 <= status < 300
+    wait_timeout = challenge_timeout if challenge_mode else 20.0
+    return should_wait, challenge_mode, wait_timeout
+
+
+async def _is_challenge_page(page: Any) -> bool:
+    return bool(await page.evaluate(_JS_IS_CHALLENGE))
 
 
 class ProxyRelay:

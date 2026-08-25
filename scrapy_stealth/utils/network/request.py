@@ -53,6 +53,31 @@ class StealthRequestPayload:
             kwargs["data"] = self.body
         return kwargs
 
+    def turbo_kwargs(
+        self,
+        *,
+        timeout: int | float,
+        http_version: Any,
+        proxy: str | None,
+    ) -> dict[str, Any]:
+        """curl_cffi kwargs for turbo — cookies via API to preserve impersonate order."""
+        headers = dict(self.headers)
+        kwargs: dict[str, Any] = {
+            "timeout": timeout,
+            "http_version": http_version,
+            "default_headers": True,
+        }
+        if self.cookie_header:
+            kwargs["cookies"] = dict(parse_cookie_pairs(self.cookie_header))
+            headers.pop("Cookie", None)
+        if headers:
+            kwargs["headers"] = headers
+        if self.body is not None:
+            kwargs["data"] = self.body
+        if proxy:
+            kwargs["proxies"] = {"http": proxy, "https": proxy}
+        return kwargs
+
     def basic_http_kwargs(self) -> dict[str, Any]:
         """Keyword args for basic (wreq) — raw bytes via ``body``."""
         kwargs: dict[str, Any] = {"headers": self.headers}

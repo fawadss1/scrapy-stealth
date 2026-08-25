@@ -79,7 +79,7 @@ class TestEngineManager:
         assert isinstance(engine, TurboEngine)
 
     def test_invalid_driver_fallback_is_always_valid(self, manager):
-        from scrapy_stealth.constants import STEALTH_DRIVER as _DEFAULT_DRIVER
-
+        fallback = config.get("STEALTH_DRIVER") or "turbo"
+        default = fallback if fallback in manager._stealth else "turbo"
         engine = manager.get("stealth", "nonexistent")
-        assert engine is manager._stealth[_DEFAULT_DRIVER]
+        assert engine is manager._stealth[default]

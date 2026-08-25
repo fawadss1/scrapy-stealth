@@ -9,6 +9,7 @@ _JS_IS_CHALLENGE = (
     # Specific challenge markers (not bare vendor names).
     "const has_keywords = ["
     "'ray id','cf-challenge','cf_chl','challenge-platform',"
+    "'challenges.cloudflare.com','cf-turnstile','turnstile',"
     "'verifying you are human','checking your browser',"
     "'recaptcha','hcaptcha','px-captcha','ak-challenge',"
     "'sec-if-cpt-container','behavioral-content','cf-browser-verification'"

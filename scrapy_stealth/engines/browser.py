@@ -22,7 +22,6 @@ from ..exceptions import (
 )
 from ..utils.browser import (
     _BROWSER_ARGS,
-    _JS_HTML,
     _JS_IS_CHROME_ERROR,
     ProxyRelay,
     _block_static_assets,
@@ -30,15 +29,18 @@ from ..utils.browser import (
     _cleanup_browser_temp_data,
     _ensure_xvfb,
     _is_browser_crash,
+    _main_document_capture,
     _make_loop,
     _proxy_bypass_args,
     _random_fingerprint_args,
+    _should_wait_for_page,
     _silence_browser,
     _smart_wait,
     _splash_url,
     _start_browser_relay,
     _stop_loop,
     _wait_for_status,
+    resolve_browser_get_body,
 )
 from ..utils.browser.cookies import collect_browser_cookies, format_cookie_header
 from ..utils.browser.patch import patch_nodriver
@@ -497,10 +499,8 @@ class BrowserEngine(BaseEngine):
             use_setup = prepared.needs_browser_setup
             direct_nav = method in {"GET", "HEAD"} and not use_setup
 
-            if direct_nav:
-                page = await self._attach_tab(browser, url)
-            else:
-                page = await self._attach_tab(browser)
+            page = await self._attach_tab(browser)
+            if not direct_nav:
                 await apply_browser_cookies(page, url, prepared.cookie_header)
                 await apply_browser_headers(
                     page, browser_cdp_headers(prepared.extra_headers)
@@ -522,8 +522,10 @@ class BrowserEngine(BaseEngine):
                         )
                         html = body_bytes.decode(errors="replace")
                     else:
-                        if not direct_nav:
-                            await page.get(url)
+                        capture = await stack.enter_async_context(
+                            _main_document_capture(page, url)
+                        )
+                        await page.get(url)
                         await page.wait()
 
                         if await page.evaluate(_JS_IS_CHROME_ERROR):
@@ -532,14 +534,35 @@ class BrowserEngine(BaseEngine):
                             )
 
                         status = await _wait_for_status(page)
+                        challenge_timeout = float(
+                            config.get("BROWSER_CHALLENGE_TIMEOUT_S", 30.0)
+                        )
 
-                        if method == "HEAD":
-                            html = ""
-                        elif 200 <= status < 300:
-                            await _smart_wait(page, settle)
-                            html = await page.evaluate(_JS_HTML)
+                        if method != "HEAD":
+                            (
+                                should_wait,
+                                challenge_mode,
+                                wait_timeout,
+                            ) = await _should_wait_for_page(
+                                page, int(status), challenge_timeout=challenge_timeout
+                            )
+                            if should_wait:
+                                await _smart_wait(
+                                    page,
+                                    settle,
+                                    timeout=wait_timeout,
+                                    challenge_mode=challenge_mode,
+                                )
+                                status = await _wait_for_status(page, timeout=3.0)
+
+                            html, resp_headers, status = await resolve_browser_get_body(
+                                page,
+                                url,
+                                capture,
+                                default_status=int(status),
+                            )
                         else:
-                            html = await page.evaluate(_JS_HTML)
+                            html = ""
 
                     if snapshot:
                         shot = await _cdp_snapshot(page)

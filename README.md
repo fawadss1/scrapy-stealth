@@ -129,6 +129,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🧭 Custom DNS overrides — pin hosts to fixed IPs (connect via IP, keep hostname for TLS/SNI/Host) to dodge poisoned or geo-shifted public DNS
 * 📤 **Full request fidelity** — `POST`/`PUT`/`PATCH`/`DELETE`, custom headers, and `Cookie` work the same on `basic`, `turbo`, and `browser`
 * 🍪 **Browser cookie handoff** — after browser login/navigation, session cookies export to response meta and merge into Scrapy's cookie jar for follow-up `basic`/`turbo` requests
+* ☁️ **Cloudflare challenge handling** — browser driver waits through 403/503 interstitials and Turnstile-style pages (up to `BROWSER_CHALLENGE_TIMEOUT_S`); returns raw bytes for CDN images (`.jpg`, `.png`, …) instead of Chrome’s HTML viewer shell
 * 📸 Built-in snapshot decorator (`scrapy_stealth.decorators.snapshot`)
 
 ---
@@ -267,14 +268,15 @@ import scrapy
 from scrapy_stealth.config import config
 
 config.DEFAULT_ENGINE = "stealth"  # "scrapy" (native) or "stealth" (browser impersonation)
-config.DEFAULT_PROFILE = "chrome_147"  # browser profile when meta["stealth"]["profile"] is not set
 config.DEFAULT_TIMEOUT = 30  # stealth request timeout in seconds
 config.STEALTH_DRIVER = "turbo"  # "turbo" (default), "basic", "browser", or "auto"
 config.HTTP2 = True  # False for servers that only support HTTP/1.1
+config.HTTP3 = False  # turbo: True for HTTP/3 (QUIC); needs UDP-capable proxy
 config.BLOCK_CODES |= {407}  # extend blocked status codes (|= keeps defaults)
 config.BLOCK_KEYWORDS.append("banned")  # extend blocked body-text patterns
 config.BROWSER_HEADLESS = False  # browser driver: False = visible window (default)
 config.BROWSER_SETTLE_S = 4.0  # browser driver: seconds to wait after navigation for JS to finish
+config.BROWSER_CHALLENGE_TIMEOUT_S = 30.0  # max wait on Cloudflare / JS challenge pages (403/503)
 config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"  # custom browser binary (default: auto-detect Chrome)
 config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle Chrome / HTTP sessions after 5 consecutive bans
 config.BROWSER_STATIC_ASSETS_BLOCK = True  # block images/fonts/CSS/media (skipped when snapshot=True)
@@ -305,15 +307,16 @@ config.get("MISSING_KEY", "default")  # "default"
 | Attribute                     | Type             | Default                           | Description                                                                                                                                                                                                                                                                                               |
 |-------------------------------|------------------|-----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `DEFAULT_ENGINE`              | `str`            | `"scrapy"`                        | Engine used when `request.meta["stealth"]` key is absent                                                                                                                                                                                                                                                  |
-| `DEFAULT_PROFILE`             | `str`            | `"chrome_147"`                    | Browser profile used when none is specified                                                                                                                                                                                                                                                               |
 | `DEFAULT_TIMEOUT`             | `int`            | `30`                              | Request timeout in seconds                                                                                                                                                                                                                                                                                |
 | `STEALTH_DRIVER`              | `str`            | `"turbo"`                         | Primary HTTP driver when `driver="auto"`. Also the default when no driver is set on a per-request stealth dict. Options: `"basic"`, `"turbo"`, `"browser"`, `"auto"`. Readable from Scrapy settings as `STEALTH_DRIVER`                                                                                   |
 | `STEALTH_ENABLED`             | `bool`           | `False`                           | When `True`, route every request through stealth and inject `driver="auto"` unless the request already sets a driver or opts out with `meta={"stealth": False}`                                                                                                                                           |
 | `HTTP2`                       | `bool`           | `True`                            | HTTP/2 mode; overridable per-request via `meta["stealth"]["http2"]`                                                                                                                                                                                                                                       |
+| `HTTP3`                       | `bool`           | `False`                           | Turbo driver: HTTP/3 (QUIC) via curl_cffi. Requires UDP-capable proxy. Per-request: `meta["stealth"]["http3"]`                                                                                                                                                                                            |
 | `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`                 | HTTP status codes considered blocked                                                                                                                                                                                                                                                                      |
 | `BLOCK_KEYWORDS`              | `list[str]`      | `["captcha", "access denied", …]` | Body-text patterns considered blocked                                                                                                                                                                                                                                                                     |
 | `BROWSER_HEADLESS`            | `bool`           | `False`                           | Browser driver: headless mode (`False` = visible window, default and more stealthy)                                                                                                                                                                                                                       |
 | `BROWSER_SETTLE_S`            | `float`          | `4.0`                             | Browser driver: seconds to wait after navigation for JS to finish rendering                                                                                                                                                                                                                               |
+| `BROWSER_CHALLENGE_TIMEOUT_S` | `float`          | `30.0`                            | Browser driver: max seconds to wait on JS challenge / Cloudflare interstitial pages (403/503, “Just a moment”, Turnstile). Uses `challenge_mode` polling — longer than `BROWSER_SETTLE_S`                                                                                                                 |
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                                  |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                                  |
 | `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                                      |
@@ -357,11 +360,12 @@ yield scrapy.Request(
 |-----------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `driver`              | `str`           | `"basic"`, `"turbo"`, `"browser"`, or `"auto"`. Use `"auto"` for smart selection: HTTP first (`STEALTH_DRIVER`), then one browser retry on challenge/ban. Injected automatically when `STEALTH_ENABLED = True`. `"basic"` / `"turbo"` alone do **not** fall back to browser |
 | `fallback`            | `bool`          | Set to `False` to disable the browser retry when `driver="auto"` is active                                                                                                                                                                                                  |
-| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`). Omit to use engine default; default rotates on ban-streak session recycle                                                                                                                                     |
+| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`). Omit for a weighted random pick from the fingerprint pool; rotates on ban-streak session recycle                                                                                                           |
 | `proxy`               | `str`           | Explicit proxy URL. Omit to use `STEALTH_PROXIES` default; default rotates on ban-streak session recycle                                                                                                                                                                    |
 | `dns`                 | `str` or `dict` | Pin DNS: bare IP for this request's hostname, or `{host: ip}` mapping. Merges over `STEALTH_DNS_OVERRIDES`. Works with `basic`/`turbo` per-request; `browser` uses global overrides at Chrome launch only                                                                   |
 | `stealth_timeout`     | `int`           | Per-request timeout in seconds (overrides default 30s)                                                                                                                                                                                                                      |
 | `http2`               | `bool`          | `True` = HTTP/2, `False` = HTTP/1.1 (overrides `config.HTTP2` for this request)                                                                                                                                                                                             |
+| `http3`               | `bool`          | Turbo only: `True` = HTTP/3 (QUIC). Takes priority over `http2`. Requires UDP-capable proxy                                                                                                                                                                                 |
 | `headless`            | `bool`          | Browser driver only: `False` = visible window (default), `True` = headless                                                                                                                                                                                                  |
 | `settle`              | `float`         | Browser driver only: seconds to wait for JS after navigation (default `4.0`)                                                                                                                                                                                                |
 | `snapshot`            | `bool`          | Browser driver only: capture a PNG snapshot — result available as `response.meta["snapshot_content"]` (`bytes`)                                                                                                                                                             |
@@ -538,11 +542,11 @@ yield scrapy.Request(
 
 ### Driver behaviour summary
 
-| Driver    | GET / HEAD                         | POST / PUT / PATCH / DELETE / …      |
-|-----------|------------------------------------|--------------------------------------|
-| `basic`   | Native HTTP client + profile TLS   | Same — method + body + headers       |
-| `turbo`   | curl-impersonate TLS fingerprint   | Same — method + body + headers       |
-| `browser` | Chrome tab navigation              | In-page `fetch()` with method + body |
+| Driver    | GET / HEAD                                                              | POST / PUT / PATCH / DELETE / …      |
+|-----------|-------------------------------------------------------------------------|--------------------------------------|
+| `basic`   | Native HTTP client + profile TLS                                        | Same — method + body + headers       |
+| `turbo`   | curl-impersonate TLS fingerprint                                        | Same — method + body + headers       |
+| `browser` | Chrome tab navigation; binary URLs (`.jpg`, `.png`, …) return raw bytes | In-page `fetch()` with method + body |
 
 For **`driver="auto"`**, phase 1 uses `basic`/`turbo` (including POST). If the response is a
 JS challenge or session ban, phase 2 retries once with **`browser`** using the same method,
@@ -691,10 +695,40 @@ yield scrapy.Request(
 )
 ```
 
-**Heavy Cloudflare sites — increase settle time:**
+**Heavy Cloudflare sites — increase settle and challenge timeout:**
 
 ```python
-meta = {"stealth": {"driver": "browser", "headless": False, "settle": 12}}
+meta = {
+    "stealth": {
+        "driver": "browser",
+        "headless": False,
+        "settle": 12,
+    }
+}
+
+# Or globally:
+# BROWSER_CHALLENGE_TIMEOUT_S = 45
+```
+
+On 403/503 challenge pages (“Just a moment”, “Performing security verification”, Turnstile),
+the browser driver waits up to `BROWSER_CHALLENGE_TIMEOUT_S` (default 30s) for the challenge
+to clear before capturing the response — not only on HTTP 2xx.
+
+**CDN images / binary assets behind Cloudflare:**
+
+Direct GET to `.jpg`, `.png`, and other asset URLs returns **raw file bytes** in
+`response.body` (not Chrome’s HTML image-viewer wrapper). Useful for CDN hosts like
+`scdn.autodoc.de`:
+
+```python
+yield scrapy.Request(
+    "https://scdn.autodoc.de/vehicles/800x287/8145.jpg",
+    meta={"stealth": {"driver": "browser", "headless": False, "settle": 8}},
+    callback=self.save_image,
+)
+
+def save_image(self, response):
+    assert response.body[:3] == b"\xff\xd8\xff"  # JPEG magic bytes
 ```
 
 **Global default (all stealth requests use browser engine):**
