@@ -57,17 +57,25 @@ class TurboEngine(BaseEngine):
         return Session(**kwargs)
 
     def _maybe_recycle_sessions(
-        self, response: Response | None, current_proxy: str | None = None
+        self,
+        request: Request,
+        response: Response | None,
+        current_proxy: str | None = None,
     ) -> None:
         """Drop cached sessions; rotate profile + proxy after N consecutive bans."""
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
+        self._record_proxy_health(request, response, current_proxy, banned=banned)
         should_recycle = self._bans.record(banned)
         self._record_response(response, banned)
         if not should_recycle:
             return
-        profile, proxy = self._recycle_identity(current_proxy=current_proxy)
+        domain = self._request_domain(request)
+        profile, proxy = self._recycle_identity(
+            current_proxy=current_proxy,
+            domain=domain,
+        )
         console.info(
             f"Recycling turbo sessions after "
             f"{config.get('STEALTH_RECYCLE_AFTER_BANS')} consecutive bans "
@@ -132,7 +140,7 @@ class TurboEngine(BaseEngine):
                 encoding=resp.encoding,
                 _flags=["turbo"],
             )
-            self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
+            self._maybe_recycle_sessions(request, response, current_proxy=ctx.proxy)
             return response
 
         except StealthRequestError as exc:
@@ -152,6 +160,7 @@ class TurboEngine(BaseEngine):
                     f"Turbo engine timed out after {ctx.timeout}s fetching {request.url!r}",
                 )
             if isinstance(exc, (CurlConn, CurlDNS, CurlProxy)):
+                self._on_proxy_transport_failure(request, ctx.proxy)
                 raise_stealth(
                     StealthConnectionError,
                     f"Turbo engine connection failed fetching {request.url!r}: {exc}",
