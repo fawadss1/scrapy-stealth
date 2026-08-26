@@ -7,9 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
----
-
-## [Unreleased]
+## [0.7.1] - 2026-08-26
 
 ### Added
 
@@ -24,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stealth/proxy/last_cooldown` (`host:port` only — credentials never appear
   in stats). Controlled by `STEALTH_PROXY_HEALTH`, `STEALTH_PROXY_CIRCUIT_AFTER`,
   `STEALTH_PROXY_COOLDOWN_S`, and `STEALTH_PROXY_CIRCUIT_CODES`.
+
+* **`STEALTH_RECYCLE_AFTER_BANS` in Scrapy settings**
+  The middleware now loads `STEALTH_RECYCLE_AFTER_BANS` from `settings.py` or
+  spider `custom_settings` on spider open (same pattern as `STEALTH_DRIVER` and
+  `STEALTH_PROXIES`).
 
 ### Fixed
 
@@ -1175,6 +1178,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.7.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.7.1
 
 [0.7.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.7.0
 

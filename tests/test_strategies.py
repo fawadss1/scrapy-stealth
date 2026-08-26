@@ -143,9 +143,7 @@ class TestProxyHealthRegistry:
         registry.record(proxy, domain, success=False, connection_failed=True)
         registry.record(proxy, domain, success=False, connection_failed=True)
         assert len(warnings) == 1
-        assert not registry.record(
-            proxy, domain, success=False, connection_failed=True
-        )
+        assert not registry.record(proxy, domain, success=False, connection_failed=True)
         assert len(warnings) == 1
 
     def test_health_disabled_uses_random_pick(self, registry, monkeypatch):
