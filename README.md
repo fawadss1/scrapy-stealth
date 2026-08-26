@@ -186,6 +186,9 @@ STEALTH_DNS_OVERRIDES = {
     "example.com": "203.0.113.10",
     "www.example.com": "203.0.113.10",
 }
+
+# 5. (Optional) Recycle HTTP/browser sessions after N consecutive bans (default 5)
+STEALTH_RECYCLE_AFTER_BANS = 2
 ```
 
 ### Option 2 — Per-spider (`custom_settings`)
@@ -209,6 +212,7 @@ class MySpider(scrapy.Spider):
         "STEALTH_DNS_OVERRIDES": {
             "example.com": "203.0.113.10",
         },
+        "STEALTH_RECYCLE_AFTER_BANS": 2,  # rotate profile + proxy after 2 consecutive bans
     }
 ```
 
@@ -322,7 +326,7 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                                  |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                                  |
 | `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                                      |
-| `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                               | After this many *consecutive* bans: `browser` restarts Chrome; `basic` / `turbo` clear cached HTTP sessions/clients. Any clean response resets the count                                                                                                                                                  |
+| `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                               | After this many *consecutive* bans: `browser` restarts Chrome; `basic` / `turbo` clear cached HTTP sessions/clients and rotate default profile + proxy. Any clean response resets the count. Readable from Scrapy settings as `STEALTH_RECYCLE_AFTER_BANS` (applied on spider open)                       |
 | `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                           | Browser driver: block images, fonts, CSS, and media via CDP. Overridable per-request via `meta["stealth"]["static_assets_block"]`; always off when `snapshot=True`                                                                                                                                        |
 | `BROWSER_EXPORT_COOKIES`      | `bool`           | `True`                            | After each browser response, merge tab cookies into Scrapy's cookie jar when `COOKIES_ENABLED` is on. Per-request opt-out: `meta["stealth"]["export_cookies"] = False`. Cookies are always exposed on the response either way (see [Browser cookie handoff](#browser-cookie-handoff))                     |
 | `BROWSER_PROXY_BYPASS_LIST`   | `list[str]`      | `[]`                              | Browser driver: domains/patterns that bypass the proxy and connect to the origin directly, via Chrome's `--proxy-bypass-list`. Supports wildcards (`*.example.com`), IP/CIDR, ports, and `<local>`. Only applies when a proxy is in use; set at browser launch (config/settings, not per-request)         |
@@ -814,10 +818,18 @@ A single clean response resets the streak, so a healthy crawl is never recycled 
 has served a lot of requests.
 
 ```python
+# settings.py or spider custom_settings (recommended)
+STEALTH_RECYCLE_AFTER_BANS = 2
+
+# or via config before the spider class
 from scrapy_stealth.config import config
 
-config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle after 5 consecutive bans (default)
+config.STEALTH_RECYCLE_AFTER_BANS = 2
 ```
+
+> **Note:** Recycle rotates the engine **default** profile and proxy from `STEALTH_PROXIES`.
+> Per-request `meta["stealth"]["profile"]` or `meta["stealth"]["proxy"]` stay pinned and are
+> not replaced on recycle — omit those keys to let rotation apply.
 
 **Static asset blocking:**
 
@@ -965,8 +977,13 @@ Between recycles, [Smart Proxy Management](#smart-proxy-management) handles
 transport failures and per-domain blocks without waiting for a full session recycle.
 
 ```python
+# settings.py or spider custom_settings
 STEALTH_RECYCLE_AFTER_BANS = 5  # default
 ```
+
+When recycle fires you will see a console line like:
+`Recycling turbo sessions after N consecutive bans (profile=… proxy=…)`.
+Check `stealth/recycles` and `stealth/profile` in [Scrapy stats](#scrapy-stats) to confirm rotation.
 
 ### Scrapy stats
 
