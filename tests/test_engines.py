@@ -362,7 +362,7 @@ class TestBasicEngine:
         picks = iter(["http://p1:1", "http://p2:2", "http://p2:2"])
         monkeypatch.setattr(
             "scrapy_stealth.strategies.proxy.ProxyRotator.get",
-            lambda self: next(picks),
+            lambda self, **kwargs: next(picks),
         )
         mock_cls = MagicMock(return_value=_make_mock_client(status=403))
         with patch("scrapy_stealth.engines.basic.Client", mock_cls):
@@ -599,6 +599,51 @@ class TestTurboEngine:
                 StealthConnectionError, match=r"Turbo engine connection failed fetching"
             ):
                 engine._execute(Request("https://example.com"))
+
+    def test_rotates_proxy_on_connection_failure(self, monkeypatch):
+        from curl_cffi.requests.exceptions import ProxyError as CurlProxy
+
+        monkeypatch.setattr(
+            config,
+            "STEALTH_PROXIES",
+            ["http://p1:8080", "http://p2:8080"],
+        )
+        picks = iter(["http://p1:8080", "http://p2:8080"])
+        monkeypatch.setattr(
+            "scrapy_stealth.strategies.proxy.ProxyRotator.get",
+            lambda self, **kwargs: next(picks),
+        )
+        collector = MagicMock()
+        values: dict = {}
+
+        def inc_value(key, count=1):
+            values[key] = values.get(key, 0) + count
+
+        def set_value(key, value):
+            values[key] = value
+
+        collector.inc_value.side_effect = inc_value
+        collector.set_value.side_effect = set_value
+
+        mock_session = MagicMock()
+        mock_session.get.side_effect = CurlProxy("curl: (56) Proxy CONNECT aborted")
+        mock_cls = MagicMock(return_value=mock_session)
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            engine = TurboEngine()
+            engine.set_stats(collector)
+            engine._default_proxy = "http://p1:8080"
+            with pytest.raises(StealthConnectionError):
+                engine._execute(
+                    Request(
+                        "https://scdn.example/img.jpg",
+                        meta={"stealth": {"proxy": "http://p1:8080"}},
+                    )
+                )
+            assert engine._default_proxy == "http://p2:8080"
+            assert values.get("stealth/proxy/connection_failures") == 1
+            assert values.get("stealth/proxy/connection_failures/turbo") == 1
+            assert values.get("stealth/proxy/rotations") == 1
+            assert values.get("stealth/proxy/last_connection_failure") == "p1:8080"
 
     def test_session_reused_for_same_profile(self, session_patch):
         mock_cls, _ = session_patch

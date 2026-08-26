@@ -9,6 +9,7 @@ from ..config import config
 from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
 from ..strategies.proxy import ProxyRotator
+from ..strategies.proxy_health import get_proxy_health_registry
 from ..utils.browser.cookies import merge_browser_cookies_to_jar
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
@@ -66,6 +67,7 @@ class StealthDownloaderMiddleware:
         proxies = settings.getlist("STEALTH_PROXIES", [])
         self._proxy_rotator = ProxyRotator(proxies=proxies)
         config.STEALTH_PROXIES = list(self._proxy_rotator.proxies)
+        get_proxy_health_registry().reset()
         self.manager.seed_proxies()
         stats = spider.crawler.stats
         self._stealth_stats = StealthStats(stats)
@@ -75,6 +77,8 @@ class StealthDownloaderMiddleware:
         )
         if driver := settings.get("STEALTH_DRIVER"):
             config.STEALTH_DRIVER = driver
+        if (recycle_after := settings.get("STEALTH_RECYCLE_AFTER_BANS")) is not None:
+            config.STEALTH_RECYCLE_AFTER_BANS = int(recycle_after)
         if (no_sandbox := settings.get("BROWSER_NO_SANDBOX")) is not None:
             config.BROWSER_NO_SANDBOX = no_sandbox
         if (executable_path := settings.get("BROWSER_EXECUTABLE_PATH")) is not None:

@@ -369,6 +369,20 @@ class TestStealthDownloaderMiddleware:
         finally:
             config.STEALTH_DRIVER = original
 
+    def test_spider_opened_sets_recycle_settings_from_settings(self, middleware):
+        spider = MagicMock()
+        spider.crawler.settings.getlist.return_value = []
+        spider.crawler.settings.getbool.return_value = False
+        spider.crawler.settings.get.side_effect = lambda key, default=None: (
+            2 if key == "STEALTH_RECYCLE_AFTER_BANS" else None
+        )
+        original_after = config.get("STEALTH_RECYCLE_AFTER_BANS")
+        try:
+            middleware.spider_opened(spider)
+            assert config.get("STEALTH_RECYCLE_AFTER_BANS") == 2
+        finally:
+            config.STEALTH_RECYCLE_AFTER_BANS = original_after
+
     def test_spider_opened_no_stealth_driver_leaves_config_unchanged(self, middleware):
         spider = MagicMock()
         spider.crawler.settings.getlist.return_value = []
