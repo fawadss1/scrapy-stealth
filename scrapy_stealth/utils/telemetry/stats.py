@@ -77,6 +77,27 @@ class StealthStats:
         self.inc("stealth/proxy/requests")
         self.inc(f"stealth/proxy/requests/{driver}")
 
+    def record_proxy_connection_failure(self, driver: str, proxy: str | None) -> None:
+        """Record transport-level proxy failure (CONNECT/407, tunnel aborted, etc.)."""
+        self.inc("stealth/proxy/connection_failures")
+        self.inc(f"stealth/proxy/connection_failures/{driver}")
+        host = proxy_host_for_stats(proxy)
+        if host is not None:
+            self.set("stealth/proxy/last_connection_failure", host)
+
+    def record_proxy_cooldown(self, driver: str, proxy: str | None) -> None:
+        """Record when a proxy enters per-domain cooldown."""
+        self.inc("stealth/proxy/cooldowns")
+        self.inc(f"stealth/proxy/cooldowns/{driver}")
+        host = proxy_host_for_stats(proxy)
+        if host is not None:
+            self.set("stealth/proxy/last_cooldown", host)
+
+    def record_proxy_rotation(self, driver: str) -> None:
+        """Record when the engine rotates to another proxy after failure."""
+        self.inc("stealth/proxy/rotations")
+        self.inc(f"stealth/proxy/rotations/{driver}")
+
     def record_ban(self, driver: str, streak: int, banned: bool) -> None:
         if banned:
             self.inc("stealth/bans")

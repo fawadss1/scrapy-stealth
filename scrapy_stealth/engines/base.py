@@ -12,13 +12,16 @@ from typing import (
     TypeVar,
     cast,
 )
+from urllib.parse import urlparse
 
 from scrapy.http import Request, Response
 
 from ..config import config
 from ..strategies.fingerprint import ProfileRotator
+from ..strategies.proxy_health import get_proxy_health_registry
+from ..utils.core.console import console
 from ..utils.core.meta import _get_meta_data
-from ..utils.telemetry.stats import StealthStats
+from ..utils.telemetry.stats import StealthStats, proxy_host_for_stats
 
 _T = TypeVar("_T")
 
@@ -100,6 +103,70 @@ class BaseEngine(ABC):
         self._stealth_stats.record_recycle(self.driver_name)
         self._record_identity(profile, proxy)
 
+    @staticmethod
+    def _request_domain(request: Request | None) -> str | None:
+        if request is None:
+            return None
+        host = urlparse(request.url).hostname
+        return host.lower() if host else None
+
+    def _record_proxy_health(
+        self,
+        request: Request | None,
+        response: Response | None,
+        proxy: str | None,
+        *,
+        banned: bool,
+    ) -> None:
+        if not proxy or not config.get("STEALTH_PROXY_HEALTH"):
+            return
+        domain = self._request_domain(request)
+        if not domain:
+            return
+        success = response is not None and not banned and response.status < 400
+        cooled = get_proxy_health_registry().record(
+            proxy,
+            domain,
+            success=success,
+            status=response.status if response is not None else None,
+            banned=banned,
+        )
+        if cooled:
+            self._stealth_stats.record_proxy_cooldown(self.driver_name, proxy)
+
+    def _on_proxy_transport_failure(
+        self,
+        request: Request | None,
+        proxy: str | None,
+    ) -> str | None:
+        """Record transport-level proxy failure and rotate the default proxy."""
+        if not proxy:
+            return None
+        domain = self._request_domain(request)
+        self._stealth_stats.record_proxy_connection_failure(self.driver_name, proxy)
+        if domain and config.get("STEALTH_PROXY_HEALTH"):
+            cooled = get_proxy_health_registry().record(
+                proxy,
+                domain,
+                success=False,
+                connection_failed=True,
+            )
+            if cooled:
+                self._stealth_stats.record_proxy_cooldown(self.driver_name, proxy)
+        proxies = config.get("STEALTH_PROXIES") or []
+        if not proxies:
+            return proxy
+        previous = proxy
+        new = self._rotate_default_proxy(domain=domain)
+        if new and new != previous and domain:
+            self._stealth_stats.record_proxy_rotation(self.driver_name)
+            host = proxy_host_for_stats(previous) or previous
+            console.warning(
+                f"Proxy {host!r} connection failed for {domain!r}; "
+                f"rotating to next proxy"
+            )
+        return new
+
     async def fetch(self, request: Request, spider: Any) -> Response | None:
         """
         This method processes the given request by delegating its execution to a worker
@@ -175,8 +242,8 @@ class BaseEngine(ABC):
         self._default_profile = new
         return new
 
-    def _rotate_default_proxy(self) -> str | None:
-        """Pick a new default proxy from ``STEALTH_PROXIES`` (prefer different).
+    def _rotate_default_proxy(self, domain: str | None = None) -> str | None:
+        """Pick a healthy default proxy from ``STEALTH_PROXIES`` (prefer different).
 
         When the pool is empty, keep the current default (e.g. a per-request
         meta proxy remembered on recycle) — never wipe it to ``None``.
@@ -186,20 +253,19 @@ class BaseEngine(ABC):
         proxies = config.get("STEALTH_PROXIES") or []
         if not proxies:
             return self._default_proxy
-        rotator = ProxyRotator(proxies)
         current = self._default_proxy
-        new = rotator.get()
-        if new == current and len(proxies) > 1:
-            for _ in range(5):
-                candidate = rotator.get()
-                if candidate != current:
-                    new = candidate
-                    break
+        rotator = ProxyRotator(proxies)
+        new = rotator.get(domain=domain, exclude=current)
+        if new is None and current is not None:
+            new = current
         self._default_proxy = new
         return new
 
     def _recycle_identity(
-        self, current_proxy: str | None = None
+        self,
+        current_proxy: str | None = None,
+        *,
+        domain: str | None = None,
     ) -> tuple[str, str | None]:
         """Rotate profile + proxy used after a ban-streak session recycle.
 
@@ -212,7 +278,7 @@ class BaseEngine(ABC):
             self._default_proxy = current_proxy
         elif current_proxy and not self._default_proxy:
             self._default_proxy = current_proxy
-        return self._rotate_default_profile(), self._rotate_default_proxy()
+        return self._rotate_default_profile(), self._rotate_default_proxy(domain)
 
     @staticmethod
     def _timed(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> tuple[_T, float]:

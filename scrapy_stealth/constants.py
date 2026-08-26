@@ -120,3 +120,18 @@ BROWSER_EXECUTABLE_PATH: str | None = None
 # meta["stealth"]["export_cookies"] = False. Cookies are always exposed on the
 # response as meta["stealth"]["browser_cookies"] and ["browser_cookie_header"].
 BROWSER_EXPORT_COOKIES: bool = True
+
+# Proxy health scoring: track success/fail per proxy + target domain in memory.
+# Proxies that hit repeated block codes on a domain enter a temporary cooldown
+# and are skipped during rotation until the cooldown expires.
+STEALTH_PROXY_HEALTH: bool = True
+
+# Consecutive block responses (see STEALTH_PROXY_CIRCUIT_CODES) on the same
+# proxy + domain before the proxy is cooled down.
+STEALTH_PROXY_CIRCUIT_AFTER: int = 3
+
+# Seconds to keep a proxy off the pool for a domain after the circuit opens.
+STEALTH_PROXY_COOLDOWN_S: float = 300.0
+
+# HTTP status codes that count toward opening a per-domain proxy circuit.
+STEALTH_PROXY_CIRCUIT_CODES: frozenset[int] = frozenset({403})

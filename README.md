@@ -15,7 +15,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fawadss1/scrapy-stealth/blob/master/LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-releases-informational)](https://github.com/fawadss1/scrapy-stealth/releases)
 
-`scrapy-stealth` extends Scrapy with browser impersonation, proxy rotation, fingerprint cycling, and intelligent retry strategies —
+`scrapy-stealth` extends Scrapy with browser impersonation, Smart Proxy Management,
+fingerprint cycling, and intelligent retry strategies —
 designed for large-scale, production-grade crawling.
 
 ---
@@ -75,7 +76,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 
 * 🧬 Browser-level impersonation (TLS + HTTP/2 fingerprints)
 * 🔁 Smarter retry strategies
-* 🌐 Proxy and fingerprint rotation
+* 🌐 **Smart Proxy Management** — health scoring, per-domain cooldown, automatic failover, and stats telemetry
 * 🛡️ Anti-bot detection
 
 ### Result
@@ -94,6 +95,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 | HTTP/2 support               |       ✅       |         ✅         |        ✅         |      ❌       |        ❌        |
 | Browser impersonation        |       ✅       |         ✅         |    ⚠️ partial     |      ❌       |        ❌        |
 | Proxy rotation (built-in)    |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
+| Smart Proxy Management       |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Fingerprint rotation         |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Anti-bot detection           |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Smart browser selection      |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
@@ -116,7 +118,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 
 * 🔌 Pluggable engine system (`scrapy`, `stealth`)
 * 🧠 Per-request engine selection via `request.meta`
-* 🌐 Proxy support and rotation
+* 🌐 **Smart Proxy Management** — per-domain health scoring, cooldown on dead or blocked proxies, automatic rotation across `STEALTH_PROXIES`, and telemetry in `crawler.stats`
 * 🧬 Browser fingerprint rotation
 * 🔁 Smart retry logic
 * 🛡️ Anti-bot detection (status + content-based, Cloudflare, Akamai)
@@ -184,6 +186,9 @@ STEALTH_DNS_OVERRIDES = {
     "example.com": "203.0.113.10",
     "www.example.com": "203.0.113.10",
 }
+
+# 5. (Optional) Recycle HTTP/browser sessions after N consecutive bans (default 5)
+STEALTH_RECYCLE_AFTER_BANS = 2
 ```
 
 ### Option 2 — Per-spider (`custom_settings`)
@@ -207,6 +212,7 @@ class MySpider(scrapy.Spider):
         "STEALTH_DNS_OVERRIDES": {
             "example.com": "203.0.113.10",
         },
+        "STEALTH_RECYCLE_AFTER_BANS": 2,  # rotate profile + proxy after 2 consecutive bans
     }
 ```
 
@@ -252,7 +258,7 @@ yield scrapy.Request(url="https://api.internal/health", meta={"stealth": False})
 yield scrapy.Request(url="https://example.com", meta={"stealth": {"driver": "basic"}})
 ```
 
-See [Smart browser selection](#-smart-browser-selection) for how `driver="auto"` works.
+See [Smart browser selection](#smart-browser-selection) for how `driver="auto"` works.
 
 ---
 
@@ -320,11 +326,16 @@ config.get("MISSING_KEY", "default")  # "default"
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                            | Browser driver: disable Chrome sandbox. `None` = auto-detect (enabled when running as root, e.g. Docker)                                                                                                                                                                                                  |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                            | Browser driver: path to the browser binary. `None` = auto-detect Chrome/Chromium. Set to use Brave or a custom install (e.g. `"/usr/bin/brave-browser"`)                                                                                                                                                  |
 | `BROWSER_MAX_TABS`            | `int`            | `10`                              | Browser driver: max concurrent Chrome tabs across in-flight requests                                                                                                                                                                                                                                      |
-| `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                               | After this many *consecutive* bans: `browser` restarts Chrome; `basic` / `turbo` clear cached HTTP sessions/clients. Any clean response resets the count                                                                                                                                                  |
+| `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                               | After this many *consecutive* bans: `browser` restarts Chrome; `basic` / `turbo` clear cached HTTP sessions/clients and rotate default profile + proxy. Any clean response resets the count. Readable from Scrapy settings as `STEALTH_RECYCLE_AFTER_BANS` (applied on spider open)                       |
 | `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                           | Browser driver: block images, fonts, CSS, and media via CDP. Overridable per-request via `meta["stealth"]["static_assets_block"]`; always off when `snapshot=True`                                                                                                                                        |
 | `BROWSER_EXPORT_COOKIES`      | `bool`           | `True`                            | After each browser response, merge tab cookies into Scrapy's cookie jar when `COOKIES_ENABLED` is on. Per-request opt-out: `meta["stealth"]["export_cookies"] = False`. Cookies are always exposed on the response either way (see [Browser cookie handoff](#browser-cookie-handoff))                     |
 | `BROWSER_PROXY_BYPASS_LIST`   | `list[str]`      | `[]`                              | Browser driver: domains/patterns that bypass the proxy and connect to the origin directly, via Chrome's `--proxy-bypass-list`. Supports wildcards (`*.example.com`), IP/CIDR, ports, and `<local>`. Only applies when a proxy is in use; set at browser launch (config/settings, not per-request)         |
 | `STEALTH_DNS_OVERRIDES`       | `dict[str, str]` | `{}`                              | Host→IP map used by `basic` / `turbo` (and Chrome `--host-resolver-rules` for `browser`). Connects to the IP while keeping the hostname for TLS SNI, Host header, and cert verification. Also readable from Scrapy settings as `STEALTH_DNS_OVERRIDES`. Per-request override via `meta["stealth"]["dns"]` |
+| `STEALTH_PROXIES`             | `list[str]`      | `[]`                              | Proxy pool seeded as the engine default; rotated on ban-streak recycle and on transport failure when [Smart Proxy Management](#smart-proxy-management) is active. Also readable from Scrapy settings                                                                                                      |
+| `STEALTH_PROXY_HEALTH`        | `bool`           | `True`                            | Enable in-memory per-proxy + per-domain health scoring, cooldown, and skip during rotation                                                                                                                                                                                                                |
+| `STEALTH_PROXY_CIRCUIT_AFTER` | `int`            | `3`                               | Consecutive block or connection failures on the same proxy + domain before cooldown                                                                                                                                                                                                                       |
+| `STEALTH_PROXY_COOLDOWN_S`    | `float`          | `300.0`                           | Seconds to exclude a cooled-down proxy from rotation for that domain                                                                                                                                                                                                                                      |
+| `STEALTH_PROXY_CIRCUIT_CODES` | `frozenset[int]` | `{403}`                           | HTTP status codes that count toward opening a per-domain proxy circuit                                                                                                                                                                                                                                    |
 
 For one-off overrides on a single request, set `meta["stealth"]["driver"]` or `meta["stealth"]["http2"]` (see Per-Request Configuration
 below).
@@ -344,9 +355,7 @@ yield scrapy.Request(
     meta={
         "stealth": {
             "driver": "turbo",
-            # optional overrides — otherwise profile/proxy come from defaults and
-            # rotate automatically when the session recycles after consecutive bans
-            "profile": "chrome_147",
+            # optional — omit profile/proxy for random fingerprint + STEALTH_PROXIES default
             "proxy": "http://user:pass@proxy:8080",
             "stealth_timeout": 60,
             "http2": True,
@@ -360,7 +369,7 @@ yield scrapy.Request(
 |-----------------------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `driver`              | `str`           | `"basic"`, `"turbo"`, `"browser"`, or `"auto"`. Use `"auto"` for smart selection: HTTP first (`STEALTH_DRIVER`), then one browser retry on challenge/ban. Injected automatically when `STEALTH_ENABLED = True`. `"basic"` / `"turbo"` alone do **not** fall back to browser |
 | `fallback`            | `bool`          | Set to `False` to disable the browser retry when `driver="auto"` is active                                                                                                                                                                                                  |
-| `profile`             | `str`           | Browser profile (e.g. `"chrome_147"`, `"safari_ios_18_1_1"`). Omit for a weighted random pick from the fingerprint pool; rotates on ban-streak session recycle                                                                                                           |
+| `profile`             | `str`           | Pin a fingerprint (e.g. `"chrome150"`, `"safari_ios_18_0"`). **Omit** for a weighted random pick from the pool; a new profile is chosen on ban-streak session recycle                                                                                                       |
 | `proxy`               | `str`           | Explicit proxy URL. Omit to use `STEALTH_PROXIES` default; default rotates on ban-streak session recycle                                                                                                                                                                    |
 | `dns`                 | `str` or `dict` | Pin DNS: bare IP for this request's hostname, or `{host: ip}` mapping. Merges over `STEALTH_DNS_OVERRIDES`. Works with `basic`/`turbo` per-request; `browser` uses global overrides at Chrome launch only                                                                   |
 | `stealth_timeout`     | `int`           | Per-request timeout in seconds (overrides default 30s)                                                                                                                                                                                                                      |
@@ -622,9 +631,7 @@ connections or SOCKS when using overrides.
 
 ## 🧠 Smart browser selection
 
-Use `driver="auto"` to pick the right engine automatically: stay on fast HTTP impersonation (`basic` / `turbo`) for normal pages, and escalate to real Chrome only when the response looks like a JS challenge or session ban (403/429/503, Cloudflare “Just a moment”, Akamai, DataDome, and similar signals).
-
-> **Note:** The removed `STEALTH_AUTO_FALLBACK` setting is no longer needed. Browser fallback is controlled solely by `driver="auto"`. When `STEALTH_ENABLED = True`, the middleware injects it for you.
+Use `driver="auto"` to pick the right engine automatically: stay on fast HTTP impersonation (`basic` / `turbo`) for normal pages, and escalate to real Chrome only when the response looks like a JS challenge or session ban (403/429/503, Cloudflare “Just a moment”, Akamai, DataDome, and similar signals). When `STEALTH_ENABLED = True`, the middleware injects `driver="auto"` for you.
 
 | Phase | Driver                       | When                                                           |
 |-------|------------------------------|----------------------------------------------------------------|
@@ -671,6 +678,45 @@ meta={"stealth": {"driver": "auto", "fallback": False}}
 Each request is retried at most once. If the browser fetch fails, the original `basic` / `turbo`
 response is returned. Console output and stats (`stealth/fallbacks`, `stealth/fallbacks/method/post`,
 `stealth/requests/browser`) show when escalation happened.
+
+---
+
+## 🌐 Smart Proxy Management
+
+When you run with a proxy pool (`STEALTH_PROXIES` or per-request `meta["stealth"]["proxy"]`),
+scrapy-stealth tracks health **per proxy and per target domain**. Dead credentials,
+tunnel errors (407, CONNECT aborted), and repeated blocks automatically cool down the
+bad entry, skip it during rotation, and fail over to the next proxy in the pool.
+
+| Signal                                                  | What happens                                                                              |
+|---------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| Transport failure (407, CONNECT aborted, DNS via proxy) | Record failure → rotate to next proxy → cooldown after `STEALTH_PROXY_CIRCUIT_AFTER` hits |
+| Repeated HTTP blocks (403 by default)                   | Same cooldown + skip logic via `STEALTH_PROXY_CIRCUIT_CODES`                              |
+| Ban-streak session recycle                              | Profile + proxy rotate together (existing behaviour)                                      |
+
+**Settings:**
+
+```python
+# settings.py
+STEALTH_PROXIES = [
+    "http://user-a:pass@dc.oxylabs.io:8000",  # primary
+    "http://user-b:pass@dc.oxylabs.io:8000",  # fallback
+]
+STEALTH_PROXY_HEALTH = True          # default — disable to use random rotation only
+STEALTH_PROXY_CIRCUIT_AFTER = 3      # failures before cooldown
+STEALTH_PROXY_COOLDOWN_S = 300.0     # seconds off-pool for that domain
+STEALTH_PROXY_CIRCUIT_CODES = {403}  # status codes that trip the circuit
+```
+
+**Per-request override** — pin or bypass a proxy for one URL:
+
+```python
+yield scrapy.Request(url, meta={"stealth": {"proxy": "http://user:pass@proxy:8080"}})
+yield scrapy.Request(cdn_url, meta={"stealth": {"proxy": None}})  # direct, no proxy
+```
+
+Proxy telemetry (`stealth/proxy/connection_failures`, `cooldowns`, `rotations`, …) is in
+[crawler.stats](#scrapy-stats) after the crawl.
 
 ---
 
@@ -766,16 +812,24 @@ Anti-Bot Detection), scrapy-stealth recycles the driver session:
 
 * **browser** — restarts Chrome (fresh fingerprint, cookies, CDP session)
 * **basic / turbo** — clears cached HTTP clients/sessions and rotates default fingerprint
-  profile + proxy from `STEALTH_PROXIES` (no per-request `rotate_*` needed)
+  profile + proxy from `STEALTH_PROXIES`
 
 A single clean response resets the streak, so a healthy crawl is never recycled just because it
 has served a lot of requests.
 
 ```python
+# settings.py or spider custom_settings (recommended)
+STEALTH_RECYCLE_AFTER_BANS = 2
+
+# or via config before the spider class
 from scrapy_stealth.config import config
 
-config.STEALTH_RECYCLE_AFTER_BANS = 5  # recycle after 5 consecutive bans (default)
+config.STEALTH_RECYCLE_AFTER_BANS = 2
 ```
+
+> **Note:** Recycle rotates the engine **default** profile and proxy from `STEALTH_PROXIES`.
+> Per-request `meta["stealth"]["profile"]` or `meta["stealth"]["proxy"]` stay pinned and are
+> not replaced on recycle — omit those keys to let rotation apply.
 
 **Static asset blocking:**
 
@@ -914,22 +968,26 @@ def parse(self, response):
 
 ---
 
-## 🔁 Automatic Rotation
+## 🔁 Session recycle & Scrapy stats
 
 Profile + proxy stay stable for speed (session reuse). After
 `STEALTH_RECYCLE_AFTER_BANS` consecutive bans, the session recycles and a new
 default profile + proxy (from `STEALTH_PROXIES`) are chosen automatically.
+Between recycles, [Smart Proxy Management](#smart-proxy-management) handles
+transport failures and per-domain blocks without waiting for a full session recycle.
 
 ```python
-# settings.py
-STEALTH_PROXIES = ["http://proxy1:8080", "http://proxy2:8080"]
+# settings.py or spider custom_settings
 STEALTH_RECYCLE_AFTER_BANS = 5  # default
-
-# spider — per-request stealth with explicit driver (no auto injection)
-yield scrapy.Request(url, meta={"stealth": {"driver": "turbo"}})
 ```
 
-**Scrapy stats:** after the crawl (or mid-run via `crawler.stats`), inspect:
+When recycle fires you will see a console line like:
+`Recycling turbo sessions after N consecutive bans (profile=… proxy=…)`.
+Check `stealth/recycles` and `stealth/profile` in [Scrapy stats](#scrapy-stats) to confirm rotation.
+
+### Scrapy stats
+
+After the crawl (or mid-run via `crawler.stats`):
 
 | Key                                                | Meaning                                          |
 |----------------------------------------------------|--------------------------------------------------|
@@ -944,7 +1002,12 @@ yield scrapy.Request(url, meta={"stealth": {"driver": "turbo"}})
 | `stealth/driver`                                   | Last stealth driver used                         |
 | `stealth/profile`                                  | Last fingerprint profile used                    |
 | `stealth/proxy`                                    | Last proxy as `host:port` (no credentials)       |
-| `stealth/proxy/requests/{driver}`                  | Requests sent through a proxy                    |
+| `stealth/proxy/requests` / `…/{driver}`            | Requests sent through a proxy                    |
+| `stealth/proxy/connection_failures` / `…/{driver}` | Transport-level proxy failures (407, CONNECT, …) |
+| `stealth/proxy/last_connection_failure`            | Host of the last dead/unreachable proxy          |
+| `stealth/proxy/cooldowns` / `…/{driver}`           | Times a proxy entered per-domain cooldown        |
+| `stealth/proxy/last_cooldown`                      | Host of the last proxy put on cooldown           |
+| `stealth/proxy/rotations` / `…/{driver}`           | Proxy rotations after connection failure         |
 | `stealth/dns/requests/{driver}`                    | Requests using DNS overrides                     |
 | `stealth/dns/hosts`                                | Total pinned hosts applied                       |
 | `stealth/dns/active_hosts`                         | Pinned hosts on latest request                   |
@@ -955,50 +1018,36 @@ yield scrapy.Request(url, meta={"stealth": {"driver": "turbo"}})
 ```python
 # e.g. in spider_closed
 stats = spider.crawler.stats.get_stats()
-print(stats.get("stealth/bans"), stats.get("stealth/recycles"))
+print(
+    stats.get("stealth/bans"),
+    stats.get("stealth/recycles"),
+    stats.get("stealth/proxy/connection_failures"),
+    stats.get("stealth/proxy/cooldowns"),
+    stats.get("stealth/proxy/rotations"),
+    stats.get("stealth/proxy/last_connection_failure"),
+)
 ```
 
 ---
 
 ## 🧩 Strategies
 
-### Proxy Rotation
+### Fingerprint Rotation
+
+Profiles are chosen **randomly from the pool by default** — you usually do not need to set
+`profile` on every request. Pin one only when debugging or when a site requires a specific
+fingerprint:
 
 ```python
-from scrapy_stealth.strategies.proxy import ProxyRotator
-
-proxy_rotator = ProxyRotator([
-    "http://proxy1:8080",
-    "http://proxy2:8080",
-])
-
-yield scrapy.Request(
-    url,
-    meta={
-        "stealth": {
-            "proxy": proxy_rotator.get(),
-        }
-    },
-)
+yield scrapy.Request(url, meta={"stealth": {"profile": "chrome150"}})
 ```
 
----
-
-### Fingerprint Rotation
+For manual rotation outside session recycle:
 
 ```python
 from scrapy_stealth.strategies.fingerprint import ProfileRotator
 
-fp = ProfileRotator()
-
-yield scrapy.Request(
-    url,
-    meta={
-        "stealth": {
-            "profile": fp.get(),
-        }
-    },
-)
+yield scrapy.Request(url, meta={"stealth": {"profile": ProfileRotator().get()}})
 ```
 
 ---
@@ -1041,9 +1090,9 @@ It shows:
 
 * middleware + `STEALTH_ENABLED` via `custom_settings` (auto-injects `driver="auto"`, turbo first)
 * per-request `basic` / `browser` overrides
-* POST requests with JSON body and custom headers (see [POST, headers, and cookies](#-post-headers-and-cookies))
+* POST requests with JSON body and custom headers (see [POST, headers, and cookies](#post-headers-and-cookies))
 * optional snapshot with `@snapshot`
-* ban detection and stealth stats on close
+* ban detection, Smart Proxy Management telemetry, and stealth stats on close
 
 ```bash
 # from a Scrapy project

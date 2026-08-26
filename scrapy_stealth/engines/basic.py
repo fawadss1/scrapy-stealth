@@ -65,17 +65,25 @@ class BasicEngine(BaseEngine):
         return Client(**kwargs)
 
     def _maybe_recycle_sessions(
-        self, response: Response | None, current_proxy: str | None = None
+        self,
+        request: Request,
+        response: Response | None,
+        current_proxy: str | None = None,
     ) -> None:
         """Drop cached clients; rotate profile + proxy after N consecutive bans."""
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
+        self._record_proxy_health(request, response, current_proxy, banned=banned)
         should_recycle = self._bans.record(banned)
         self._record_response(response, banned)
         if not should_recycle:
             return
-        profile, proxy = self._recycle_identity(current_proxy=current_proxy)
+        domain = self._request_domain(request)
+        profile, proxy = self._recycle_identity(
+            current_proxy=current_proxy,
+            domain=domain,
+        )
         self.default_profile = resolve_browser(profile)
         console.info(
             f"Recycling basic sessions after "
@@ -139,7 +147,7 @@ class BasicEngine(BaseEngine):
                 body=body,
                 _flags=["basic"],
             )
-            self._maybe_recycle_sessions(response, current_proxy=ctx.proxy)
+            self._maybe_recycle_sessions(request, response, current_proxy=ctx.proxy)
             return response
 
         except StealthRequestError as exc:
@@ -158,6 +166,7 @@ class BasicEngine(BaseEngine):
                     f"Basic engine timed out after {ctx.timeout}s fetching {request.url!r}",
                 )
             if isinstance(exc, (WConn, WProxyConn)):
+                self._on_proxy_transport_failure(request, ctx.proxy)
                 raise_stealth(
                     StealthConnectionError,
                     f"Basic engine connection failed fetching {request.url!r}: {exc}",

@@ -584,12 +584,17 @@ class BrowserEngine(BaseEngine):
         return body_out, int(status), shot, resp_headers, browser_cookies
 
     def _maybe_restart(
-        self, headless: bool, proxy: str | None, response: Response | None
+        self,
+        request: Request,
+        headless: bool,
+        proxy: str | None,
+        response: Response | None,
     ) -> None:
         """Restart Chrome once BanStreakTracker reports N consecutive bans."""
         banned = response is not None and AntiBotDetector.is_browser_session_ban(
             response
         )
+        self._record_proxy_health(request, response, proxy, banned=banned)
         with self._lock:
             if self._restarting:
                 # Restart logic ignores in-flight results, but stats still count
@@ -615,7 +620,8 @@ class BrowserEngine(BaseEngine):
         # keep / rotate proxy for subsequent requests without explicit meta.
         if proxy and not (config.get("STEALTH_PROXIES") or []):
             self._default_proxy = proxy
-        new_proxy = self._rotate_default_proxy()
+        domain = self._request_domain(request)
+        new_proxy = self._rotate_default_proxy(domain)
         self._reset_browser(headless, self._browser, proxy=proxy or new_proxy)
         self._record_recycle(self._default_profile, proxy or new_proxy)
 
@@ -749,7 +755,7 @@ class BrowserEngine(BaseEngine):
             )
 
             # Restart Chrome after STEALTH_RECYCLE_AFTER_BANS consecutive bans.
-            self._maybe_restart(headless, ctx.proxy or None, response)
+            self._maybe_restart(request, headless, ctx.proxy or None, response)
 
             return response
 
