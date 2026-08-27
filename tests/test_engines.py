@@ -947,7 +947,9 @@ class TestBrowserEngine:
     def test_execute_do_fetch_receives_prepared_request(self, engine):
         captured = {}
 
-        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
+        async def fake_fetch(
+            url, prepared, settle, profile, snapshot=False, block_assets=False
+        ):
             captured.update(
                 {
                     "url": url,
@@ -998,7 +1000,9 @@ class TestBrowserEngine:
             }
         ]
 
-        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
+        async def fake_fetch(
+            url, prepared, settle, profile, snapshot=False, block_assets=False
+        ):
             return (
                 b"<html></html>",
                 200,
@@ -1112,7 +1116,9 @@ class TestBrowserEngine:
     def test_execute_uses_custom_settle_from_meta(self, engine):
         captured = []
 
-        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
+        async def fake_fetch(
+            url, prepared, settle, profile, snapshot=False, block_assets=False
+        ):
             captured.append(settle)
             return (
                 b"<html></html>",
@@ -1131,7 +1137,9 @@ class TestBrowserEngine:
     def test_execute_uses_config_settle_default(self, engine):
         captured = []
 
-        async def fake_fetch(url, prepared, settle, snapshot=False, block_assets=False):
+        async def fake_fetch(
+            url, prepared, settle, profile, snapshot=False, block_assets=False
+        ):
             captured.append(settle)
             return (
                 b"<html></html>",
