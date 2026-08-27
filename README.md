@@ -69,12 +69,13 @@ designed for large-scale, production-grade crawling.
 Scrapy is fast and powerful, but modern websites use advanced anti-bot protections such as:
 
 * TLS fingerprinting
-* Browser behavior detection
+* Browser behavior detection (mouse, scroll, timing)
 * Rate limiting and IP blocking
 
 `scrapy-stealth` helps by adding:
 
 * 🧬 Browser-level impersonation (TLS + HTTP/2 fingerprints)
+* 🖭 Behavioral fingerprinting (CDP mouse/scroll on browser; timing jitter on HTTP drivers)
 * 🔁 Smarter retry strategies
 * 🌐 **Smart Proxy Management** — health scoring, per-domain cooldown, automatic failover, and stats telemetry
 * 🛡️ Anti-bot detection
@@ -103,6 +104,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 | Per-request engine switching |       ✅       |         ❌         |        ❌         |      ❌       |        ❌        |
 | Headless browser required    |       ✅       |         ❌         |        ✅         |      ✅       |        ❌        |
 | JavaScript rendering         |       ️✅       |         ❌         |        ✅         |      ✅       |        ❌        |
+| Behavioral fingerprinting    |       ✅       |         ❌         |     ⚠️ manual     |      ❌       |        ❌        |
 | Screenshot / snapshot        |       ✅       |         ❌         |        ✅         |      ✅       |        ❌        |
 | Native Scrapy integration    |       ✅       |         ✅         |        ✅         |      ✅       |        ✅        |
 | Memory footprint             |     🟢 Low     |       🟢 Low       |      🔴 High      |    🔴 High    |      🟢 Low      |
@@ -125,6 +127,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * 🧠 **Smart browser selection** — `driver="auto"` runs fast `basic` / `turbo` first, then retries once with visible Chrome on JS challenge or ban (enabled automatically when `STEALTH_ENABLED = True`)
 * ⚡ Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
+* 🖭 **Behavioral fingerprinting** — auto-enabled on every driver: CDP mouse/scroll/viewport on `browser`; profile-seeded request timing on `basic`/`turbo` (no config flags)
 * 🔄 Intelligent session recycle — after consecutive bans, browser restarts Chrome; basic/turbo clear HTTP sessions
 * 🚫 Static asset blocking — skip images, fonts, CSS, and media for faster, lighter browser fetches
 * 🎯 Proxy bypass list — send chosen domains straight to the origin instead of through the proxy (`--proxy-bypass-list`)
@@ -557,6 +560,14 @@ yield scrapy.Request(
 | `turbo`   | curl-impersonate TLS fingerprint                                        | Same — method + body + headers       |
 | `browser` | Chrome tab navigation; binary URLs (`.jpg`, `.png`, …) return raw bytes | In-page `fetch()` with method + body |
 
+**Human-like behavior (automatic — no settings or meta flags):**
+
+| Driver    | What runs                                                                                        |
+|-----------|--------------------------------------------------------------------------------------------------|
+| `browser` | Viewport emulation + CDP `mouseMoved` / `mouseWheel` + occasional key nudge after GET navigation |
+| `basic`   | Profile-seeded pre-request delay (~30–350 ms)                                                    |
+| `turbo`   | Same timing jitter as `basic`                                                                    |
+
 For **`driver="auto"`**, phase 1 uses `basic`/`turbo` (including POST). If the response is a
 JS challenge or session ban, phase 2 retries once with **`browser`** using the same method,
 body, and headers. Fallback counters include the HTTP method (`stealth/fallbacks/method/post`,
@@ -724,7 +735,8 @@ Proxy telemetry (`stealth/proxy/connection_failures`, `cooldowns`, `rotations`, 
 
 For sites protected by Cloudflare JS challenges or heavy JavaScript rendering, use the `browser` driver.
 It runs a real Chrome instance via the DevTools Protocol (no WebDriver), keeping one persistent browser
-and opening a new tab per request.
+and opening a new tab per request. **Behavioral fingerprinting is always on** for the browser driver —
+CDP mouse movement, scroll, and viewport emulation run automatically after each GET navigation.
 
 **Per-request (most common):**
 
@@ -760,13 +772,54 @@ On 403/503 challenge pages (“Just a moment”, “Performing security verifica
 the browser driver waits up to `BROWSER_CHALLENGE_TIMEOUT_S` (default 30s) for the challenge
 to clear before capturing the response — not only on HTTP 2xx.
 
+### Behavioral fingerprinting (auto-enabled)
+
+No `BROWSER_BEHAVIOR_ENABLED` setting and no `meta["stealth"]["behavior"]` flag — interaction
+replay is built into the drivers:
+
+| Driver    | Behavior                                                                                                                                                               |
+|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `browser` | After each GET load: viewport from profile → Bezier CDP mouse path (`Input.dispatchMouseEvent` / `mouseMoved`) → CDP scroll (`mouseWheel`) → occasional keyboard nudge |
+| `basic`   | Profile-seeded sleep before each request (~30–350 ms)                                                                                                                  |
+| `turbo`   | Same pre-request timing as `basic`                                                                                                                                     |
+
+Mouse paths use quadratic Bézier curves with Gaussian jitter so consecutive requests from the
+same profile stay in a plausible band without identical coordinates every time.
+
+**Verify on an HTML page** (not a bare `.jpg` CDN URL) with a visible window:
+
+```python
+yield scrapy.Request(
+    "https://example.com",
+    meta={"stealth": {"driver": "browser", "headless": False, "settle": 8}},
+)
+```
+
+Watch the Chrome tab during `settle` — you should see scroll/wheel activity. CDP input affects
+the **browser tab**, not your OS desktop cursor.
+
+> **CDN / static assets:** Behavioral replay does not bypass IP or proxy blocks. For plain CDN
+> images (e.g. `scdn.autodoc.de/*.jpg`) without a JS challenge, prefer `driver="turbo"` and a
+> clean proxy — browser mode is slower and still returns 403 when the CDN rejects the IP.
+
+Advanced: `scrapy_stealth.behaviors.simulate_hover(page, x1, y1, x2, y2)` is exported for
+custom CDP mouse paths in browser automation scripts.
+
 **CDN images / binary assets behind Cloudflare:**
 
 Direct GET to `.jpg`, `.png`, and other asset URLs returns **raw file bytes** in
-`response.body` (not Chrome’s HTML image-viewer wrapper). Useful for CDN hosts like
-`scdn.autodoc.de`:
+`response.body` (not Chrome’s HTML image-viewer wrapper) when the origin serves the file.
+Useful when a CDN sits behind Cloudflare JS — otherwise try `turbo` first:
 
 ```python
+# Fast path — no Chrome, no mouse replay
+yield scrapy.Request(
+    "https://scdn.autodoc.de/vehicles/800x287/8145.jpg",
+    meta={"stealth": {"driver": "turbo"}},
+    callback=self.save_image,
+)
+
+# Browser — when the CDN requires JS/challenge clearance first
 yield scrapy.Request(
     "https://scdn.autodoc.de/vehicles/800x287/8145.jpg",
     meta={"stealth": {"driver": "browser", "headless": False, "settle": 8}},
