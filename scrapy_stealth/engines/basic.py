@@ -13,6 +13,7 @@ try:
 except ImportError as exc:
     StealthDependencyError.check("wreq", exc)
 
+from ..behaviors import apply_request_timing
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import (
@@ -97,6 +98,7 @@ class BasicEngine(BaseEngine):
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
         self._record_request_identity(ctx.profile, ctx.proxy)
+        apply_request_timing(ctx.profile)
         try:
             emulation = (
                 self.default_profile
