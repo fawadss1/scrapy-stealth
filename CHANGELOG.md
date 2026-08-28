@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-08-27
+
+### Added
+
+* **Behavioral fingerprinting engine (auto-enabled)**
+  Human-like interaction runs automatically on every stealth driver.
+
+  * **`browser`** — after each GET navigation: viewport emulation from the active
+    fingerprint profile (desktop vs mobile), Bezier-curved CDP mouse paths via
+    `Input.dispatchMouseEvent` (`mouseMoved`), CDP scroll (`mouseWheel`), and an
+    occasional keyboard nudge.
+  * **`basic` / `turbo`** — profile-seeded pre-request timing jitter (~30–350 ms);
+    no DOM is available on HTTP drivers, so mouse/scroll are not simulated there.
+
+  New package: `scrapy_stealth/behaviors/` (`engine`, `patterns`, `viewport`,
+  `noise`, `timing`). Exports include `simulate_hover()` for custom CDP mouse paths.
+
+### Changed
+
+* **Browser behavioral input — CDP instead of JavaScript**
+  Mouse and scroll replay previously used `document.dispatchEvent()` (untrusted,
+  invisible to the OS cursor). They now use Chrome DevTools Protocol input events,
+  which anti-bot behavioral checks are more likely to treat as real browser input.
+
+---
+
 ## [0.7.1] - 2026-08-26
 
 ### Added
@@ -1178,6 +1204,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.8.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.8.0
 
 [0.7.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.7.1
 
