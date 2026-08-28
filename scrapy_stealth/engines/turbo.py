@@ -12,6 +12,7 @@ try:
 except ImportError as exc:
     StealthDependencyError.check("curl_cffi", exc)
 
+from ..behaviors import apply_request_timing
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import (
@@ -88,6 +89,7 @@ class TurboEngine(BaseEngine):
     def _execute(self, request: Request) -> Response | None:
         ctx = self._ctx(request)
         self._record_request_identity(ctx.profile, ctx.proxy)
+        apply_request_timing(ctx.profile)
         try:
             browser = resolve_browser(ctx.profile, backend="turbo", http3=ctx.http3)
             prepared = build_stealth_request(request)

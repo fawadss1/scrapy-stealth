@@ -11,6 +11,7 @@ from typing import Any
 
 from scrapy.http import Request, Response
 
+from ..behaviors import apply_viewport_emulation, run_browser_interactions
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import (
@@ -478,6 +479,7 @@ class BrowserEngine(BaseEngine):
         url: str,
         prepared: StealthRequestPayload,
         settle: float,
+        profile: str,
         snapshot: bool = False,
         block_assets: bool = False,
     ) -> tuple[bytes, int, bytes | None, dict[str, str], list[dict[str, Any]]]:
@@ -500,6 +502,7 @@ class BrowserEngine(BaseEngine):
             direct_nav = method in {"GET", "HEAD"} and not use_setup
 
             page = await self._attach_tab(browser)
+            await apply_viewport_emulation(page, profile)
             if not direct_nav:
                 await apply_browser_cookies(page, url, prepared.cookie_header)
                 await apply_browser_headers(
@@ -532,6 +535,9 @@ class BrowserEngine(BaseEngine):
                             raise StealthConnectionError(
                                 f"Browser engine connection failed fetching {url!r}"
                             )
+
+                        if method != "HEAD":
+                            await run_browser_interactions(page, profile)
 
                         status = await _wait_for_status(page)
                         challenge_timeout = float(
@@ -677,6 +683,7 @@ class BrowserEngine(BaseEngine):
                             payload.url,
                             payload,
                             settle,
+                            ctx.profile,
                             snap,
                             block_assets,
                         )
