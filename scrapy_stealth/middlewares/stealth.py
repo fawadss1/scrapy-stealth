@@ -10,6 +10,7 @@ from ..engines.browser import BrowserEngine
 from ..manager import EngineManager
 from ..strategies.proxy import ProxyRotator
 from ..strategies.proxy_health import get_proxy_health_registry
+from ..strategies.throttle import get_throttle_registry
 from ..utils.browser.cookies import merge_browser_cookies_to_jar
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
@@ -68,6 +69,7 @@ class StealthDownloaderMiddleware:
         self._proxy_rotator = ProxyRotator(proxies=proxies)
         config.STEALTH_PROXIES = list(self._proxy_rotator.proxies)
         get_proxy_health_registry().reset()
+        get_throttle_registry().reset()
         self.manager.seed_proxies()
         stats = spider.crawler.stats
         self._stealth_stats = StealthStats(stats)
