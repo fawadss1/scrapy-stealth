@@ -121,3 +121,18 @@ class StealthStats:
         if count <= 0:
             return
         self.inc("stealth/browser_cookies_exported", count)
+
+    def record_throttle_wait(self, driver: str, seconds: float) -> None:
+        if seconds <= 0:
+            return
+        self.inc("stealth/throttle/waits")
+        self.inc(f"stealth/throttle/waits/{driver}")
+        self.inc("stealth/throttle/wait_ms", max(1, int(seconds * 1000)))
+
+    def record_throttle_rate_limit(self, driver: str) -> None:
+        self.inc("stealth/throttle/rate_limited")
+        self.inc(f"stealth/throttle/rate_limited/{driver}")
+
+    def record_throttle_retry_after(self, driver: str) -> None:
+        self.inc("stealth/throttle/retry_after")
+        self.inc(f"stealth/throttle/retry_after/{driver}")
