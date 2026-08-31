@@ -19,6 +19,7 @@ from scrapy.http import Request, Response
 from ..config import config
 from ..strategies.fingerprint import ProfileRotator
 from ..strategies.proxy_health import get_proxy_health_registry
+from ..strategies.throttle import get_throttle_registry
 from ..utils.core.console import console
 from ..utils.core.meta import _get_meta_data
 from ..utils.telemetry.stats import StealthStats, proxy_host_for_stats
@@ -193,7 +194,23 @@ class BaseEngine(ABC):
             )
 
     def _execute_timed(self, request: Request) -> Response | None:
+        domain = self._request_domain(request)
+        profile = _get_meta_data(request, "profile", self._default_profile)
+        get_throttle_registry().wait(
+            domain,
+            self.driver_name,
+            profile=profile,
+            stats=self._stealth_stats,
+        )
         resp, latency = self._timed(self._execute, request)
+        get_throttle_registry().record(
+            domain,
+            self.driver_name,
+            status=resp.status if resp is not None else 0,
+            latency_s=latency,
+            headers=resp.headers if resp is not None else None,
+            stats=self._stealth_stats,
+        )
         if resp is not None:
             resp.meta["download_latency"] = latency
         return resp

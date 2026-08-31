@@ -128,6 +128,7 @@ Scrapy is fast and powerful, but modern websites use advanced anti-bot protectio
 * ⚡ Thread-safe async integration
 * 🖥️ Real-browser engine (CDP) for JS-heavy pages
 * 🖭 **Behavioral fingerprinting** — auto-enabled on every driver: CDP mouse/scroll/viewport on `browser`; profile-seeded request timing on `basic`/`turbo` (no config flags)
+* ⏱️ **Adaptive rate limiting** — auto-enabled per-domain throttle: backs off on HTTP 429 / `Retry-After`, eases after success streaks (no config flags)
 * 🔄 Intelligent session recycle — after consecutive bans, browser restarts Chrome; basic/turbo clear HTTP sessions
 * 🚫 Static asset blocking — skip images, fonts, CSS, and media for faster, lighter browser fetches
 * 🎯 Proxy bypass list — send chosen domains straight to the origin instead of through the proxy (`--proxy-bypass-list`)
@@ -780,8 +781,22 @@ replay is built into the drivers:
 | Driver    | Behavior                                                                                                                                                               |
 |-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `browser` | After each GET load: viewport from profile → Bezier CDP mouse path (`Input.dispatchMouseEvent` / `mouseMoved`) → CDP scroll (`mouseWheel`) → occasional keyboard nudge |
-| `basic`   | Profile-seeded sleep before each request (~30–350 ms)                                                                                                                  |
-| `turbo`   | Same pre-request timing as `basic`                                                                                                                                     |
+| `basic`   | Profile-seeded sleep before each request (~30–350 ms), plus adaptive per-domain spacing |
+| `turbo`   | Same pre-request timing as `basic`                                                                                                                     |
+
+### Adaptive rate limiting (auto-enabled)
+
+Every stealth driver paces requests per domain automatically — no `STEALTH_ADAPTIVE_THROTTLE`
+setting and no per-request meta flag.
+
+* **429 / Retry-After** — doubles inter-request spacing (minimum 1s) and honors `Retry-After`.
+* **Success streaks** — after several clean responses, spacing eases back down (AIMD).
+* **Slow responses** — high latency EMA nudges spacing up slightly.
+* **Stats** — `stealth/throttle/waits`, `stealth/throttle/wait_ms`,
+  `stealth/throttle/rate_limited`, `stealth/throttle/retry_after` (with `{driver}` breakdowns).
+
+403/503 blocks still go through ban detection, proxy health, and session recycle — throttle
+only learns from rate limits, not generic bans.
 
 Mouse paths use quadratic Bézier curves with Gaussian jitter so consecutive requests from the
 same profile stay in a plausible band without identical coordinates every time.

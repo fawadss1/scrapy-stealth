@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.1] - 2026-08-31
+
+### Added
+
+* **Adaptive rate limiting (auto-enabled)**
+  Per-domain smart throttle on every stealth driver — no settings or meta flags.
+
+  * Tracks HTTP **429**, **`Retry-After`**, and response latency per domain + driver.
+  * **AIMD** spacing: backs off on rate limits, eases delay after success streaks.
+  * Behavioral timing jitter on `basic`/`turbo` is folded into the throttle wait.
+  * Stats: `stealth/throttle/waits`, `stealth/throttle/wait_ms`,
+    `stealth/throttle/rate_limited`, `stealth/throttle/retry_after`
+    (each with a `{driver}` breakdown where applicable).
+
+  New module: `scrapy_stealth/strategies/throttle.py`.
+
+---
+
 ## [0.8.0] - 2026-08-27
 
 ### Added
@@ -1204,6 +1222,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.8.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.8.1
 
 [0.8.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.8.0
 
