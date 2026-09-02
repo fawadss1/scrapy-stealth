@@ -135,3 +135,8 @@ STEALTH_PROXY_COOLDOWN_S: float = 300.0
 
 # HTTP status codes that count toward opening a per-domain proxy circuit.
 STEALTH_PROXY_CIRCUIT_CODES: frozenset[int] = frozenset({403})
+
+# When True (default), print styled [scrapy-stealth] console messages and emit
+# package logger output. Set False in settings.py or config to silence stealth logs.
+# The PyPI update notice is always shown when a newer version exists.
+STEALTH_LOGS: bool = True
