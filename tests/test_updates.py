@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scrapy_stealth.config import config
 from scrapy_stealth.utils.telemetry import updates
 
 _IMPL = "scrapy_stealth.utils.telemetry.updates"
@@ -79,9 +80,12 @@ class TestLatestPypiRelease:
 class TestUpdateAvailable:
     def setup_method(self):
         updates._reset_update_check_state()
+        self._previous_stealth_logs = config.STEALTH_LOGS
+        config.STEALTH_LOGS = True
 
     def teardown_method(self):
         updates._reset_update_check_state()
+        config.STEALTH_LOGS = self._previous_stealth_logs
 
     def test_runs_check_once_per_process(self):
         def run_target_immediately(*, target, **kwargs):
@@ -108,3 +112,18 @@ class TestUpdateAvailable:
         message = mock_console.info.call_args.args[0]
         assert url in message
         assert "pip install -U scrapy-stealth" in message
+
+    def test_notifies_even_when_stealth_logs_disabled(self):
+        url = "https://pypi.org/project/scrapy-stealth/9.9.9/"
+        previous = config.STEALTH_LOGS
+        try:
+            config.STEALTH_LOGS = False
+            with (
+                patch(f"{_IMPL}.get_update_url", return_value=url),
+                patch("scrapy_stealth.utils.core.console.console") as mock_console,
+            ):
+                updates._notify_if_update_available()
+            mock_console.info.assert_called_once()
+            assert mock_console.info.call_args.kwargs.get("force") is True
+        finally:
+            config.STEALTH_LOGS = previous
