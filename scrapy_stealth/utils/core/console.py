@@ -44,7 +44,13 @@ class Console:
         *,
         symbol: str = "",
         msg_color: str = "CYAN",
+        force: bool = False,
     ) -> None:
+        from ...config import config
+
+        if not force and not config.get("STEALTH_LOGS", True):
+            return
+
         from colorama import Fore, Style
 
         self._ensure_init()
@@ -59,8 +65,8 @@ class Console:
         with Console._print_lock:
             print(f"{ts} {prefix} {text}", flush=True)
 
-    def info(self, message: str) -> None:
-        self._print(message, symbol=_SYMBOLS["info"])
+    def info(self, message: str, *, force: bool = False) -> None:
+        self._print(message, symbol=_SYMBOLS["info"], force=force)
 
     def success(self, message: str) -> None:
         self._print(message, symbol=_SYMBOLS["success"], msg_color="GREEN")
