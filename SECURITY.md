@@ -6,7 +6,8 @@ Only the latest minor series receives security fixes.
 
 | Version          | Supported |
 |------------------|-----------|
-| 0.8.1 (latest)   | ✅        |
+| 0.8.2 (latest)   | ✅        |
+| 0.8.1            | ❌        |
 | 0.8.0            | ❌        |
 | 0.7.x            | ❌        |
 
