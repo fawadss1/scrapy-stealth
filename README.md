@@ -26,22 +26,22 @@ designed for large-scale, production-grade crawling.
 <table>
   <tr>
     <td colspan="2" align="center">
-      <a href="https://go.nodemaven.com/Fawadss1readmegh">
+      <a href="https://go.nodemaven.com/Fawadss1readmesept">
         <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/nodemaven-banner.png" alt="NodeMaven — Best proxy for web scrapping and automation with the highest quality IP" width="720"/>
       </a>
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <strong><a href="https://go.nodemaven.com/Fawadss1readmegh">NodeMaven</a></strong> — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
+      <strong><a href="https://go.nodemaven.com/Fawadss1readmesept">NodeMaven</a></strong> — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
       <br/><br/>
-      <strong>Why <a href="https://go.nodemaven.com/Fawadss1readmegh">NodeMaven</a>?</strong>
+      <strong>Why <a href="https://go.nodemaven.com/Fawadss1readmesept">NodeMaven</a>?</strong>
       <ul>
         <li>99.9% uptime</li>
         <li>ZIP Targeting</li>
         <li>IP filtering: all proxies have fraud score &lt;97%</li>
         <li>No KYC required</li>
-        <li>Unique free tools: <a href="https://go.nodemaven.com/Fawadss1tools">Proxy Bandwidth Checker</a>, Meta Tag Checker, IP Lookup, and others</li>
+        <li>Unique free tools: <a href="https://go.nodemaven.com/Fawadss1toolssept">Proxy Bandwidth Checker</a>, Meta Tag Checker, IP Lookup, and others</li>
       </ul>
       Special codes for scrapy-stealth users:
       <code>SCRAPYSTEALTH35</code> — 35% off Mobile and Residential Proxies;

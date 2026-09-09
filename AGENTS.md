@@ -32,15 +32,15 @@ See [CHECK.md](CHECK.md) for individual commands.
 
 ### NodeMaven
 
-**[NodeMaven](https://go.nodemaven.com/Fawadss1agentmdgh)** — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
+**[NodeMaven](https://go.nodemaven.com/Fawadss1agentmdsept)** — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
 
-**Why [NodeMaven](https://go.nodemaven.com/Fawadss1agentmdgh)?**
+**Why [NodeMaven](https://go.nodemaven.com/Fawadss1agentmdsept)?**
 
 - 99.9% uptime
 - ZIP Targeting
 - IP filtering: all proxies have fraud score <97%
 - No KYC required
-- Unique free tools: [Proxy Bandwidth Checker](https://go.nodemaven.com/Fawadss1tools), Meta Tag Checker, IP Lookup, and others
+- Unique free tools: [Proxy Bandwidth Checker](https://go.nodemaven.com/Fawadss1toolssept), Meta Tag Checker, IP Lookup, and others
 
 Special codes for scrapy-stealth users:
 
