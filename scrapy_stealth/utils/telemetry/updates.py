@@ -69,7 +69,8 @@ def _notify_if_update_available() -> None:
     if url := get_update_url():
         console.info(
             f"A newer version of {_pkg_meta.name} is available. "
-            f"Update with `pip install -U {_pkg_meta.name}` or see {url}"
+            f"Update with `pip install -U {_pkg_meta.name}` or see {url}",
+            force=True,
         )
 
 

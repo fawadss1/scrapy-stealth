@@ -13,7 +13,7 @@ from ..strategies.proxy_health import get_proxy_health_registry
 from ..strategies.throttle import get_throttle_registry
 from ..utils.browser.cookies import merge_browser_cookies_to_jar
 from ..utils.core.console import console
-from ..utils.core.logger import get_logger
+from ..utils.core.logger import configure_stealth_logging, get_logger
 from ..utils.core.meta import (
     _apply_stealth_enabled_defaults,
     _get_meta_data,
@@ -54,6 +54,8 @@ class StealthDownloaderMiddleware:
     def from_crawler(cls, crawler: Any) -> StealthDownloaderMiddleware:
         proxies = crawler.settings.getlist("STEALTH_PROXIES", [])
         stealth_enabled = crawler.settings.getbool("STEALTH_ENABLED", False)
+        config.STEALTH_LOGS = crawler.settings.getbool("STEALTH_LOGS", True)
+        configure_stealth_logging(config.STEALTH_LOGS)
         mw = cls(proxies=proxies, stealth_enabled=stealth_enabled, crawler=crawler)
         crawler.signals.connect(mw.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(mw.spider_closed, signal=signals.spider_closed)
@@ -65,6 +67,8 @@ class StealthDownloaderMiddleware:
 
     def spider_opened(self, spider: Any) -> None:
         settings = spider.crawler.settings
+        config.STEALTH_LOGS = settings.getbool("STEALTH_LOGS", config.STEALTH_LOGS)
+        configure_stealth_logging(config.STEALTH_LOGS)
         proxies = settings.getlist("STEALTH_PROXIES", [])
         self._proxy_rotator = ProxyRotator(proxies=proxies)
         config.STEALTH_PROXIES = list(self._proxy_rotator.proxies)

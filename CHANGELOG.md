@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.2] - 2026-09-02
+
+### Added
+
+* **`STEALTH_LOGS`** — toggle styled `[scrapy-stealth]` console output and package logger
+  messages. Default **`True`** (unchanged behaviour). Set `STEALTH_LOGS = False` in
+  `settings.py` / `custom_settings`, or `config.STEALTH_LOGS = False` before the spider
+  runs, to silence stealth logs. The PyPI update notice is always shown when a newer
+  version exists, regardless of this setting.
+
+---
+
 ## [0.8.1] - 2026-08-31
 
 ### Added
@@ -1222,6 +1234,8 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[0.8.2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.8.2
 
 [0.8.1]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.8.1
 

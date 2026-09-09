@@ -100,3 +100,27 @@ class TestSemanticMethods:
             getattr(c, method)("x")
             out = capsys.readouterr().out
             assert out.count("\n") == 1
+
+
+class TestStealthLogsToggle:
+    def test_console_silent_when_disabled(self, capsys):
+        from scrapy_stealth.config import config
+
+        previous = config.STEALTH_LOGS
+        try:
+            config.STEALTH_LOGS = False
+            Console().info("hidden message")
+            assert capsys.readouterr().out == ""
+        finally:
+            config.STEALTH_LOGS = previous
+
+    def test_force_bypasses_stealth_logs(self, capsys):
+        from scrapy_stealth.config import config
+
+        previous = config.STEALTH_LOGS
+        try:
+            config.STEALTH_LOGS = False
+            Console().info("always visible", force=True)
+            assert "always visible" in strip_ansi(capsys.readouterr().out)
+        finally:
+            config.STEALTH_LOGS = previous

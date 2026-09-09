@@ -19,3 +19,7 @@ def test_http3_default():
 
 def test_dns_overrides_default():
     assert config.get("STEALTH_DNS_OVERRIDES") == {}
+
+
+def test_stealth_logs_default():
+    assert config.get("STEALTH_LOGS") is True
