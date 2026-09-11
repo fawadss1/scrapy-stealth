@@ -30,8 +30,8 @@ class TestSnapshotDecorator:
         def parse(self, response):
             called.append(response.url)
 
-        parse(None, _make_response(b"PNG", "https://bare.com"))
-        assert called == ["https://bare.com"]
+        parse(None, _make_response(b"PNG", "https://cdn.example.com/image.png"))
+        assert called == ["https://cdn.example.com/image.png"]
 
     def test_empty_call_decorator_calls_callback(self):
         called = []
@@ -106,7 +106,7 @@ class TestSnapshotDecorator:
                 def parse(self, response):
                     pass
 
-                parse(None, _make_response(b"DATA", "https://test.com/page"))
+                parse(None, _make_response(b"DATA", "https://example.com/page"))
                 snap_dir = os.path.join(tmpdir, "stealth_snapshots")
                 pngs = [f for f in os.listdir(snap_dir) if f.endswith(".png")]
                 assert len(pngs) == 1

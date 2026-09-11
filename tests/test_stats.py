@@ -11,8 +11,8 @@ from scrapy_stealth.utils.telemetry.stats import StealthStats, proxy_host_for_st
 class TestProxyHostForStats:
     def test_strips_credentials(self):
         assert (
-            proxy_host_for_stats("https://user:pass@dc.oxylabs.io:8000")
-            == "dc.oxylabs.io:8000"
+            proxy_host_for_stats("https://user:pass@proxy.example.com:8000")
+            == "proxy.example.com:8000"
         )
 
     def test_none_and_empty(self):
@@ -93,14 +93,14 @@ class TestStealthStats:
         collector = MagicMock()
         s = StealthStats(collector)
         s.record_proxy_connection_failure(
-            "turbo", "http://user:secret@dc.oxylabs.io:8000"
+            "turbo", "http://user:secret@proxy.example.com:8000"
         )
         collector.inc_value.assert_any_call("stealth/proxy/connection_failures", 1)
         collector.inc_value.assert_any_call(
             "stealth/proxy/connection_failures/turbo", 1
         )
         collector.set_value.assert_any_call(
-            "stealth/proxy/last_connection_failure", "dc.oxylabs.io:8000"
+            "stealth/proxy/last_connection_failure", "proxy.example.com:8000"
         )
 
     def test_records_proxy_cooldown_and_rotation(self):
@@ -157,7 +157,7 @@ class TestBasicEngineStats:
         with patch("scrapy_stealth.engines.basic.Client", mock_cls):
             engine = BasicEngine(profile="chrome_147")
             engine.set_stats(collector)
-            meta_proxy = "https://user:pass@dc.oxylabs.io:8000"
+            meta_proxy = "https://user:pass@proxy.example.com:8000"
             req = Request(
                 "https://example.com",
                 meta={"stealth": {"proxy": meta_proxy}},
@@ -173,7 +173,7 @@ class TestBasicEngineStats:
         assert values.get("stealth/proxy/requests") == 2
         assert values.get("stealth/recycles") == 1
         assert values.get("stealth/recycles/basic") == 1
-        assert values.get("stealth/proxy") == "dc.oxylabs.io:8000"
+        assert values.get("stealth/proxy") == "proxy.example.com:8000"
         assert values.get("stealth/profile") is not None
 
     def test_clean_response_resets_streak_stat(self, monkeypatch):

@@ -15,11 +15,11 @@ from scrapy_stealth.utils.browser._core import (
 
 class TestUrlHelpers:
     def test_url_looks_binary_for_jpg(self):
-        assert _url_looks_binary("https://scdn.autodoc.de/vehicles/800x287/8145.jpg")
+        assert _url_looks_binary("https://cdn.example.com/media/800x287/item-8145.jpg")
 
     def test_url_looks_binary_for_png(self):
         assert _url_looks_binary(
-            "https://scdn.autodoc.de/catalog/categories/100x100/10564.png"
+            "https://cdn.example.com/catalog/categories/100x100/item-10564.png"
         )
 
 
@@ -38,7 +38,7 @@ class TestResolveBrowserGetBody:
     async def test_binary_url_uses_fetch_when_network_body_is_html(self):
         page = AsyncMock()
         capture = _MainDocumentCapture(
-            "https://scdn.autodoc.de/vehicles/800x287/8145.jpg"
+            "https://cdn.example.com/media/800x287/item-8145.jpg"
         )
         capture.get_body = AsyncMock(
             return_value=(
@@ -60,7 +60,7 @@ class TestResolveBrowserGetBody:
         ) as mock_fetch:
             body, headers, status = await resolve_browser_get_body(
                 page,
-                "https://scdn.autodoc.de/vehicles/800x287/8145.jpg",
+                "https://cdn.example.com/media/800x287/item-8145.jpg",
                 capture,
             )
 
@@ -74,7 +74,7 @@ class TestMainDocumentCapture:
     @pytest.mark.asyncio
     async def test_get_body_decodes_base64(self):
         capture = _MainDocumentCapture(
-            "https://scdn.autodoc.de/catalog/categories/100x100/10564.png"
+            "https://cdn.example.com/catalog/categories/100x100/item-10564.png"
         )
         page = AsyncMock()
         capture._page = page

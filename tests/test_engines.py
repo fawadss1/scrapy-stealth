@@ -376,7 +376,7 @@ class TestBasicEngine:
         monkeypatch.setattr(config, "STEALTH_RECYCLE_AFTER_BANS", 2)
         monkeypatch.setattr(config, "STEALTH_RECYCLE_COOLDOWN_S", 0.0)
         monkeypatch.setattr(config, "STEALTH_PROXIES", [])
-        meta_proxy = "https://user:pass@dc.oxylabs.io:8000"
+        meta_proxy = "https://user:pass@proxy.example.com:8000"
         mock_cls = MagicMock(return_value=_make_mock_client(status=403))
         with patch("scrapy_stealth.engines.basic.Client", mock_cls):
             engine = BasicEngine(profile="chrome_147")

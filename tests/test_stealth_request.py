@@ -139,7 +139,7 @@ class TestBuildStealthRequest:
         from scrapy_stealth.utils.browser.request import _build_fetch_expression
 
         payload = StealthRequestPayload(
-            url="https://postman-echo.com/post",
+            url="https://api.example.com/post",
             method="POST",
             headers={"Content-Type": "application/json"},
             body=b'{"ok":true}',
@@ -155,7 +155,7 @@ class TestBuildStealthRequest:
         from scrapy_stealth.utils.browser.request import _build_fetch_expression
 
         payload = StealthRequestPayload(
-            url="https://quotes.toscrape.com/login",
+            url="https://app.example.com/login",
             method="POST",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             body=b"username=admin&password=admin",
@@ -203,20 +203,20 @@ class TestBuildStealthRequest:
     def test_request_origin(self):
         from scrapy_stealth.utils.browser.request import request_origin
 
-        assert request_origin("https://quotes.toscrape.com/login") == (
-            "https://quotes.toscrape.com/"
+        assert request_origin("https://app.example.com/login") == (
+            "https://app.example.com/"
         )
 
     def test_same_origin(self):
         from scrapy_stealth.utils.browser.request import _same_origin
 
         assert _same_origin(
-            "https://postman-echo.com/post",
-            "https://postman-echo.com/post",
+            "https://api.example.com/post",
+            "https://api.example.com/post",
         )
         assert not _same_origin(
-            "https://www.postman.com/foo",
-            "https://postman-echo.com/post",
+            "https://other.example.com/foo",
+            "https://api.example.com/post",
         )
 
     def test_browser_cdp_headers_skip_content_type(self):
