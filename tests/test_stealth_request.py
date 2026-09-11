@@ -9,7 +9,9 @@ from scrapy_stealth.utils.network.request import (
     StealthRequestPayload,
     build_stealth_request,
     extract_cookie_header,
+    format_cookie_header,
     parse_cookie_pairs,
+    resolve_cookie_header,
 )
 
 
@@ -93,6 +95,42 @@ class TestBuildStealthRequest:
     def test_extract_cookie_header_from_bytes(self):
         request = Request("https://example.com", headers={b"Cookie": b"s=1"})
         assert extract_cookie_header(request) == "s=1"
+
+    def test_resolve_cookie_header_from_request_cookies(self):
+        request = Request(
+            "https://example.com",
+            cookies={"user-settings": "%7B%22currencyCode%22%3A%22EUR%22%7D"},
+        )
+        assert resolve_cookie_header(request) == (
+            "user-settings=%7B%22currencyCode%22%3A%22EUR%22%7D"
+        )
+
+    def test_resolve_cookie_header_request_cookies_override_header(self):
+        request = Request(
+            "https://example.com",
+            cookies={"a": "2", "b": "3"},
+            headers={"Cookie": "a=1"},
+        )
+        assert resolve_cookie_header(request) == "a=2; b=3"
+
+    def test_build_stealth_request_uses_request_cookies_without_middleware(self):
+        payload = build_stealth_request(
+            Request(
+                "https://example.com",
+                cookies={"sid": "abc", "user-settings": "%7BEUR%7D"},
+            )
+        )
+        assert payload.cookie_header == "sid=abc; user-settings=%7BEUR%7D"
+        assert payload.turbo_kwargs(timeout=30, http_version=2, proxy=None)[
+            "cookies"
+        ] == {
+            "sid": "abc",
+            "user-settings": "%7BEUR%7D",
+        }
+
+    def test_format_cookie_header(self):
+        assert format_cookie_header([("a", "1"), ("b", "2")]) == "a=1; b=2"
+        assert format_cookie_header([]) is None
 
     def test_parse_cookie_pairs(self):
         assert parse_cookie_pairs("a=1; b=2") == [("a", "1"), ("b", "2")]

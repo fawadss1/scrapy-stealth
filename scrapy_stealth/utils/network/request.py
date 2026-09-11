@@ -99,6 +99,47 @@ def extract_cookie_header(request: Request) -> str | None:
     return str(raw)
 
 
+def _cookie_pairs_from_request(request: Request) -> list[tuple[str, str]]:
+    """Read ``Request.cookies`` (dict or Scrapy verbose-cookie list)."""
+    cookies = request.cookies
+    if not cookies:
+        return []
+    if isinstance(cookies, dict):
+        return [(str(name), str(value)) for name, value in cookies.items()]
+    pairs: list[tuple[str, str]] = []
+    for item in cookies:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        value = item.get("value")
+        if name is not None and value is not None:
+            pairs.append((str(name), str(value)))
+    return pairs
+
+
+def format_cookie_header(pairs: list[tuple[str, str]]) -> str | None:
+    if not pairs:
+        return None
+    return "; ".join(f"{name}={value}" for name, value in pairs)
+
+
+def resolve_cookie_header(request: Request) -> str | None:
+    """
+    Cookie string for stealth drivers.
+
+    Merge the ``Cookie`` header (from ``CookiesMiddleware`` / manual headers)
+    with ``Request.cookies``. Explicit ``Request.cookies`` win on name clashes
+    so per-request values override stale jar cookies.
+    """
+    merged: dict[str, str] = {}
+    header = extract_cookie_header(request)
+    if header:
+        merged.update(dict(parse_cookie_pairs(header)))
+    for name, value in _cookie_pairs_from_request(request):
+        merged[name] = value
+    return format_cookie_header(list(merged.items())) if merged else None
+
+
 def parse_cookie_pairs(cookie_header: str) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     for part in cookie_header.split(";"):
@@ -175,7 +216,7 @@ def build_stealth_request(
     _validate_request(method, url, body)
 
     extra_headers = _extract_extra_headers(request)
-    cookie_header = extract_cookie_header(request)
+    cookie_header = resolve_cookie_header(request)
     headers = _compose_headers(extra_headers, cookie_header, profile)
 
     return StealthRequestPayload(

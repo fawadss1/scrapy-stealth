@@ -41,7 +41,7 @@ async def prepare_browser_post_context(page: Any, url: str) -> None:
     """Load the target URL so in-page ``fetch()`` is same-origin.
 
     Uses GET on the target URL (not the site root) because many hosts redirect
-    ``/`` elsewhere — e.g. postman-echo.com → www.postman.com — which would
+    ``/`` elsewhere — e.g. example.com → www.example.com — which would
     make a subsequent same-URL ``fetch()`` cross-origin and fail.
     """
     await page.get(url)
