@@ -8,6 +8,8 @@ r"""
 
 scrapy-stealth: A pluggable anti-bot and stealth framework for Scrapy.
 
+Documentation: https://scrapy-stealth.readthedocs.io/en/latest/
+
 Quick start
 -----------
 Add the middleware to your settings.py or spider custom_settings::
@@ -55,6 +57,8 @@ from .utils.core.meta_info import _pkg_meta
 __version__: str = _pkg_meta.version
 __author__: str = _pkg_meta.author
 __license__: str = _pkg_meta.license
+__docs_url__: str = _pkg_meta.docs_url
+__changelog_url__: str = _pkg_meta.changelog_url
 
 __all__ = [
     # Middleware
@@ -82,4 +86,6 @@ __all__ = [
     "__version__",
     "__author__",
     "__license__",
+    "__docs_url__",
+    "__changelog_url__",
 ]

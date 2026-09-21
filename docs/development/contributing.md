@@ -44,7 +44,7 @@ Submit doc changes under `docs/` with the same PR as code changes when behavior 
 2. Import the GitHub repo `fawadss1/scrapy-stealth`
 3. RTD reads `.readthedocs.yaml` and builds with MkDocs automatically
 4. Set **default branch** and enable **PDF/epub** if desired
-5. Update PyPI `Documentation` URL to `https://scrapy-stealth.readthedocs.io/`
+5. PyPI project URLs (`Documentation`, `Homepage`, `Changelog`) are set in `pyproject.toml`
 
 ## Conventions
 

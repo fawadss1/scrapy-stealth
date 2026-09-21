@@ -8,18 +8,18 @@
 
 <p align="center">A pluggable anti-bot and stealth framework for Scrapy.</p>
 
-[![Documentation](https://readthedocs.org/projects/scrapy-stealth/badge/?version=latest)](https://scrapy-stealth.readthedocs.io/)
+[![Documentation](https://readthedocs.org/projects/scrapy-stealth/badge/?version=latest)](https://scrapy-stealth.readthedocs.io/en/latest/)
 [![PyPI version](https://img.shields.io/pypi/v/scrapy-stealth?color=blue)](https://pypi.org/project/scrapy-stealth/)
 [![Python versions](https://img.shields.io/pypi/pyversions/scrapy-stealth)](https://pypi.org/project/scrapy-stealth/)
 [![GitHub release](https://img.shields.io/github/v/release/Suvastutech-Ltd/scrapy-stealth)](https://github.com/Suvastutech-Ltd/scrapy-stealth/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fawadss1/scrapy-stealth/blob/master/LICENSE)
-[![Changelog](https://img.shields.io/badge/changelog-releases-informational)](https://github.com/fawadss1/scrapy-stealth/releases)
+[![Changelog](https://img.shields.io/badge/changelog-docs-informational)](https://scrapy-stealth.readthedocs.io/en/latest/reference/changelog/)
 
 `scrapy-stealth` extends Scrapy with browser impersonation, Smart Proxy Management,
 fingerprint cycling, and intelligent retry strategies —
 designed for large-scale, production-grade crawling.
 
-**Full documentation:** [scrapy-stealth.readthedocs.io](https://scrapy-stealth.readthedocs.io/)
+**Full documentation:** [scrapy-stealth.readthedocs.io/en/latest/](https://scrapy-stealth.readthedocs.io/en/latest/)
 
 ---
 
@@ -1213,8 +1213,9 @@ Using stealth selectively:
 
 ## 📜 Changelog
 
-See [CHANGELOG.md](https://github.com/fawadss1/scrapy-stealth/blob/master/CHANGELOG.md) for a full history of changes, or
-browse [GitHub Releases](https://github.com/fawadss1/scrapy-stealth/releases).
+See the [changelog on Read the Docs](https://scrapy-stealth.readthedocs.io/en/latest/reference/changelog/)
+for a full history of changes, or browse
+[GitHub Releases](https://github.com/fawadss1/scrapy-stealth/releases).
 
 ---
 

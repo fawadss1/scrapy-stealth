@@ -3,8 +3,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, metadata
+from typing import Any
 
 _PACKAGE_NAME = "scrapy-stealth"
+
+
+def _project_url(meta: Any, label: str, default: str = "") -> str:
+    """Return a PEP 621 Project-URL value by label (e.g. Documentation)."""
+    for entry in meta.get_all("Project-URL") or []:
+        name, sep, url = entry.partition(", ")
+        if sep and name.strip() == label:
+            return url.strip()
+    return default
 
 
 def _parse_author(raw: str) -> tuple[str, str]:
@@ -25,6 +35,8 @@ class PackageMetadata:
     author: str
     email: str
     license: str
+    docs_url: str
+    changelog_url: str
 
     @classmethod
     def load(cls, package: str = _PACKAGE_NAME) -> PackageMetadata:
@@ -32,7 +44,15 @@ class PackageMetadata:
         try:
             meta = metadata(package)
         except PackageNotFoundError:
-            return cls(name=package, version="", author="", email="", license="")
+            return cls(
+                name=package,
+                version="",
+                author="",
+                email="",
+                license="",
+                docs_url="",
+                changelog_url="",
+            )
 
         raw_author = meta.get("Author-email") or meta.get("Author") or ""
         author, email = _parse_author(raw_author)
@@ -43,6 +63,16 @@ class PackageMetadata:
             author=author,
             email=email,
             license=meta.get("License", ""),
+            docs_url=_project_url(
+                meta,
+                "Documentation",
+                "https://scrapy-stealth.readthedocs.io/en/latest/",
+            ),
+            changelog_url=_project_url(
+                meta,
+                "Changelog",
+                "https://scrapy-stealth.readthedocs.io/en/latest/reference/changelog/",
+            ),
         )
 
     def __str__(self) -> str:

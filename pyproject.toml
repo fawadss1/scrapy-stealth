@@ -77,10 +77,11 @@ docs = [
 ]
 
 [project.urls]
-Documentation = "https://scrapy-stealth.readthedocs.io/"
+Homepage = "https://scrapy-stealth.readthedocs.io/en/latest/"
+Documentation = "https://scrapy-stealth.readthedocs.io/en/latest/"
 Repository = "https://github.com/fawadss1/scrapy-stealth"
 Issues = "https://github.com/fawadss1/scrapy-stealth/issues"
-Changelog = "https://github.com/fawadss1/scrapy-stealth/releases"
+Changelog = "https://scrapy-stealth.readthedocs.io/en/latest/reference/changelog/"
 
 [tool.setuptools.packages.find]
 where = ["."]
