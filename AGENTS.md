@@ -18,7 +18,8 @@ pip install -e ".[dev]"
 python scripts/check.py
 ```
 
-See [CHECK.md](CHECK.md) for individual commands.
+See [CHECK.md](CHECK.md) for individual commands. User docs: [scrapy-stealth.readthedocs.io](https://scrapy-stealth.readthedocs.io/)
+(source in `docs/`, built via MkDocs).
 
 ## Conventions
 
@@ -32,7 +33,8 @@ See [CHECK.md](CHECK.md) for individual commands.
 
 ### NodeMaven
 
-**[NodeMaven](https://go.nodemaven.com/Fawadss1agentmdsept)** — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
+**[NodeMaven](https://go.nodemaven.com/Fawadss1agentmdsept)** — the most efficient proxy provider for web scrapping and automation with
+the highest-quality IP on the market.
 
 **Why [NodeMaven](https://go.nodemaven.com/Fawadss1agentmdsept)?**
 
@@ -49,6 +51,7 @@ Special codes for scrapy-stealth users:
 
 ### Proxy-Seller
 
-**[Proxy-Seller](https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875)** — residential, ISP, mobile, IPv4, and IPv6 proxies across 220+ locations. HTTP(S) and SOCKS5, flexible rotation, and 24/7 support.
+**[Proxy-Seller](https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875)** —
+residential, ISP, mobile, IPv4, and IPv6 proxies across 220+ locations. HTTP (S) and SOCKS5, flexible rotation, and 24/7 support.
 
 Use code `FAWAD15` at checkout.

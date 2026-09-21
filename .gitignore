@@ -71,6 +71,9 @@ scrapy.log
 # Jupyter
 .ipynb_checkpoints/
 
+# MkDocs
+site/
+
 # Ruff / linters
 .ruff_cache/
 

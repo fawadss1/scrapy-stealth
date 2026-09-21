@@ -1,0 +1,79 @@
+site_name: scrapy-stealth
+site_description: Pluggable anti-bot and stealth framework for Scrapy
+site_url: https://scrapy-stealth.readthedocs.io/
+repo_url: https://github.com/fawadss1/scrapy-stealth
+repo_name: fawadss1/scrapy-stealth
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quickstart.md
+  - Configuration:
+      - Global settings: configuration/settings.md
+      - Per-request meta: configuration/meta.md
+  - Drivers:
+      - Overview: drivers/overview.md
+      - Smart selection (auto): drivers/auto.md
+      - Browser engine: drivers/browser.md
+  - Guides:
+      - Cookies & HTTP requests: guides/cookies-and-requests.md
+      - DNS overrides: guides/dns-overrides.md
+      - Proxy management: guides/proxy-management.md
+      - Throttle & behavior: guides/throttle-and-behavior.md
+      - Snapshots: guides/snapshots.md
+  - Reference:
+      - Scrapy stats: reference/stats.md
+      - Troubleshooting: reference/troubleshooting.md
+  - Development:
+      - Contributing: development/contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/fawadss1/scrapy-stealth
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/scrapy-stealth/
+
+copyright: Copyright &copy; Fawad Ali — MIT License

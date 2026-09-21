@@ -46,8 +46,8 @@ python scripts/check.py --fix
 
 Then re-run `python scripts/check.py`. Mypy and pytest still need manual fixes.
 
-Pytest runs with `-p no:twisted` so local runs match GitHub CI (`pip install -e ".[dev]"` only).
-If you have `pytest-twisted` installed from Scrapy, plain `pytest` can pass async tests that CI rejects.
+Pytest runs with `-p no:twisted` so local runs match GitHub CI (`pip install -e ".[dev]"` only). If you have `pytest-twisted` installed
+from Scrapy, plain `pytest` can pass async tests that CI rejects.
 
 ## Run steps individually
 
@@ -57,3 +57,13 @@ python -m ruff format --check .
 python -m mypy scrapy_stealth
 python -m pytest -p no:twisted
 ```
+
+## Documentation (MkDocs / Read the Docs)
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve          # preview at http://127.0.0.1:8000
+mkdocs build --strict # same build Read the Docs runs
+```
+
+Published at [scrapy-stealth.readthedocs.io](https://scrapy-stealth.readthedocs.io/) after importing the repo on Read the Docs.

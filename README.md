@@ -8,9 +8,9 @@
 
 <p align="center">A pluggable anti-bot and stealth framework for Scrapy.</p>
 
+[![Documentation](https://readthedocs.org/projects/scrapy-stealth/badge/?version=latest)](https://scrapy-stealth.readthedocs.io/)
 [![PyPI version](https://img.shields.io/pypi/v/scrapy-stealth?color=blue)](https://pypi.org/project/scrapy-stealth/)
 [![Python versions](https://img.shields.io/pypi/pyversions/scrapy-stealth)](https://pypi.org/project/scrapy-stealth/)
-[![Downloads](https://static.pepy.tech/badge/scrapy-stealth)](https://pepy.tech/project/scrapy-stealth)
 [![GitHub release](https://img.shields.io/github/v/release/Suvastutech-Ltd/scrapy-stealth)](https://github.com/Suvastutech-Ltd/scrapy-stealth/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fawadss1/scrapy-stealth/blob/master/LICENSE)
 [![Changelog](https://img.shields.io/badge/changelog-releases-informational)](https://github.com/fawadss1/scrapy-stealth/releases)
@@ -18,6 +18,8 @@
 `scrapy-stealth` extends Scrapy with browser impersonation, Smart Proxy Management,
 fingerprint cycling, and intelligent retry strategies —
 designed for large-scale, production-grade crawling.
+
+**Full documentation:** [scrapy-stealth.readthedocs.io](https://scrapy-stealth.readthedocs.io/)
 
 ---
 
@@ -147,6 +149,9 @@ pip install scrapy-stealth
 ```
 
 > Requires Python 3.11+ and Scrapy 2.12–2.x
+
+See the [installation guide](https://scrapy-stealth.readthedocs.io/en/latest/getting-started/installation/)
+and [quick start](https://scrapy-stealth.readthedocs.io/en/latest/getting-started/quickstart/) on Read the Docs.
 
 ---
 
