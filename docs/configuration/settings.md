@@ -60,18 +60,44 @@ config.STEALTH_LOGS = False
 | `BROWSER_NO_SANDBOX`          | `bool`      | auto      | Force `--no-sandbox` (Docker/root)                               |
 | `BROWSER_MAX_TABS`            | `int`       | `10`      | Max concurrent browser tabs                                      |
 
-## Config-only attributes
+## Config object reference
 
-These live on `scrapy_stealth.config.config` (some also mirror Scrapy settings):
+All attributes on `scrapy_stealth.config.config`. Many mirror Scrapy settings above.
 
-| Attribute         | Default         | Description                          |
-|-------------------|-----------------|--------------------------------------|
-| `DEFAULT_ENGINE`  | `"scrapy"`      | Engine when `meta["stealth"]` absent |
-| `DEFAULT_TIMEOUT` | `30`            | Request timeout (seconds)            |
-| `HTTP2`           | `True`          | HTTP/2 for basic/turbo               |
-| `HTTP3`           | `False`         | HTTP/3 (QUIC) for turbo              |
-| `BLOCK_CODES`     | `{403,429,503}` | Status codes treated as blocked      |
-| `BLOCK_KEYWORDS`  | list            | Body text patterns for blocks        |
+| Attribute                     | Type             | Default                   | Description                                                                  |
+|-------------------------------|------------------|---------------------------|------------------------------------------------------------------------------|
+| `DEFAULT_ENGINE`              | `str`            | `"scrapy"`                | Engine when `meta["stealth"]` is absent                                      |
+| `DEFAULT_TIMEOUT`             | `int`            | `30`                      | Stealth request timeout (seconds)                                            |
+| `STEALTH_DRIVER`              | `str`            | `"turbo"`                 | Primary HTTP driver for `auto`; also default per-request driver              |
+| `STEALTH_ENABLED`             | `bool`           | `False`                   | Route every request through stealth; inject `driver="auto"` unless opted out |
+| `HTTP2`                       | `bool`           | `True`                    | HTTP/2 for basic/turbo; override per-request via `meta["stealth"]["http2"]`  |
+| `HTTP3`                       | `bool`           | `False`                   | Turbo: HTTP/3 (QUIC); needs UDP-capable proxy                                |
+| `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`         | HTTP status codes treated as blocked                                         |
+| `BLOCK_KEYWORDS`              | `list[str]`      | captcha, access denied, … | Body-text patterns treated as blocked                                        |
+| `BROWSER_HEADLESS`            | `bool`           | `False`                   | Browser driver headless mode                                                 |
+| `BROWSER_SETTLE_S`            | `float`          | `4.0`                     | Seconds to wait after navigation for JS                                      |
+| `BROWSER_CHALLENGE_TIMEOUT_S` | `float`          | `30.0`                    | Max wait on Cloudflare / challenge pages                                     |
+| `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                    | Disable Chrome sandbox; `None` = auto (root/Docker)                          |
+| `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                    | Browser binary path; `None` = auto-detect Chrome                             |
+| `BROWSER_MAX_TABS`            | `int`            | `10`                      | Max concurrent Chrome tabs                                                   |
+| `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                       | Consecutive bans before session recycle                                      |
+| `BROWSER_STATIC_ASSETS_BLOCK` | `bool`           | `False`                   | Block images/fonts/CSS via CDP; off when `snapshot=True`                     |
+| `BROWSER_EXPORT_COOKIES`      | `bool`           | `True`                    | Merge browser tab cookies into Scrapy jar                                    |
+| `BROWSER_PROXY_BYPASS_LIST`   | `list[str]`      | `[]`                      | Chrome `--proxy-bypass-list` (global, launch-time)                           |
+| `STEALTH_DNS_OVERRIDES`       | `dict[str, str]` | `{}`                      | Host → IP map for all drivers                                                |
+| `STEALTH_PROXIES`             | `list[str]`      | `[]`                      | Proxy pool; rotated on recycle and transport failure                         |
+| `STEALTH_PROXY_HEALTH`        | `bool`           | `True`                    | Per-proxy + per-domain health scoring                                        |
+| `STEALTH_PROXY_CIRCUIT_AFTER` | `int`            | `3`                       | Failures before proxy cooldown                                               |
+| `STEALTH_PROXY_COOLDOWN_S`    | `float`          | `300.0`                   | Cooldown duration (seconds)                                                  |
+| `STEALTH_PROXY_CIRCUIT_CODES` | `frozenset[int]` | `{403}`                   | Status codes that trip proxy circuit                                         |
+| `STEALTH_LOGS`                | `bool`           | `True`                    | Styled console + package logs; PyPI update notice always shown               |
+
+Read values programmatically:
+
+```python
+config.get("DEFAULT_ENGINE")
+config.get("MISSING_KEY", "default")
+```
 
 ## Middleware registration
 
@@ -87,5 +113,4 @@ handles the request.
 ## Next
 
 - [Per-request meta](meta.md)
-- [Global settings in README](https://github.com/fawadss1/scrapy-stealth/blob/master/README.md#-global-configuration) (extended table
-  on GitHub)
+- [Drivers overview](../drivers/overview.md)

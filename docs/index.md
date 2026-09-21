@@ -69,6 +69,8 @@ Modern sites use TLS fingerprinting, behavioral detection, rate limits, and IP b
 | Smart `auto` fallback     |      Yes       |         No         |        No         |
 | Native Scrapy integration |      Yes       |        Yes         |        Yes        |
 
+See the [full comparison table](reference/comparison.md) and [feature list](reference/features.md).
+
 ## Quick install
 
 ```bash
@@ -95,6 +97,8 @@ See [Quick start](getting-started/quickstart.md) for per-request and global mode
 ## Next steps
 
 - [Installation](getting-started/installation.md)
+- [Quick start](getting-started/quickstart.md)
+- [Example spider](getting-started/example-spider.md)
 - [Global settings](configuration/settings.md)
 - [Drivers overview](drivers/overview.md)
 - [Cookies & requests](guides/cookies-and-requests.md)

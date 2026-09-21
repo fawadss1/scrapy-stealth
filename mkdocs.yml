@@ -57,6 +57,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Quick start: getting-started/quickstart.md
+      - Example spider: getting-started/example-spider.md
   - Configuration:
       - Global settings: configuration/settings.md
       - Per-request meta: configuration/meta.md
@@ -70,7 +71,11 @@ nav:
       - Proxy management: guides/proxy-management.md
       - Throttle & behavior: guides/throttle-and-behavior.md
       - Snapshots: guides/snapshots.md
+      - Strategies: guides/strategies.md
   - Reference:
+      - Features: reference/features.md
+      - Comparison: reference/comparison.md
+      - Anti-bot detection: reference/antibot-detection.md
       - Scrapy stats: reference/stats.md
       - Troubleshooting: reference/troubleshooting.md
       - Changelog: reference/changelog.md
