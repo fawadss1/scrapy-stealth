@@ -7,38 +7,45 @@ edit_uri: edit/master/docs/
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
+  logo: static/logo-mark.svg
+  favicon: static/logo-mark.svg
+  font:
+    text: DM Sans
+    code: JetBrains Mono
   palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+      primary: black
+      accent: cyan
   features:
-    - navigation.tabs
-    - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.indexes
     - search.suggest
     - search.highlight
     - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/stealth.css
+
+extra_javascript:
+  - javascripts/stealth.js
 
 plugins:
   - search
 
 markdown_extensions:
   - admonition
+  - md_in_html
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: ["."]
   - pymdownx.tabbed:
       alternate_style: true
   - tables
@@ -66,14 +73,14 @@ nav:
   - Reference:
       - Scrapy stats: reference/stats.md
       - Troubleshooting: reference/troubleshooting.md
+      - Changelog: reference/changelog.md
   - Development:
       - Contributing: development/contributing.md
 
 extra:
+  generator: false
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/fawadss1/scrapy-stealth
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/scrapy-stealth/
-
-copyright: Copyright &copy; Fawad Ali — MIT License

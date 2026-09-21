@@ -57,4 +57,4 @@ Submit doc changes under `docs/` with the same PR as code changes when behavior 
 
 - [CONTRIBUTING.md](https://github.com/fawadss1/scrapy-stealth/blob/master/CONTRIBUTING.md)
 - [AGENTS.md](https://github.com/fawadss1/scrapy-stealth/blob/master/AGENTS.md) — agent guide
-- [CHANGELOG](https://github.com/fawadss1/scrapy-stealth/releases)
+- [Changelog](../reference/changelog.md)

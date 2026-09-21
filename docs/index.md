@@ -1,20 +1,62 @@
-# scrapy-stealth
+---
+hide:
+  - title
+---
 
-**Stealthy Crawling. Maximum Results.**
-
-A pluggable anti-bot and stealth framework for Scrapy — browser impersonation, Smart Proxy Management, fingerprint cycling, and
-intelligent retry strategies for production crawls.
+<div class="hero-panel">
+  <div class="hero-panel__inner">
+    <img src="static/logo.png" alt="scrapy-stealth logo" class="hero-panel__logo">
+    <h1 class="hero-title">scrapy-stealth</h1>
+    <p class="hero-tagline">Stealthy Crawling. Maximum Results.</p>
+    <p class="hero-desc">
+      A pluggable anti-bot and stealth framework for Scrapy — TLS impersonation, behavioral fingerprinting,
+      adaptive rate limiting, smart proxies, and real Chrome.
+    </p>
+    <div class="hero-badges">
+      <span class="hero-badge hero-badge--cyan"><i class="fa-brands fa-python"></i> Python 3.11+</span>
+      <span class="hero-badge hero-badge--violet"><i class="fa-solid fa-spider"></i> Scrapy 2.12–2.x</span>
+      <span class="hero-badge hero-badge--emerald"><i class="fa-solid fa-scale-balanced"></i> MIT License</span>
+      <a href="https://pypi.org/project/scrapy-stealth/" target="_blank" class="hero-badge hero-badge--emerald">
+        <i class="fa-solid fa-tag"></i> <span class="version-lbl">v…</span>
+      </a>
+    </div>
+  </div>
+</div>
 
 ## Why scrapy-stealth?
 
 Modern sites use TLS fingerprinting, behavioral detection, rate limits, and IP blocks. scrapy-stealth adds:
 
-- Browser-level impersonation (TLS + HTTP/2 via `turbo`)
-- Real Chrome via CDP for JS-heavy pages (`browser`)
-- Smart browser selection (`auto` — HTTP first, browser on challenge)
-- Adaptive rate limiting and behavioral timing (auto-enabled)
-- Smart Proxy Management with per-domain health scoring
-- Anti-bot detection (Cloudflare, Akamai, DataDome signals)
+<div class="feature-grid" markdown="0">
+  <div class="feature-card">
+    <div class="feature-card__icon"><i class="fa-solid fa-dna"></i></div>
+    <div class="feature-card__body">
+      <p class="feature-card__title">Browser-level impersonation</p>
+      <p class="feature-card__text">Deep TLS and HTTP/2 fingerprints via the turbo driver.</p>
+    </div>
+  </div>
+  <div class="feature-card">
+    <div class="feature-card__icon feature-card__icon--violet"><i class="fa-brands fa-chrome"></i></div>
+    <div class="feature-card__body">
+      <p class="feature-card__title">Real Chrome via CDP</p>
+      <p class="feature-card__text">Full browser engine for JS-heavy pages and challenges.</p>
+    </div>
+  </div>
+  <div class="feature-card">
+    <div class="feature-card__icon feature-card__icon--emerald"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+    <div class="feature-card__body">
+      <p class="feature-card__title">Smart auto fallback</p>
+      <p class="feature-card__text">HTTP first, browser on challenge — per request.</p>
+    </div>
+  </div>
+  <div class="feature-card">
+    <div class="feature-card__icon"><i class="fa-solid fa-globe"></i></div>
+    <div class="feature-card__body">
+      <p class="feature-card__title">Smart proxy management</p>
+      <p class="feature-card__text">Per-domain health scoring, cooldown, and failover.</p>
+    </div>
+  </div>
+</div>
 
 ## Comparison at a glance
 
@@ -26,17 +68,6 @@ Modern sites use TLS fingerprinting, behavioral detection, rate limits, and IP b
 | Per-request engine switch |      Yes       |         No         |        No         |
 | Smart `auto` fallback     |      Yes       |         No         |        No         |
 | Native Scrapy integration |      Yes       |        Yes         |        Yes        |
-
-## Features
-
-- Pluggable engines: `scrapy` (native) and `stealth` (basic / turbo / browser / auto)
-- Per-request control via `request.meta["stealth"]`
-- Full request fidelity: POST, cookies, custom headers on all drivers
-- Browser cookie handoff to Scrapy's jar
-- Cloudflare / Turnstile wait logic on browser driver
-- DNS overrides (pin host → IP, keep SNI/Host)
-- Snapshot decorator for PNG captures
-- Rich Scrapy stats telemetry
 
 ## Quick install
 
@@ -72,5 +103,5 @@ See [Quick start](getting-started/quickstart.md) for per-request and global mode
 
 - [PyPI](https://pypi.org/project/scrapy-stealth/)
 - [GitHub](https://github.com/fawadss1/scrapy-stealth)
-- [Changelog](https://github.com/fawadss1/scrapy-stealth/releases)
+- [Changelog](reference/changelog.md)
 - [Example spider](https://github.com/fawadss1/scrapy-stealth/blob/master/examples/full_spider.py)

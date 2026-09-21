@@ -29,7 +29,7 @@ yield scrapy.Request(
 )
 
 # Full mapping:
-meta={"stealth": {"dns": {"shop.example.com": "203.0.113.10"}}}
+meta = {"stealth": {"dns": {"shop.example.com": "203.0.113.10"}}}
 ```
 
 ## Driver behavior

@@ -5,6 +5,7 @@ include README.md
 
 # Browser splash only — not full docs/, sponsors, examples, or scripts
 include docs/static/logo.png
+include docs/static/logo-mark.svg
 
 # Exclude dev / repo-only trees from sdist and wheel
 prune tests

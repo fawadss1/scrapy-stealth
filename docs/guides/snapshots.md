@@ -26,18 +26,14 @@ from scrapy_stealth.decorators import snapshot
 
 
 class MySpider(scrapy.Spider):
-
     @snapshot
-    def parse(self, response):
-        ...
+    def parse(self, response): ...
 
     @snapshot(path="stealth_shots/page.png")
-    def parse(self, response):
-        ...
+    def parse(self, response): ...
 
     @snapshot(path=lambda r: r.url.split("/")[-1] + ".png")
-    def parse(self, response):
-        ...
+    def parse(self, response): ...
 ```
 
 Requires `driver="browser"` and `snapshot=True` in request meta.
