@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+---
+
+## [0.9.0] - 2026-09-22
+
+### Added
+
+* **Read the Docs documentation** — MkDocs Material site at
+  [scrapy-stealth.readthedocs.io](https://scrapy-stealth.readthedocs.io/en/latest/), built from `docs/` via
+  `.readthedocs.yaml`. Install docs locally with `pip install -e ".[docs]"` and `mkdocs serve`.
+* **Docs navigation** — getting started, configuration, drivers, guides, and reference sections, including
+  comparison table, feature list, anti-bot detection, strategies, example spider, stats, troubleshooting, and
+  changelog (synced from this file).
+* **Package documentation URLs** — `pyproject.toml` `Homepage`, `Documentation`, and `Changelog` project URLs
+  point to Read the Docs. Exports `scrapy_stealth.__docs_url__` and `scrapy_stealth.__changelog_url__` from
+  installed distribution metadata.
+
+### Fixed
+
+* **Request cookies on stealth drivers** — `resolve_cookie_header()` merges the `Cookie` header (from
+  `CookiesMiddleware` or manual headers) with `Request.cookies` in `build_stealth_request()`. HTTP and browser
+  engines no longer drop cookies that exist only on the Scrapy request; explicit `Request.cookies` win on duplicate
+  names.
+
+### Changed
+
+* **README** — shortened to logo, badges, sponsors, install, minimal setup, and a documentation index table.
+  Long-form guides, settings reference, and examples now live on Read the Docs only.
+* **Settings reference** — full `config` attribute table moved into `docs/configuration/settings.md` (no longer
+  duplicated in README).
+* **Tests** — example CDN and media URLs use `cdn.example.com` consistently across browser, DNS, and decorator tests.
+
+### Removed
+
+* **Proxy-Seller sponsor** — removed from README and `AGENTS.md` (partnership ended; logo kept under
+  `docs/static/sponsors/` for possible reinstatement).
+
+---
+
 ## [0.8.2] - 2026-09-02
 
 ### Added
@@ -312,7 +352,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the spider finishes instead of lingering until process exit.
 
 * **Full spider example**
-  [`examples/full_spider.py`](examples/full_spider.py) demonstrates settings,
+  [`examples/full_spider.py`](https://github.com/fawadss1/scrapy-stealth/blob/master/examples/full_spider.py) demonstrates settings,
   per-request drivers, snapshots, ban detection, and stealth stats. README links
   to it instead of embedding a long copy.
 
@@ -1234,6 +1274,10 @@ New `decorators` package with a `snapshot` decorator that auto-saves the PNG to 
 - `StealthConfig` for centralised configuration defaults
 
 ---
+
+[Unreleased]: https://github.com/fawadss1/scrapy-stealth/compare/v0.9.0...HEAD
+
+[0.9.0]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.9.0
 
 [0.8.2]: https://github.com/fawadss1/scrapy-stealth/releases/tag/v0.8.2
 
