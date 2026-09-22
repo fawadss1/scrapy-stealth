@@ -10,6 +10,7 @@
 
 [![Documentation](https://readthedocs.org/projects/scrapy-stealth/badge/?version=latest)](https://scrapy-stealth.readthedocs.io/en/latest/)
 [![PyPI version](https://img.shields.io/pypi/v/scrapy-stealth?color=blue)](https://pypi.org/project/scrapy-stealth/)
+[![Downloads](https://static.pepy.tech/badge/scrapy-stealth)](https://pepy.tech/project/scrapy-stealth)
 [![Python versions](https://img.shields.io/pypi/pyversions/scrapy-stealth)](https://pypi.org/project/scrapy-stealth/)
 [![GitHub release](https://img.shields.io/github/v/release/fawadss1/scrapy-stealth)](https://github.com/fawadss1/scrapy-stealth/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/fawadss1/scrapy-stealth/blob/master/LICENSE)
@@ -47,18 +48,6 @@ with per-request driver selection and automatic HTTP → browser fallback.
       Special codes for scrapy-stealth users:
       <code>SCRAPYSTEALTH35</code> — 35% off Mobile and Residential Proxies;
       <code>SCRAPYSTEALTH40</code> — 40% off ISP (Static) Proxies.
-    </td>
-  </tr>
-  <tr>
-    <td width="160" align="center">
-      <a href="https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875">
-        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/proxy-seller-logo.png" alt="Proxy-Seller" width="120"/>
-      </a>
-    </td>
-    <td>
-      <strong><a href="https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875">Proxy-Seller</a></strong> — residential, ISP, mobile, IPv4, and IPv6 proxies across 220+ locations. HTTP(S) and SOCKS5, flexible rotation, and 24/7 support.
-      <br/><br/>
-      Use code <code>FAWAD15</code> at <a href="https://proxy-seller.com/?utm_source=github&utm_medium=referral&utm_campaign=partner_promo&utm_term=github&partner=C2796BDED58F4875">proxy-seller.com</a>.
     </td>
   </tr>
 </table>
