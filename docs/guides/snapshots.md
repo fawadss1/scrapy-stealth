@@ -17,7 +17,7 @@ yield scrapy.Request(
 )
 ```
 
-PNG bytes are in `response.meta["snapshot_content"]`.
+PNG bytes are in `response.meta["snapshot_content"]` (full scrollable page, not just the viewport).
 
 ## `@snapshot` decorator
 

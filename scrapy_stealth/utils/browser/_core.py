@@ -191,12 +191,39 @@ def _splash_url() -> str:
     return "about:blank"
 
 
+# Chrome caps full-page screenshot dimensions (CSS px); clip above this may fail.
+_SNAPSHOT_MAX_CSS_DIMENSION = 16_384
+
+
 async def _cdp_snapshot(page: Any) -> bytes | None:
-    """Take a screenshot of the page using Chrome DevTools Protocol. Returns the raw PNG bytes, or None on failure."""
+    """Capture full scrollable page as PNG bytes via CDP."""
     try:
         import nodriver.cdp.page as _cdp_page
 
-        data: str = await page.send(_cdp_page.capture_screenshot())
+        metrics = await page.send(_cdp_page.get_layout_metrics())
+        content = metrics[5]
+        width = min(
+            _SNAPSHOT_MAX_CSS_DIMENSION,
+            max(1, int(content.width)),
+        )
+        height = min(
+            _SNAPSHOT_MAX_CSS_DIMENSION,
+            max(1, int(content.height)),
+        )
+        clip = _cdp_page.Viewport(
+            x=0.0,
+            y=0.0,
+            width=float(width),
+            height=float(height),
+            scale=1.0,
+        )
+        data: str = await page.send(
+            _cdp_page.capture_screenshot(
+                clip=clip,
+                capture_beyond_viewport=True,
+                from_surface=True,
+            )
+        )
         return base64.b64decode(data)
     except Exception:
         return None

@@ -25,21 +25,21 @@ yield scrapy.Request(
 
 ## Meta keys
 
-| Key                   | Type            | Description                                                      |
-|-----------------------|-----------------|------------------------------------------------------------------|
-| `driver`              | `str`           | `basic`, `turbo`, `browser`, or `auto`                           |
-| `fallback`            | `bool`          | `False` disables browser retry when `driver="auto"`              |
-| `profile`             | `str`           | Pin fingerprint (e.g. `chrome150`). Omit for random pool         |
-| `proxy`               | `str`           | Explicit proxy URL. `None` = direct, no proxy                    |
-| `dns`                 | `str` or `dict` | Per-request DNS override (IP or host map)                        |
-| `stealth_timeout`     | `int`           | Timeout in seconds (default 30)                                  |
-| `http2`               | `bool`          | HTTP/2 vs HTTP/1.1                                               |
-| `http3`               | `bool`          | Turbo only: HTTP/3 (QUIC)                                        |
-| `headless`            | `bool`          | Browser only: headless window                                    |
-| `settle`              | `float`         | Browser only: JS settle time after load                          |
-| `snapshot`            | `bool`          | Browser only: capture PNG to `response.meta["snapshot_content"]` |
-| `static_assets_block` | `bool`          | Browser only: block images/fonts/CSS                             |
-| `export_cookies`      | `bool`          | Browser only: merge tab cookies into Scrapy jar                  |
+| Key                   | Type            | Description                                                        |
+|-----------------------|-----------------|--------------------------------------------------------------------|
+| `driver`              | `str`           | `basic`, `turbo`, `browser`, or `auto`                             |
+| `fallback`            | `bool`          | `False` disables browser retry when `driver="auto"`                |
+| `profile`             | `str`           | Pin fingerprint (e.g. `chrome150`). Omit for random pool           |
+| `proxy`               | `str`           | Explicit proxy URL. `None` = direct, no proxy                      |
+| `dns`                 | `str` or `dict` | Per-request DNS override (IP or host map)                          |
+| `stealth_timeout`     | `int`           | Timeout in seconds (default 30)                                    |
+| `http2`               | `bool`          | HTTP/2 vs HTTP/1.1                                                 |
+| `http3`               | `bool`          | Turbo only: HTTP/3 (QUIC)                                          |
+| `headless`            | `bool`          | Browser only: headless window                                      |
+| `settle`              | `float`         | Browser only: JS settle time after load                            |
+| `snapshot`            | `bool`          | Browser only: full-page PNG in `response.meta["snapshot_content"]` |
+| `static_assets_block` | `bool`          | Browser only: block images/fonts/CSS                               |
+| `export_cookies`      | `bool`          | Browser only: merge tab cookies into Scrapy jar                    |
 
 ## Browser response meta
 
