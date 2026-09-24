@@ -30,6 +30,20 @@ class StealthBrowserNotFoundError(StealthException):
     """Raised when the browser binary is not found on the system."""
 
 
+class StealthCdpConnectionError(StealthException):
+    """Raised when ``STEALTH_CDP_URL`` is set but the CDP endpoint is unreachable.
+
+    Like :class:`StealthBrowserNotFoundError`, this is a configuration / infrastructure
+    problem (browser not started, wrong port, etc.), not a transient network blip.
+    It does **not** subclass :class:`ConnectionError`, so Scrapy's default retry
+    middleware will not retry it unless you add it explicitly.
+    """
+
+    def __init__(self, message: str, *, cdp_url: str | None = None) -> None:
+        super().__init__(message)
+        self.cdp_url = cdp_url
+
+
 class StealthRequestError(StealthException, ValueError):
     """Raised when a Scrapy request has invalid or unsupported HTTP fields."""
 

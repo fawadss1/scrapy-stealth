@@ -16,6 +16,7 @@ from ..config import config
 from ..detectors.antibot import AntiBotDetector
 from ..exceptions import (
     StealthBrowserNotFoundError,
+    StealthCdpConnectionError,
     StealthConnectionError,
     StealthRequestError,
     StealthTimeoutError,
@@ -43,8 +44,20 @@ from ..utils.browser import (
     _wait_for_status,
     resolve_browser_get_body,
 )
+from ..utils.browser.cdp_connect import (
+    connect_cdp_browser,
+    format_cdp_unreachable,
+    is_nodriver_connect_failure,
+)
 from ..utils.browser.cookies import collect_browser_cookies, format_cookie_header
 from ..utils.browser.patch import patch_nodriver
+from ..utils.browser.relay import (
+    chromium_proxy_server_from_url,
+    external_cdp_uses_direct_upstream_proxy,
+    format_relay_proxy_server,
+    resolve_browser_relay_advertise_host,
+    resolve_browser_relay_bind_host,
+)
 from ..utils.browser.request import (
     apply_browser_cookies,
     apply_browser_headers,
@@ -55,7 +68,13 @@ from ..utils.browser.request import (
 from ..utils.browser.session import BanStreakTracker
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
-from ..utils.core.meta import _get_meta_data, _stealth_meta, resolve_browser_headless
+from ..utils.core.meta import (
+    _get_meta_data,
+    _stealth_meta,
+    resolve_browser_headless,
+    resolve_cdp_connect_kwargs,
+    resolve_cdp_url,
+)
 from ..utils.core.response import StealthResponse
 from ..utils.network.dns import (
     dns_fingerprint,
@@ -149,6 +168,13 @@ class BrowserEngine(BaseEngine):
         # DNS overrides applied on the *next* Chrome launch (config + per-request).
         self._dns_overrides: dict[str, str] = {}
         self._launched_dns: tuple[tuple[str, str], ...] = ()
+        self._cdp_url: str | None = config.get("STEALTH_CDP_URL")
+        self._cdp_connect_kwargs: dict[str, Any] = dict(
+            config.get("STEALTH_CDP_CONNECT_KWARGS") or {}
+        )
+        self._owns_browser_process: bool = True
+        # CDP connect: proxy/DNS relay is applied per-tab via Target.createBrowserContext.
+        self._cdp_browser_context_id: Any = None
 
     @property
     def driver_name(self) -> str:
@@ -182,7 +208,7 @@ class BrowserEngine(BaseEngine):
                 ("--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage")
             )
         if proxy_port is not None:
-            args.append(f"--proxy-server=http://127.0.0.1:{proxy_port}")
+            args.append(f"--proxy-server={format_relay_proxy_server(proxy_port)}")
             # DNS-pinned hosts must stay on the relay — do not add them to bypass.
             args.extend(_proxy_bypass_args(config.get("BROWSER_PROXY_BYPASS_LIST")))
         # Append fingerprint args last so they always win over any conflicting base arg.
@@ -199,6 +225,23 @@ class BrowserEngine(BaseEngine):
 
         return hasattr(os, "getuid") and os.getuid() == 0
 
+    def _using_external_cdp(self) -> bool:
+        return bool(self._cdp_url)
+
+    def _sync_cdp_from_request(self, request: Request) -> None:
+        """Apply per-request CDP settings; restart if the endpoint changed."""
+        url = resolve_cdp_url(request)
+        kwargs = resolve_cdp_connect_kwargs(request)
+        if url == self._cdp_url and kwargs == self._cdp_connect_kwargs:
+            return
+        self._cdp_url = url
+        self._cdp_connect_kwargs = kwargs
+        if self._browser is not None:
+            headless = resolve_browser_headless(request)
+            proxy = _get_meta_data(request, "proxy") or None
+            logger.debug("CDP endpoint changed — reconnecting browser")
+            self._reset_browser(headless, self._browser, proxy=proxy)
+
     async def _start_browser(
         self,
         headless: bool,
@@ -210,6 +253,15 @@ class BrowserEngine(BaseEngine):
 
         _ensure_xvfb(headless)
 
+        if self._cdp_url:
+            logger.debug("Connecting browser engine to external CDP: %s", self._cdp_url)
+            browser, owns = await connect_cdp_browser(
+                self._cdp_url, self._cdp_connect_kwargs
+            )
+            self._owns_browser_process = owns
+            return browser
+
+        self._owns_browser_process = True
         executable_path: str | None = config.get("BROWSER_EXECUTABLE_PATH")
         try:
             kwargs: dict[str, Any] = {
@@ -329,29 +381,68 @@ class BrowserEngine(BaseEngine):
 
         dns_overrides = self._effective_dns_overrides()
         proxy_port: int | None = None
-        # Local CONNECT relay is required for DNS pins (Chrome host-resolver-rules
-        # is unreliable) and for upstream proxy auth injection.
-        if proxy or dns_overrides:
+        external_cdp = self._using_external_cdp()
+        direct_upstream = external_cdp_uses_direct_upstream_proxy(
+            external_cdp=external_cdp,
+            proxy=proxy,
+            dns_overrides=dns_overrides,
+        )
+        relay_advertise = resolve_browser_relay_advertise_host(
+            external_cdp=external_cdp
+        )
+        relay_bind = resolve_browser_relay_bind_host(
+            relay_advertise, external_cdp=external_cdp
+        )
+        if direct_upstream:
+            logger.debug(
+                "External CDP: using upstream proxy directly (no auth in URL, no DNS pin)."
+            )
+        elif proxy or dns_overrides:
             server, proxy_port = await _start_browser_relay(
                 proxy_url=proxy,
                 dns_overrides=dns_overrides or None,
+                bind_host=relay_bind,
             )
             self._relay_server = server
             self._relay_port = proxy_port
+            relay_url = format_relay_proxy_server(proxy_port, relay_advertise)
             logger.debug(
-                "Browser relay started on 127.0.0.1:%d (proxy=%s dns=%s)",
+                "Browser relay on %s:%s (CDP proxy %s; external_cdp=%s)",
+                relay_bind,
                 proxy_port,
+                relay_url,
+                external_cdp,
+            )
+            logger.debug(
+                "Browser relay (proxy=%s dns=%s cdp=%s direct_upstream=%s)",
                 bool(proxy),
                 dict(dns_overrides) if dns_overrides else {},
+                external_cdp,
+                direct_upstream,
             )
 
         # Draw a fresh fingerprint for this browser lifetime.  _start_browser
         # passes it to _build_args so the same values end up in the process
         # args — no second random draw happens inside _build_args.
-        browser = await self._start_browser(headless, proxy_port=proxy_port)
-        with contextlib.suppress(Exception):
-            await browser.main_tab.get(_splash_url())
-            await browser.main_tab.wait()
+        browser = await self._start_browser(
+            headless,
+            proxy_port=proxy_port if not self._using_external_cdp() else None,
+        )
+        self._cdp_browser_context_id = None
+        if external_cdp and direct_upstream and proxy:
+            self._cdp_browser_context_id = (
+                await self._create_cdp_upstream_proxy_context(browser, proxy)
+            )
+        elif external_cdp and proxy_port is not None:
+            self._cdp_browser_context_id = await self._create_cdp_proxy_context(
+                browser, proxy_port, relay_advertise
+            )
+        # Local launch only: warm the default tab with the package splash. External CDP
+        # (Fortress, remote debug port) should not navigate the user's browser away.
+        if not self._using_external_cdp():
+            with contextlib.suppress(Exception):
+                await browser.main_tab.get(_splash_url())
+                await browser.main_tab.wait()
 
         self._tab_sem = asyncio.Semaphore(config.get("BROWSER_MAX_TABS"))
         return browser
@@ -397,15 +488,55 @@ class BrowserEngine(BaseEngine):
     async def _shutdown(self) -> None:
         if self._browser is not None:
             with contextlib.suppress(Exception):
-                self._browser.stop()
+                if self._owns_browser_process:
+                    self._browser.stop()
+                else:
+                    await self._browser.aclose()
             self._browser = None
-            _cleanup_browser_temp_data()
+            if self._owns_browser_process:
+                _cleanup_browser_temp_data()
         await self._drain_loop_tasks()
         if self._relay_server is not None:
             with contextlib.suppress(Exception):
                 await self._relay_server.await_closed()
             self._relay_server = None
             self._relay_port = None
+        self._cdp_browser_context_id = None
+
+    async def _create_cdp_proxy_context(
+        self, browser: Any, proxy_port: int, relay_host: str
+    ) -> Any:
+        """Route CDP tabs through the local CONNECT relay (proxy auth + DNS pin)."""
+        import nodriver.cdp.target as _cdp_target
+
+        bypass = config.get("BROWSER_PROXY_BYPASS_LIST") or []
+        bypass_arg = ";".join(str(x) for x in bypass) if bypass else None
+        proxy_server = format_relay_proxy_server(proxy_port, relay_host)
+        return await browser.send(
+            _cdp_target.create_browser_context(
+                proxy_server=proxy_server,
+                proxy_bypass_list=bypass_arg,
+            )
+        )
+
+    async def _create_cdp_upstream_proxy_context(
+        self, browser: Any, proxy_url: str
+    ) -> Any:
+        """External CDP: point browser context at the upstream proxy (Fortress reaches it directly)."""
+        import nodriver.cdp.target as _cdp_target
+
+        bypass = config.get("BROWSER_PROXY_BYPASS_LIST") or []
+        bypass_arg = ";".join(str(x) for x in bypass) if bypass else None
+        proxy_server = chromium_proxy_server_from_url(proxy_url)
+        logger.debug(
+            "External CDP upstream proxyServer=%s", proxy_server.split("@")[-1]
+        )
+        return await browser.send(
+            _cdp_target.create_browser_context(
+                proxy_server=proxy_server,
+                proxy_bypass_list=bypass_arg,
+            )
+        )
 
     def _reset_browser(
         self,
@@ -420,11 +551,18 @@ class BrowserEngine(BaseEngine):
                     return
                 if self._browser is not None:
                     with contextlib.suppress(Exception):
-                        self._browser.stop()
+                        if self._owns_browser_process:
+                            self._browser.stop()
+                        elif self._loop is not None:
+                            asyncio.run_coroutine_threadsafe(
+                                self._browser.aclose(), self._loop
+                            ).result(timeout=3)
                     self._browser = None
-                    _cleanup_browser_temp_data()
+                    if self._owns_browser_process:
+                        _cleanup_browser_temp_data()
                 self._tab_sem = None
                 self._launched_dns = ()
+                self._cdp_browser_context_id = None
 
                 if self._loop is not None:
                     with contextlib.suppress(Exception):
@@ -459,9 +597,10 @@ class BrowserEngine(BaseEngine):
         """Create a CDP target, attach, and return the tab."""
         import nodriver.cdp.target as _cdp_target
 
-        target_id = await browser.send(
-            _cdp_target.create_target(url, enable_begin_frame_control=False)
-        )
+        create_kwargs: dict[str, Any] = {"enable_begin_frame_control": False}
+        if self._cdp_browser_context_id is not None:
+            create_kwargs["browser_context_id"] = self._cdp_browser_context_id
+        target_id = await browser.send(_cdp_target.create_target(url, **create_kwargs))
         await browser.update_targets()
         page = next(
             (t for t in browser.targets if t.target.target_id == target_id),
@@ -532,8 +671,16 @@ class BrowserEngine(BaseEngine):
                         await page.wait()
 
                         if await page.evaluate(_JS_IS_CHROME_ERROR):
+                            hint = ""
+                            if self._using_external_cdp() and (
+                                self._relay_port or self._cdp_browser_context_id
+                            ):
+                                hint = (
+                                    " Check proxy/relay reachability from the CDP browser "
+                                    "(firewall / VPN)."
+                                )
                             raise StealthConnectionError(
-                                f"Browser engine connection failed fetching {url!r}"
+                                f"Browser engine connection failed fetching {url!r}.{hint}"
                             )
 
                         if method != "HEAD":
@@ -655,6 +802,7 @@ class BrowserEngine(BaseEngine):
             )
 
             payload = build_stealth_request(request)
+            self._sync_cdp_from_request(request)
 
             # Ensure the single persistent browser is up (proxy / DNS-relay aware).
             # DNS pins use a local CONNECT relay (not Chrome host-resolver-rules).
@@ -776,11 +924,17 @@ class BrowserEngine(BaseEngine):
             )
         except (
             StealthBrowserNotFoundError,
+            StealthCdpConnectionError,
             StealthConnectionError,
             StealthTimeoutError,
         ):
             raise
-        except (ConnectionRefusedError, OSError):
+        except (ConnectionRefusedError, OSError) as exc:
+            if self._using_external_cdp():
+                raise StealthCdpConnectionError(
+                    format_cdp_unreachable(self._cdp_url or "?", str(exc)),
+                    cdp_url=self._cdp_url,
+                ) from None
             raise_stealth(
                 StealthConnectionError,
                 f"Browser engine connection failed fetching {request.url!r}",
@@ -809,5 +963,13 @@ class BrowserEngine(BaseEngine):
                     "Browser fetch cancelled during restart for %s", request.url
                 )
                 return None
-            logger.error("Browser engine request failed: %r", exc)
+            if self._using_external_cdp() and (
+                is_nodriver_connect_failure(exc)
+                or isinstance(exc, (ConnectionRefusedError, ConnectionError, OSError))
+            ):
+                raise StealthCdpConnectionError(
+                    format_cdp_unreachable(self._cdp_url or "?", str(exc)),
+                    cdp_url=self._cdp_url,
+                ) from None
+            logger.error("Browser engine request failed: %s", exc)
             return None

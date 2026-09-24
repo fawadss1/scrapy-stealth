@@ -4,6 +4,7 @@ from scrapy.exceptions import DownloadTimeoutError
 from scrapy_stealth.exceptions import (
     EngineNotFound,
     StealthBrowserNotFoundError,
+    StealthCdpConnectionError,
     StealthConnectionError,
     StealthException,
     StealthTimeoutError,
@@ -89,6 +90,21 @@ class TestStealthConnectionError:
         exc = StealthConnectionError("connection failed")
         exc.__cause__ = original
         assert exc.__cause__ is original
+
+
+class TestStealthCdpConnectionError:
+    def test_is_stealth_exception(self):
+        assert issubclass(StealthCdpConnectionError, StealthException)
+
+    def test_is_not_oserror(self):
+        assert not issubclass(StealthCdpConnectionError, OSError)
+
+    def test_cdp_url_attribute(self):
+        exc = StealthCdpConnectionError(
+            "unreachable",
+            cdp_url="http://127.0.0.1:9222",
+        )
+        assert exc.cdp_url == "http://127.0.0.1:9222"
 
 
 class TestStealthBrowserNotFoundError:

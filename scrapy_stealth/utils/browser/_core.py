@@ -667,6 +667,8 @@ async def _start_proxy_relay(proxy_url: str) -> tuple[ProxyRelay, int]:
 async def _start_browser_relay(
     proxy_url: str | None = None,
     dns_overrides: dict[str, str] | None = None,
+    *,
+    bind_host: str = "127.0.0.1",
 ) -> tuple[ProxyRelay, int]:
     """Local CONNECT relay: DNS pin dial, upstream proxy auth, or direct dial."""
     dns_map = {h.lower(): ip for h, ip in (dns_overrides or {}).items()}
@@ -801,7 +803,7 @@ async def _start_browser_relay(
                 if w is not None:
                     _close_writer(w)
 
-    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    server = await asyncio.start_server(handle, bind_host, 0)
     listen_port = server.sockets[0].getsockname()[1]
     relay = ProxyRelay(server, listen_port)
     relay_holder.append(relay)
