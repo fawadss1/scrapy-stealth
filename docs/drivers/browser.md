@@ -56,7 +56,7 @@ STEALTH_CDP_CONNECT_KWARGS = {
 Per-request overrides:
 
 ```python
-meta={
+meta = {
     "stealth": {
         "driver": "browser",
         "cdp_url": "http://127.0.0.1:9222",
