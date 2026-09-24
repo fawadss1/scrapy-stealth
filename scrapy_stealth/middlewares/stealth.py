@@ -104,6 +104,11 @@ class StealthDownloaderMiddleware:
                 "Loaded %d DNS overrides from spider settings",
                 len(config.STEALTH_DNS_OVERRIDES),
             )
+        if (cdp_url := settings.get("STEALTH_CDP_URL")) is not None:
+            config.STEALTH_CDP_URL = str(cdp_url) if cdp_url else None
+        cdp_kwargs = settings.get("STEALTH_CDP_CONNECT_KWARGS")
+        if isinstance(cdp_kwargs, dict):
+            config.STEALTH_CDP_CONNECT_KWARGS = dict(cdp_kwargs)
         logger.debug("Loaded %d proxies from spider settings", len(proxies))
 
     @property

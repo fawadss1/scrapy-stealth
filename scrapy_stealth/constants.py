@@ -107,6 +107,16 @@ BROWSER_PROXY_BYPASS_LIST: list[str] = []
 # Set True to force no-sandbox mode; False to keep sandbox even when running as root.
 BROWSER_NO_SANDBOX: bool | None = None
 
+# Browser engine: attach to an external CDP endpoint instead of launching Chrome.
+# Examples: http://127.0.0.1:9222 (local debug port), or https://… (remote CDP API base).
+# Per-request override: meta["stealth"]["cdp_url"].
+STEALTH_CDP_URL: str | None = None
+
+# Extra options when connecting to STEALTH_CDP_URL (e.g. Authorization headers).
+# Passed to the HTTP /json/version request and the CDP WebSocket handshake.
+# Per-request override / merge: meta["stealth"]["cdp_connect_kwargs"].
+STEALTH_CDP_CONNECT_KWARGS: dict[str, object] = {}
+
 # Browser engine: path to the browser executable.
 # None = auto-detect: nodriver will locate Google Chrome / Chromium automatically.
 # Set to an explicit path to use a different browser binary (e.g. Brave, Chromium, or a

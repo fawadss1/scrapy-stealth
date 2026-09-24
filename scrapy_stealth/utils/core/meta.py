@@ -22,6 +22,26 @@ def _get_meta_data(request: Request, key: str, default: Any = None) -> Any:
     return _stealth_meta(request).get(key, default)
 
 
+def resolve_cdp_url(request: Request) -> str | None:
+    """External CDP endpoint; per-request meta overrides global config."""
+    stealth = _stealth_meta(request)
+    if "cdp_url" in stealth:
+        url = stealth["cdp_url"]
+        return None if url in (None, "") else str(url)
+    return config.get("STEALTH_CDP_URL")
+
+
+def resolve_cdp_connect_kwargs(request: Request) -> dict[str, Any]:
+    """Merged CDP connect kwargs (global settings + per-request meta)."""
+    from ..browser.cdp_connect import merge_cdp_connect_kwargs
+
+    override = _stealth_meta(request).get("cdp_connect_kwargs")
+    base = config.get("STEALTH_CDP_CONNECT_KWARGS") or {}
+    if isinstance(override, dict):
+        return merge_cdp_connect_kwargs(base, override)
+    return dict(base)
+
+
 def resolve_browser_headless(request: Request) -> bool:
     """Browser runs visible by default; per-request meta or config can opt into headless."""
     stealth = _stealth_meta(request)
