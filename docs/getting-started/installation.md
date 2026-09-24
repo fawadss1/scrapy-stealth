@@ -26,18 +26,6 @@ pip install -e ".[docs]"
 mkdocs serve
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000) to preview the documentation.
-
-## Dependencies
-
-| Package     | Purpose                             |
-|-------------|-------------------------------------|
-| `scrapy`    | Crawler framework                   |
-| `curl_cffi` | Turbo driver TLS/HTTP impersonation |
-| `wreq`      | Basic driver HTTP client            |
-| `nodriver`  | Browser driver (CDP)                |
-| `colorama`  | Console styling                     |
-
 ## Windows note
 
 The `basic` driver uses `wreq`, which requires the **Visual C++ Redistributable** on Windows. If import fails, install both:

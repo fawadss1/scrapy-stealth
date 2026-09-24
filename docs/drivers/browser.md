@@ -36,6 +36,54 @@ meta = {
 On 403/503 challenge pages, the driver waits up to `BROWSER_CHALLENGE_TIMEOUT_S` (default 30s)
 for the challenge to clear.
 
+## External CDP connect
+
+Attach to a browser that is already running instead of launching local Chrome (Fortress,
+Brave/Chrome with `--remote-debugging-port`, or any remote CDP service):
+
+```python
+# Local debug port (Brave, Chrome, Fortress, etc.)
+STEALTH_CDP_URL = "http://127.0.0.1:9222"
+
+# Remote HTTPS endpoint with auth headers on /json/version and the WebSocket
+STEALTH_CDP_URL = "https://cdp.example.com/v1"
+STEALTH_CDP_CONNECT_KWARGS = {
+    "headers": {"Authorization": "Bearer YOUR_TOKEN"},
+    "timeout": 30,
+}
+```
+
+Per-request overrides:
+
+```python
+meta={
+    "stealth": {
+        "driver": "browser",
+        "cdp_url": "http://127.0.0.1:9222",
+        "cdp_connect_kwargs": {"headers": {"Authorization": "Basic …"}},
+    }
+}
+```
+
+When `STEALTH_CDP_URL` is set, scrapy-stealth **does not** launch Chrome, but it still starts
+the **local CONNECT relay** when you use `STEALTH_PROXIES`, `meta["stealth"]["proxy"]`, or
+`STEALTH_DNS_OVERRIDES` / `meta["stealth"]["dns"]`. Tabs are opened in a CDP browser context
+that points at `http://127.0.0.1:<relay>` so upstream proxy auth and DNS pinning work the
+same as with a locally launched browser.
+
+Closing the spider disconnects the CDP session but **does not** terminate the external browser.
+
+### Fortress / Docker on Linux (`ERR_PROXY_CONNECTION_FAILED`)
+
+**Proxy only (no DNS pin):** scrapy-stealth points Fortress **straight at your upstream
+proxy** (Oxylabs, etc.) via CDP — no `127.0.0.1` relay. You should see a log line:
+`External CDP: using upstream proxy directly`.
+
+**Proxy + DNS pin (or authenticated proxy):** the CONNECT relay runs **next to Scrapy**.
+scrapy-stealth picks the advertise IP automatically (your LAN IP, e.g. `10.10.10.178`) and
+listens on `0.0.0.0` when using external CDP. Fortress must be able to reach that URL
+(firewall / VPN). Local Brave on the same PC still uses `127.0.0.1`.
+
 ## Custom browser binary
 
 ```python

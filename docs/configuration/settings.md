@@ -38,27 +38,29 @@ config.STEALTH_LOGS = False
 
 ## Settings reference
 
-| Setting                       | Type        | Default   | Description                                                      |
-|-------------------------------|-------------|-----------|------------------------------------------------------------------|
-| `STEALTH_ENABLED`             | `bool`      | `False`   | Route all requests through stealth; inject `driver="auto"`       |
-| `STEALTH_DRIVER`              | `str`       | `"turbo"` | Primary HTTP driver for `auto`: `basic`, `turbo`, `browser`      |
-| `STEALTH_PROXIES`             | `list[str]` | `[]`      | Proxy pool; rotated on recycle and transport failure             |
-| `STEALTH_DNS_OVERRIDES`       | `dict`      | `{}`      | Host → IP map for all drivers                                    |
-| `STEALTH_RECYCLE_AFTER_BANS`  | `int`       | `5`       | Consecutive bans before session recycle                          |
-| `STEALTH_PROXY_HEALTH`        | `bool`      | `True`    | Per-proxy + per-domain health scoring                            |
-| `STEALTH_PROXY_CIRCUIT_AFTER` | `int`       | `3`       | Failures before proxy cooldown                                   |
-| `STEALTH_PROXY_COOLDOWN_S`    | `float`     | `300.0`   | Cooldown duration (seconds)                                      |
-| `STEALTH_PROXY_CIRCUIT_CODES` | set         | `{403}`   | Status codes that trip the circuit                               |
-| `STEALTH_LOGS`                | `bool`      | `True`    | Styled console + package logger. PyPI update notice always shows |
-| `BROWSER_HEADLESS`            | `bool`      | `False`   | Browser driver headless mode                                     |
-| `BROWSER_SETTLE_S`            | `float`     | `4.0`     | Seconds to wait for JS after navigation                          |
-| `BROWSER_CHALLENGE_TIMEOUT_S` | `float`     | `30.0`    | Max wait on Cloudflare / challenge pages                         |
-| `BROWSER_EXECUTABLE_PATH`     | `str`       | `None`    | Custom Chrome/Chromium/Brave binary path                         |
-| `BROWSER_EXPORT_COOKIES`      | `bool`      | `True`    | Merge browser tab cookies into Scrapy jar                        |
-| `BROWSER_STATIC_ASSETS_BLOCK` | `bool`      | `False`   | Block images/fonts/CSS in browser via CDP                        |
-| `BROWSER_PROXY_BYPASS_LIST`   | `list`      | `[]`      | Chrome `--proxy-bypass-list` patterns                            |
-| `BROWSER_NO_SANDBOX`          | `bool`      | auto      | Force `--no-sandbox` (Docker/root)                               |
-| `BROWSER_MAX_TABS`            | `int`       | `10`      | Max concurrent browser tabs                                      |
+| Setting                       | Type        | Default   | Description                                                          |
+|-------------------------------|-------------|-----------|----------------------------------------------------------------------|
+| `STEALTH_ENABLED`             | `bool`      | `False`   | Route all requests through stealth; inject `driver="auto"`           |
+| `STEALTH_DRIVER`              | `str`       | `"turbo"` | Primary HTTP driver for `auto`: `basic`, `turbo`, `browser`          |
+| `STEALTH_PROXIES`             | `list[str]` | `[]`      | Proxy pool; rotated on recycle and transport failure                 |
+| `STEALTH_DNS_OVERRIDES`       | `dict`      | `{}`      | Host → IP map for all drivers                                        |
+| `STEALTH_RECYCLE_AFTER_BANS`  | `int`       | `5`       | Consecutive bans before session recycle                              |
+| `STEALTH_PROXY_HEALTH`        | `bool`      | `True`    | Per-proxy + per-domain health scoring                                |
+| `STEALTH_PROXY_CIRCUIT_AFTER` | `int`       | `3`       | Failures before proxy cooldown                                       |
+| `STEALTH_PROXY_COOLDOWN_S`    | `float`     | `300.0`   | Cooldown duration (seconds)                                          |
+| `STEALTH_PROXY_CIRCUIT_CODES` | set         | `{403}`   | Status codes that trip the circuit                                   |
+| `STEALTH_LOGS`                | `bool`      | `True`    | Styled console + package logger. PyPI update notice always shows     |
+| `BROWSER_HEADLESS`            | `bool`      | `False`   | Browser driver headless mode                                         |
+| `BROWSER_SETTLE_S`            | `float`     | `4.0`     | Seconds to wait for JS after navigation                              |
+| `BROWSER_CHALLENGE_TIMEOUT_S` | `float`     | `30.0`    | Max wait on Cloudflare / challenge pages                             |
+| `STEALTH_CDP_URL`             | `str`       | `None`    | Connect browser driver to external CDP (local `:9222` or remote URL) |
+| `STEALTH_CDP_CONNECT_KWARGS`  | `dict`      | `{}`      | CDP connect extras (`headers`, `timeout`, `verify_ssl`)              |
+| `BROWSER_EXECUTABLE_PATH`     | `str`       | `None`    | Custom Chrome/Chromium/Brave binary path                             |
+| `BROWSER_EXPORT_COOKIES`      | `bool`      | `True`    | Merge browser tab cookies into Scrapy jar                            |
+| `BROWSER_STATIC_ASSETS_BLOCK` | `bool`      | `False`   | Block images/fonts/CSS in browser via CDP                            |
+| `BROWSER_PROXY_BYPASS_LIST`   | `list`      | `[]`      | Chrome `--proxy-bypass-list` patterns                                |
+| `BROWSER_NO_SANDBOX`          | `bool`      | auto      | Force `--no-sandbox` (Docker/root)                                   |
+| `BROWSER_MAX_TABS`            | `int`       | `10`      | Max concurrent browser tabs                                          |
 
 ## Config object reference
 
@@ -78,6 +80,8 @@ All attributes on `scrapy_stealth.config.config`. Many mirror Scrapy settings ab
 | `BROWSER_SETTLE_S`            | `float`          | `4.0`                     | Seconds to wait after navigation for JS                                      |
 | `BROWSER_CHALLENGE_TIMEOUT_S` | `float`          | `30.0`                    | Max wait on Cloudflare / challenge pages                                     |
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                    | Disable Chrome sandbox; `None` = auto (root/Docker)                          |
+| `STEALTH_CDP_URL`             | `str \| None`    | `None`                    | External CDP endpoint; skips local Chrome launch                             |
+| `STEALTH_CDP_CONNECT_KWARGS`  | `dict`           | `{}`                      | HTTP/WebSocket connect kwargs (e.g. auth headers)                            |
 | `BROWSER_EXECUTABLE_PATH`     | `str \| None`    | `None`                    | Browser binary path; `None` = auto-detect Chrome                             |
 | `BROWSER_MAX_TABS`            | `int`            | `10`                      | Max concurrent Chrome tabs                                                   |
 | `STEALTH_RECYCLE_AFTER_BANS`  | `int`            | `5`                       | Consecutive bans before session recycle                                      |
