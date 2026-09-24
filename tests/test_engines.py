@@ -948,7 +948,12 @@ class TestBrowserEngine:
         captured = {}
 
         async def fake_fetch(
-            url, prepared, settle, profile, snapshot=False, block_assets=False
+            url,
+            prepared,
+            settle,
+            profile,
+            snapshot=False,
+            block_assets=False,
         ):
             captured.update(
                 {
@@ -1001,7 +1006,12 @@ class TestBrowserEngine:
         ]
 
         async def fake_fetch(
-            url, prepared, settle, profile, snapshot=False, block_assets=False
+            url,
+            prepared,
+            settle,
+            profile,
+            snapshot=False,
+            block_assets=False,
         ):
             return (
                 b"<html></html>",
@@ -1117,7 +1127,12 @@ class TestBrowserEngine:
         captured = []
 
         async def fake_fetch(
-            url, prepared, settle, profile, snapshot=False, block_assets=False
+            url,
+            prepared,
+            settle,
+            profile,
+            snapshot=False,
+            block_assets=False,
         ):
             captured.append(settle)
             return (
@@ -1138,7 +1153,12 @@ class TestBrowserEngine:
         captured = []
 
         async def fake_fetch(
-            url, prepared, settle, profile, snapshot=False, block_assets=False
+            url,
+            prepared,
+            settle,
+            profile,
+            snapshot=False,
+            block_assets=False,
         ):
             captured.append(settle)
             return (
