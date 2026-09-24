@@ -9,8 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.0.0] - 2026-09-24
+
 ### Added
 
+* **Browser snapshots — full scrollable page** — `snapshot=True` captures the full
+  document via CDP `Page.getLayoutMetrics` + clip (not only the viewport).
 * **External CDP connect for the browser driver**
   Set `STEALTH_CDP_URL` (and optional `STEALTH_CDP_CONNECT_KWARGS` with `headers`, `timeout`,
   `verify_ssl`) to attach to a local `:9222` debug port, Fortress, or a remote CDP endpoint
@@ -20,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **`StealthCdpConnectionError`** — Dedicated exception when external CDP is configured but
   unreachable; exposes `.cdp_url` and is not a subclass of `ConnectionError` (no default
   Scrapy retries).
+
+### Changed
+
+* **Engine imports** — `BasicEngine` / `TurboEngine` load lazily so browser-only workflows
+  need not import `wreq` at package startup.
+* **Relay logging** — CONNECT relay startup uses DEBUG instead of styled console INFO for
+  external CDP.
 
 ### Fixed
 
@@ -32,7 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatically (LAN IP + `0.0.0.0` for external CDP; `127.0.0.1` for local Brave).
 * **External CDP + proxy only (no auth)** — Optional direct upstream `proxyServer` when
   the proxy URL has no credentials; authenticated proxies and DNS pin always use the relay.
-
 * **CDP connect errors** — If `STEALTH_CDP_URL` is set but nothing is listening, raise
   `StealthCdpConnectionError` (compact message; startup hints at DEBUG) instead of
   nodriver’s generic failure text or a misleading downstream HTTP response. Unlike
