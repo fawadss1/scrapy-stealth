@@ -80,6 +80,6 @@ class TestEngineManager:
 
     def test_invalid_driver_fallback_is_always_valid(self, manager):
         fallback = config.get("STEALTH_DRIVER") or "turbo"
-        default = fallback if fallback in manager._stealth else "turbo"
+        default = fallback if fallback in ("basic", "turbo", "browser") else "turbo"
         engine = manager.get("stealth", "nonexistent")
         assert engine is manager._stealth[default]

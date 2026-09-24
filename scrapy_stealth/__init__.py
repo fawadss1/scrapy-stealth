@@ -36,14 +36,15 @@ profile + proxy are chosen when the session recycles after consecutive bans.
 Explicit ``meta["stealth"]["profile"]`` / ``["proxy"]`` always win.
 """
 
+from typing import TYPE_CHECKING
+
 from .config import StealthConfig, config
 from .detectors.antibot import AntiBotDetector
 from .engines.base import BaseEngine
-from .engines.basic import BasicEngine
-from .engines.turbo import TurboEngine
 from .exceptions import (
     EngineNotFound,
     StealthBrowserNotFoundError,
+    StealthCdpConnectionError,
     StealthConnectionError,
     StealthException,
     StealthTimeoutError,
@@ -54,11 +55,28 @@ from .strategies.proxy import ProxyRotator
 from .strategies.retry import RetryHandler
 from .utils.core.meta_info import _pkg_meta
 
+if TYPE_CHECKING:
+    from .engines.basic import BasicEngine
+    from .engines.turbo import TurboEngine
+
 __version__: str = _pkg_meta.version
 __author__: str = _pkg_meta.author
 __license__: str = _pkg_meta.license
 __docs_url__: str = _pkg_meta.docs_url
 __changelog_url__: str = _pkg_meta.changelog_url
+
+
+def __getattr__(name: str) -> object:
+    if name == "BasicEngine":
+        from .engines.basic import BasicEngine
+
+        return BasicEngine
+    if name == "TurboEngine":
+        from .engines.turbo import TurboEngine
+
+        return TurboEngine
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # Middleware
@@ -81,6 +99,7 @@ __all__ = [
     "EngineNotFound",
     "StealthTimeoutError",
     "StealthConnectionError",
+    "StealthCdpConnectionError",
     "StealthBrowserNotFoundError",
     # Metadata
     "__version__",
