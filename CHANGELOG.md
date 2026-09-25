@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-09-25
+
+### Changed
+
+* **External CDP URL handling** — Classify endpoints by scheme: `http`/`https` use JSON
+  discovery; `ws`/`wss` at the root (`ws://host:9222/`) behave like the HTTP debug port;
+  full `ws(s)://…/devtools/…` paths connect directly. Clearer errors when a copied browser
+  WebSocket URL is stale (HTTP 404).
+* **Documentation** — Browser driver defaults (visible Chrome); external CDP URL examples.
+* **`SECURITY.md`** — Supported versions (1.0.x); CDP/relay scope; operational guidance for
+  CDP URLs, relay firewall, and snapshots.
+
+---
+
 ## [1.0.0] - 2026-09-24
 
 ### Added

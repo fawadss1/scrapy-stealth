@@ -8,10 +8,9 @@ the newest version before reporting issues that may already be fixed.
 | Version         | Supported |
 |-----------------|-----------|
 | **1.0.x**       | ✅        |
-| **0.9.x**       | ✅        |
-| 0.8.x and older | ❌        |
+| 0.9.x and older | ❌        |
 
-Once **1.0.0** is published on PyPI, **0.9.x** will no longer receive security updates.
+Latest stable: **1.0.1** — install with `pip install -U scrapy-stealth`.
 
 ## Reporting a Vulnerability
 
@@ -35,8 +34,10 @@ This policy covers the **scrapy-stealth** Python package and its documented publ
 **In scope for hardening discussions**
 
 - The local **CONNECT relay** used with the browser driver (proxy auth, DNS pin), including bind/advertise behavior with external CDP
-- **External CDP** configuration (`STEALTH_CDP_URL`, `STEALTH_CDP_CONNECT_KWARGS`, per-request `cdp_url` / `cdp_connect_kwargs`)
+- **External CDP** configuration (`STEALTH_CDP_URL`, `STEALTH_CDP_CONNECT_KWARGS`, per-request `cdp_url` / `cdp_connect_kwargs`),
+  including `http`/`https` discovery and `ws`/`wss` endpoints
 - Handling of proxy URLs, cookies, and request data passed through stealth engines
+- Full-page **snapshots** (`snapshot=True`) stored in `response.meta["snapshot_content"]`
 
 **Out of scope**
 
@@ -47,5 +48,8 @@ This policy covers the **scrapy-stealth** Python package and its documented publ
 ## Operational notes
 
 - Treat **CDP endpoints** like admin interfaces: bind to trusted networks, use auth headers where supported, and restrict firewall access.
+- Prefer **`http://host:9222`** or **`ws://host:9222/`** for `STEALTH_CDP_URL`, not copied `ws://…/devtools/browser/…` session URLs
+  (they expire and are not a stable security boundary).
 - When Scrapy runs on one host and the browser on another, the relay is reachable at your LAN IP; allow only the CDP host to connect.
-- Snapshot PNGs in `response.meta["snapshot_content"]` may contain sensitive page content; handle exports accordingly.
+- Snapshot PNGs may contain sensitive page content; restrict file permissions and sharing when using the `@snapshot` decorator or
+  `snapshot_content` in pipelines.
