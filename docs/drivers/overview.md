@@ -19,8 +19,8 @@ meta = {"stealth": {"driver": "auto"}}
 # Maximum throughput, no browser cost
 meta = {"stealth": {"driver": "turbo"}}
 
-# Always real browser
-meta = {"stealth": {"driver": "browser", "headless": False}}
+# Always real browser (visible window by default)
+meta = {"stealth": {"driver": "browser"}}
 
 # Lightest HTTP client
 meta = {"stealth": {"driver": "basic"}}

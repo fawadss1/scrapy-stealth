@@ -9,10 +9,10 @@ When `STEALTH_ENABLED = True`, the middleware injects `driver="auto"` automatica
 | Phase | Driver                       | When                                            |
 |-------|------------------------------|-------------------------------------------------|
 | 1     | `turbo` (default) or `basic` | First attempt — low memory, high throughput     |
-| 2     | `browser` (`headless=False`) | One retry when phase 1 is blocked or challenged |
+| 2     | `browser` (visible window)   | One retry when phase 1 is blocked or challenged |
 
-Phase 2 always opens a **visible Chrome window** for better evasion, regardless of
-`BROWSER_HEADLESS`.
+Phase 2 uses the browser driver with a **visible Chrome window** by default (`BROWSER_HEADLESS =
+False`). Auto fallback also sets `headless=False` on the retry request for better evasion.
 
 ## Setup
 

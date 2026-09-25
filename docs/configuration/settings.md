@@ -50,7 +50,7 @@ config.STEALTH_LOGS = False
 | `STEALTH_PROXY_COOLDOWN_S`    | `float`     | `300.0`   | Cooldown duration (seconds)                                          |
 | `STEALTH_PROXY_CIRCUIT_CODES` | set         | `{403}`   | Status codes that trip the circuit                                   |
 | `STEALTH_LOGS`                | `bool`      | `True`    | Styled console + package logger. PyPI update notice always shows     |
-| `BROWSER_HEADLESS`            | `bool`      | `False`   | Browser driver headless mode                                         |
+| `BROWSER_HEADLESS`            | `bool`      | `False`   | `False` = visible Chrome (default); `True` = headless                |
 | `BROWSER_SETTLE_S`            | `float`     | `4.0`     | Seconds to wait for JS after navigation                              |
 | `BROWSER_CHALLENGE_TIMEOUT_S` | `float`     | `30.0`    | Max wait on Cloudflare / challenge pages                             |
 | `STEALTH_CDP_URL`             | `str`       | `None`    | Connect browser driver to external CDP (local `:9222` or remote URL) |
@@ -76,7 +76,7 @@ All attributes on `scrapy_stealth.config.config`. Many mirror Scrapy settings ab
 | `HTTP3`                       | `bool`           | `False`                   | Turbo: HTTP/3 (QUIC); needs UDP-capable proxy                                |
 | `BLOCK_CODES`                 | `frozenset[int]` | `{403, 429, 503}`         | HTTP status codes treated as blocked                                         |
 | `BLOCK_KEYWORDS`              | `list[str]`      | captcha, access denied, … | Body-text patterns treated as blocked                                        |
-| `BROWSER_HEADLESS`            | `bool`           | `False`                   | Browser driver headless mode                                                 |
+| `BROWSER_HEADLESS`            | `bool`           | `False`                   | `False` = visible Chrome (default); `True` = headless                        |
 | `BROWSER_SETTLE_S`            | `float`          | `4.0`                     | Seconds to wait after navigation for JS                                      |
 | `BROWSER_CHALLENGE_TIMEOUT_S` | `float`          | `30.0`                    | Max wait on Cloudflare / challenge pages                                     |
 | `BROWSER_NO_SANDBOX`          | `bool \| None`   | `None`                    | Disable Chrome sandbox; `None` = auto (root/Docker)                          |

@@ -27,12 +27,12 @@ Per-domain AIMD throttle on all drivers:
 | `basic`   | Profile-seeded pre-request delay (~30–350 ms) + adaptive throttle   |
 | `turbo`   | Same timing as `basic`                                              |
 
-Verify browser behavior on an HTML page with a visible window:
+Verify browser behavior on an HTML page (visible Chrome is the default):
 
 ```python
 yield scrapy.Request(
     "https://example.com",
-    meta={"stealth": {"driver": "browser", "headless": False, "settle": 8}},
+    meta={"stealth": {"driver": "browser", "settle": 8}},
 )
 ```
 

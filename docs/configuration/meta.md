@@ -35,7 +35,7 @@ yield scrapy.Request(
 | `stealth_timeout`     | `int`           | Timeout in seconds (default 30)                                    |
 | `http2`               | `bool`          | HTTP/2 vs HTTP/1.1                                                 |
 | `http3`               | `bool`          | Turbo only: HTTP/3 (QUIC)                                          |
-| `headless`            | `bool`          | Browser only: headless window                                      |
+| `headless`            | `bool`          | Browser only: `True` = headless; default **visible** window        |
 | `settle`              | `float`         | Browser only: JS settle time after load                            |
 | `snapshot`            | `bool`          | Browser only: full-page PNG in `response.meta["snapshot_content"]` |
 | `static_assets_block` | `bool`          | Browser only: block images/fonts/CSS                               |

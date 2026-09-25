@@ -5,6 +5,10 @@ per request**.
 
 Use for Cloudflare JS challenges, heavy JavaScript, login flows, and when `turbo` returns challenge pages.
 
+The browser driver uses a **visible Chrome window by default** (`BROWSER_HEADLESS = False`). Use
+`headless: True` in meta or `BROWSER_HEADLESS = True` in settings only when you need a headless
+window (e.g. CI or a server without a display).
+
 ## Per-request
 
 ```python
@@ -13,7 +17,6 @@ yield scrapy.Request(
     meta={
         "stealth": {
             "driver": "browser",
-            "headless": False,
             "settle": 4.0,
         }
     },
@@ -26,7 +29,6 @@ yield scrapy.Request(
 meta = {
     "stealth": {
         "driver": "browser",
-        "headless": False,
         "settle": 12,
     }
 }
