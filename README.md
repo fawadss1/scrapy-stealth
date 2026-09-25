@@ -1,12 +1,16 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/logo.png" alt="scrapy-stealth logo" width="720"/>
+  <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/logo.png" alt="scrapy-stealth logo" width="720" style="border-radius: 1.25rem;"/>
 </p>
 
 <h1 align="center">scrapy-stealth</h1>
 
 <p align="center"><strong>Stealthy Crawling. Maximum Results.</strong></p>
 
-<p align="center">A pluggable anti-bot and stealth framework for Scrapy.</p>
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=DM+Sans&weight=600&size=22&duration=3500&pause=1200&color=22D3EE&center=true&vCenter=true&width=640&height=36&lines=Pluggable+anti-bot+middleware+for+Scrapy;TLS+%C2%B7+smart+proxies+%C2%B7+external+CDP+%C2%B7+Chrome" alt="Pluggable anti-bot middleware for Scrapy — TLS, smart proxies, external CDP, Chrome"/>
+</p>
+
+<p align="center">Per-request drivers and automatic HTTP → browser fallback.</p>
 
 [![Documentation](https://readthedocs.org/projects/scrapy-stealth/badge/?version=latest)](https://scrapy-stealth.readthedocs.io/en/latest/)
 [![PyPI version](https://img.shields.io/pypi/v/scrapy-stealth?color=blue)](https://pypi.org/project/scrapy-stealth/)
@@ -23,7 +27,8 @@ with per-request driver selection and automatic HTTP → browser fallback.
 
 ---
 
-## 💜 Sponsors
+<details>
+<summary><h3>💜 Sponsors</h3></summary>
 
 <table>
   <tr>
@@ -51,6 +56,8 @@ with per-request driver selection and automatic HTTP → browser fallback.
     </td>
   </tr>
 </table>
+
+</details>
 
 ---
 

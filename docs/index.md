@@ -5,9 +5,12 @@ hide:
 
 <div class="hero-panel">
   <div class="hero-panel__inner">
-    <img src="static/logo.png" alt="scrapy-stealth logo" class="hero-panel__logo">
+    <img src="static/logo.png" alt="scrapy-stealth logo" class="hero-panel__logo" style="border-radius: 1.25rem;">
     <h1 class="hero-title">scrapy-stealth</h1>
     <p class="hero-tagline">Stealthy Crawling. Maximum Results.</p>
+    <p class="hero-typing">
+      <img src="https://readme-typing-svg.demolab.com?font=DM+Sans&weight=600&size=22&duration=3500&pause=1200&color=22D3EE&center=true&vCenter=true&width=640&height=36&lines=Pluggable+anti-bot+middleware+for+Scrapy;TLS+%C2%B7+smart+proxies+%C2%B7+external+CDP+%C2%B7+Chrome" alt="Pluggable anti-bot middleware for Scrapy — TLS, smart proxies, external CDP, Chrome"/>
+    </p>
     <p class="hero-desc">
       A pluggable anti-bot and stealth framework for Scrapy — TLS impersonation, behavioral fingerprinting,
       adaptive rate limiting, smart proxies, and real Chrome.

@@ -303,14 +303,27 @@ body ::selection { background: rgba(34, 211, 238, 0.25); color: #fff; }
   background: linear-gradient(145deg, rgba(12, 20, 38, 0.9), rgba(8, 12, 24, 0.95));
 }
 
+.hero-typing {
+  margin: 0 auto 0.75rem;
+  text-align: center;
+}
+
+.hero-typing img {
+  max-width: 100%;
+  height: auto;
+}
+
 .hero-panel__logo {
+  display: block;
   width: 100%;
   max-width: 320px;
   margin: 0 auto 1rem;
+  border-radius: 1.25rem;
+  overflow: hidden;
 }
 
 .hero-title {
-  font-family: var(--font-display);
+  font-family: var(--font-display), serif;
   font-weight: 800;
   font-size: clamp(1.625rem, 3.2vw, 2.375rem);
   margin: 0 0 0.4375rem;
