@@ -46,6 +46,10 @@ Brave/Chrome with `--remote-debugging-port`, or any remote CDP service):
 ```python
 # Local debug port (Brave, Chrome, Fortress, etc.)
 STEALTH_CDP_URL = "http://127.0.0.1:9222"
+# Equivalent: ws://127.0.0.1:9222/  (root ws URL — discovers browser via HTTP, same as above)
+
+# Full WebSocket path (ws://host/devtools/browser/… or …/page/…) — only when you have a
+# live URL; copied DevTools browser ids expire. Prefer http://host:9222 or ws://host:9222/.
 
 # Remote HTTPS endpoint with auth headers on /json/version and the WebSocket
 STEALTH_CDP_URL = "https://cdp.example.com/v1"

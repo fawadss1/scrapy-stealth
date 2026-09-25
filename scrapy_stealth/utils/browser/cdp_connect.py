@@ -101,13 +101,39 @@ def _short_cdp_detail(detail: str | None) -> str:
     return text
 
 
+def _is_websocket_scheme(parsed: urllib.parse.ParseResult) -> bool:
+    return parsed.scheme in {"ws", "wss"}
+
+
+def _is_http_scheme(parsed: urllib.parse.ParseResult) -> bool:
+    return parsed.scheme in {"http", "https"}
+
+
+def _websocket_is_root_endpoint(parsed: urllib.parse.ParseResult) -> bool:
+    """``ws://host:port`` or ``ws://host:port/`` — no target path; discover via HTTP."""
+    return (parsed.path or "").rstrip("/") == ""
+
+
+def _http_scheme_for_cdp_discovery(parsed: urllib.parse.ParseResult) -> str:
+    """Map ``http``/``https``/``ws``/``wss`` to the scheme used for ``/json/version``."""
+    if parsed.scheme in {"https", "wss"}:
+        return "https"
+    return "http"
+
+
 def format_cdp_unreachable(cdp_url: str, detail: str | None = None) -> str:
     """Short exception message when ``STEALTH_CDP_URL`` cannot be reached."""
     reason = _short_cdp_detail(detail)
-    return (
-        f"CDP browser not reachable at {cdp_url.strip()!r} ({reason}). "
-        "Start Chromium with --remote-debugging-port or unset STEALTH_CDP_URL."
-    )
+    hint = "Start Chromium with --remote-debugging-port or unset STEALTH_CDP_URL."
+    parsed = urllib.parse.urlparse(cdp_url.strip())
+    if _is_websocket_scheme(parsed) and not _websocket_is_root_endpoint(parsed):
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 9222
+        hint = (
+            f"Use ws(s)://{host}:{port}/ (root) or http://{host}:{port} for discovery. "
+            "A copied ws://…/devtools/browser/… URL expires when Chrome restarts."
+        )
+    return f"CDP browser not reachable at {cdp_url.strip()!r} ({reason}). {hint}"
 
 
 def raise_cdp_unreachable(cdp_url: str, detail: str | None = None) -> NoReturn:
@@ -134,19 +160,21 @@ def is_nodriver_connect_failure(exc: BaseException) -> bool:
 
 
 def _classify_cdp_url(cdp_url: str) -> tuple[str, urllib.parse.ParseResult]:
+    """Classify CDP URL by scheme and path (see module doc in ``connect_cdp_browser``)."""
     parsed = urllib.parse.urlparse(cdp_url.strip())
-    if parsed.scheme in {"ws", "wss"}:
+    if _is_websocket_scheme(parsed):
+        if _websocket_is_root_endpoint(parsed):
+            return "debug_port", parsed
         return "websocket", parsed
-    if parsed.scheme not in {"http", "https"}:
-        raise_stealth(
-            StealthConnectionError,
-            f"Unsupported CDP URL scheme {parsed.scheme!r} in {cdp_url!r}. "
-            "Use http(s)://… or ws(s)://…",
-        )
-    path = parsed.path or ""
-    if path in {"", "/"}:
-        return "debug_port", parsed
-    return "http_base", parsed
+    if _is_http_scheme(parsed):
+        if _websocket_is_root_endpoint(parsed):
+            return "debug_port", parsed
+        return "http_base", parsed
+    raise_stealth(
+        StealthConnectionError,
+        f"Unsupported CDP URL scheme {parsed.scheme!r} in {cdp_url!r}. "
+        "Use http://, https://, ws://, or wss://.",
+    )
 
 
 async def _open_websocket(
@@ -182,6 +210,13 @@ async def connect_cdp_browser(
 ) -> tuple[Any, bool]:
     """Connect to an external Chrome/Fortress CDP endpoint via nodriver.
 
+    Supported ``STEALTH_CDP_URL`` shapes:
+
+    - ``http://host:9222`` / ``https://host:9222`` — debug port (recommended)
+    - ``ws://host:9222/`` / ``wss://host:9222/`` — same as HTTP root (JSON discovery)
+    - ``https://host/cdp/…`` — HTTP base; fetches ``/json/version``
+    - ``ws://host/…/devtools/…`` — direct WebSocket (must be a live URL)
+
     Returns ``(browser, owns_process)``. ``owns_process`` is always ``False``.
     """
     import nodriver as nd
@@ -198,7 +233,7 @@ async def connect_cdp_browser(
         if not host:
             raise_stealth(StealthConnectionError, f"Invalid CDP URL: {cdp_url!r}")
         port = parsed.port or 9222
-        scheme = parsed.scheme or "http"
+        scheme = _http_scheme_for_cdp_discovery(parsed)
         version_url = f"{scheme}://{host}:{port}/json/version"
         logger.debug("Connecting to local CDP debug port %s:%s", host, port)
         try:
