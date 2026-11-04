@@ -28,7 +28,7 @@ mkdocs serve
 
 ## Windows note
 
-The `basic` driver uses `wreq`, which requires the **Visual C++ Redistributable** on Windows. If import fails, install both:
+The `basic` and `turbo` drivers use native HTTP components that require the **Visual C++ Redistributable** on Windows. If import fails, install both:
 
 - [VC++ x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 - [VC++ x86](https://aka.ms/vs/17/release/vc_redist.x86.exe)

@@ -27,14 +27,14 @@ Install Chrome/Chromium or set:
 BROWSER_EXECUTABLE_PATH = "/path/to/chrome"
 ```
 
-On Windows, install [VC++ redistributables](../getting-started/installation.md) if `wreq`
-(basic driver) fails to import.
+On Windows, install [VC++ redistributables](../getting-started/installation.md) if the
+`basic` or `turbo` driver fails to import native HTTP components.
 
 ## Turbo connection failed
 
 - Verify proxy allows HTTPS to the target host
 - Try `meta={"stealth": {"http2": False}}`
-- Try `driver="basic"` to isolate curl_cffi vs wreq
+- Try `driver="basic"` vs `driver="turbo"` to isolate which HTTP stack misbehaves
 - Test without proxy first
 
 ## Always getting 403

@@ -118,5 +118,5 @@ These are stripped and replaced by the active profile:
 | Driver    | GET / HEAD                                   | POST / PUT / PATCH / DELETE |
 |-----------|----------------------------------------------|-----------------------------|
 | `basic`   | Native HTTP + profile TLS                    | Same                        |
-| `turbo`   | curl-impersonate TLS                         | Same                        |
+| `turbo`   | Deep TLS impersonation                       | Same                        |
 | `browser` | Tab navigation; binary URLs return raw bytes | In-page `fetch()`           |

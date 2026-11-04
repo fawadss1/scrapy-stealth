@@ -41,7 +41,7 @@ This policy covers the **scrapy-stealth** Python package and its documented publ
 
 **Out of scope**
 
-- Third-party runtimes and services: Chrome/Chromium, nodriver, curl_cffi, wreq, proxy providers, and target websites
+- Third-party runtimes and services: Chrome/Chromium, bundled HTTP/CDP libraries, proxy providers, and target websites
 - Misconfiguration (e.g. exposing CDP `:9222` or the relay port to the public internet without authentication or firewall rules)
 - Storing proxy passwords or API keys in source control — use environment variables or secret stores, not committed settings
 

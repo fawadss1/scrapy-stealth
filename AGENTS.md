@@ -25,7 +25,7 @@ See [CHECK.md](CHECK.md) for individual commands. User docs: [scrapy-stealth.rea
 
 - Per-request options live in `request.meta["stealth"]`.
 - Global defaults: `STEALTH_ENABLED`, `STEALTH_DRIVER`, `STEALTH_PROXIES` in Scrapy settings, or `scrapy_stealth.config.config`.
-- Browser engine uses Chrome via CDP (`nodriver`); proxy mode uses a local auth relay.
+- Browser engine uses Chrome via CDP; proxy mode uses a local auth relay.
 
 ---
 

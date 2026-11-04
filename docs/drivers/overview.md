@@ -5,8 +5,8 @@ The stealth engine supports four drivers, selected via `meta["stealth"]["driver"
 
 | Driver    | Speed    | Use case                                                      |
 |-----------|----------|---------------------------------------------------------------|
-| `basic`   | Fast     | Light HTTP impersonation via `wreq`                           |
-| `turbo`   | Fast     | Deep TLS + HTTP/2 impersonation via `curl_cffi` (**default**) |
+| `basic`   | Fast     | Light HTTP browser-profile impersonation                      |
+| `turbo`   | Fast     | Deep TLS + HTTP/2 impersonation (**default** HTTP driver)     |
 | `browser` | Slow     | Real Chrome via CDP — JS, Cloudflare, heavy sites             |
 | `auto`    | Adaptive | `turbo`/`basic` first, one `browser` retry on challenge/ban   |
 
@@ -32,7 +32,7 @@ meta = {"stealth": {"driver": "basic"}}
 |-----------------------------|:-------:|:------------------:|:-------------------:|
 | GET / HEAD                  |   Yes   |        Yes         |         Yes         |
 | POST / PUT / PATCH / DELETE |   Yes   |        Yes         | Yes (in-page fetch) |
-| TLS fingerprint             | Profile |  curl-impersonate  |     Real Chrome     |
+| TLS fingerprint             | Profile |  Deep impersonate  |     Real Chrome     |
 | HTTP/2                      |   Yes   |        Yes         |         Yes         |
 | HTTP/3 (QUIC)               |   No    | Yes (`http3=True`) |         No          |
 | JS rendering                |   No    |         No         |         Yes         |

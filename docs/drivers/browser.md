@@ -1,6 +1,6 @@
 # Browser engine
 
-The `browser` driver runs **real Chrome** via the Chrome DevTools Protocol (nodriver) — no WebDriver. One persistent browser, **new tab
+The `browser` driver runs **real Chrome** via the Chrome DevTools Protocol — no WebDriver. One persistent browser, **new tab
 per request**.
 
 Use for Cloudflare JS challenges, heavy JavaScript, login flows, and when `turbo` returns challenge pages.
