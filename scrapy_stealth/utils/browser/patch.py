@@ -6,7 +6,7 @@ import re
 
 
 def patch_nodriver() -> None:
-    """Fix Latin-1 byte in nodriver/cdp/network.py that causes SyntaxError on import."""
+    """Fix Latin-1 byte in the CDP client's network module that breaks import on some Python builds."""
     try:
         spec = importlib.util.find_spec("nodriver")
         if spec is None or spec.origin is None:

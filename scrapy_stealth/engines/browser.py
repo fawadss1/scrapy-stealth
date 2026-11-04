@@ -248,7 +248,7 @@ class BrowserEngine(BaseEngine):
         proxy_port: int | None = None,
         fingerprint_args: list[str] | None = None,
     ) -> Any:
-        """Start nodriver; map missing binary to StealthBrowserNotFoundError."""
+        """Launch or attach the browser; map missing binary to StealthBrowserNotFoundError."""
         import nodriver as _nd
 
         _ensure_xvfb(headless)
@@ -310,7 +310,7 @@ class BrowserEngine(BaseEngine):
         # suppress it here as well for any edge case where it does arrive.
         if isinstance(exc, asyncio.InvalidStateError):
             return
-        # Orphaned nodriver / fetch tasks during browser restart.
+        # Orphaned CDP / fetch tasks during browser restart.
         if isinstance(exc, (ConnectionError, StealthConnectionError)):
             return
         loop.default_exception_handler(context)

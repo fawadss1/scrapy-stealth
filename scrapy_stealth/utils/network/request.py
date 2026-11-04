@@ -60,7 +60,7 @@ class StealthRequestPayload:
         http_version: Any,
         proxy: str | None,
     ) -> dict[str, Any]:
-        """curl_cffi kwargs for turbo — cookies via API to preserve impersonate order."""
+        """Keyword args for turbo — cookies via API to preserve impersonate order."""
         headers = dict(self.headers)
         kwargs: dict[str, Any] = {
             "timeout": timeout,
@@ -79,7 +79,7 @@ class StealthRequestPayload:
         return kwargs
 
     def basic_http_kwargs(self) -> dict[str, Any]:
-        """Keyword args for basic (wreq) — raw bytes via ``body``."""
+        """Keyword args for basic — raw bytes via ``body``."""
         kwargs: dict[str, Any] = {"headers": self.headers}
         if self.body is not None:
             kwargs["body"] = self.body

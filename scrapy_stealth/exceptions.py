@@ -67,9 +67,9 @@ class StealthDependencyError(StealthException, ImportError):
     .. code-block:: python
 
         try:
-            from wreq.blocking import Client
+            from my_native_http_client import Client
         except ImportError as exc:
-            StealthDependencyError.check("wreq", exc)
+            StealthDependencyError.check("basic driver", exc)
     """
 
     _WINDOWS_HINT = (
@@ -108,7 +108,7 @@ class StealthDependencyError(StealthException, ImportError):
         Call this inside an ``except ImportError`` block at module level so
         every compiled-dependency failure produces a uniform, actionable error.
 
-        :param package: The pip package name that failed to import.
+        :param package: Short label for the component that failed to import (e.g. driver name).
         :param exc:     The original :class:`ImportError` caught.
         :raises StealthDependencyError: Always.
         """

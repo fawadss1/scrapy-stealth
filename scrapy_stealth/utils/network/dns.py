@@ -133,11 +133,11 @@ def build_curl_resolve(overrides: DnsOverrides, url: str) -> list[str]:
 
 
 def _wreq_dns_options_cls() -> Any:
-    """Return wreq's ``DnsOptions`` class from the native extension.
+    """Return the basic driver's ``DnsOptions`` class from its native extension.
 
-    Resolved via ``getattr`` because the Python ``wreq/dns.py`` stub is
-    shadowed by the extension module at runtime, so static analyzers cannot
-    see the symbol on a normal import.
+    Resolved via ``getattr`` because the Python DNS stub is shadowed by the
+    extension module at runtime, so static analyzers cannot see the symbol on
+    a normal import.
     """
     import wreq
 
@@ -147,11 +147,13 @@ def _wreq_dns_options_cls() -> Any:
         cls = getattr(owner, "DnsOptions", None)
         if cls is not None:
             return cls
-    raise AttributeError("wreq.DnsOptions is unavailable; upgrade wreq to >= 0.13.0")
+    raise AttributeError(
+        "Basic driver DnsOptions is unavailable; upgrade scrapy-stealth."
+    )
 
 
 def build_wreq_dns_options(overrides: DnsOverrides) -> Any | None:
-    """Return a wreq ``DnsOptions`` with custom resolves, or ``None`` if empty."""
+    """Return basic-driver ``DnsOptions`` with custom resolves, or ``None`` if empty."""
     if not overrides:
         return None
 
@@ -166,8 +168,8 @@ def build_chrome_host_resolver_args(overrides: DnsOverrides) -> list[str]:
     Build Chrome ``--host-resolver-rules`` launch args from a host→IP map.
 
     Format: ``MAP host ip, MAP host2 ip2``. Returns ``[]`` when empty so
-    callers can splat unconditionally. Passed as a single argv element (nodriver
-    uses ``create_subprocess_exec``), so spaces inside the rules stay intact.
+    callers can splat unconditionally. Passed as a single argv element (browser
+    launch uses ``create_subprocess_exec``), so spaces inside the rules stay intact.
     """
     if not overrides:
         return []

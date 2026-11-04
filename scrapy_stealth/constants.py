@@ -118,7 +118,7 @@ STEALTH_CDP_URL: str | None = None
 STEALTH_CDP_CONNECT_KWARGS: dict[str, object] = {}
 
 # Browser engine: path to the browser executable.
-# None = auto-detect: nodriver will locate Google Chrome / Chromium automatically.
+# None = auto-detect: browser driver locates Google Chrome / Chromium automatically.
 # Set to an explicit path to use a different browser binary (e.g. Brave, Chromium, or a
 # custom Chrome installation):
 #   config.BROWSER_EXECUTABLE_PATH = "/usr/bin/brave-browser"

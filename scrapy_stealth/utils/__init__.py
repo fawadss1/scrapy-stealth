@@ -9,7 +9,7 @@ detection
 network
     DNS overrides, HTTP headers, proxy pool.
 browser
-    Chrome/CDP runtime, nodriver patch, session tracking.
+    Chrome/CDP runtime, CDP client patch, session tracking.
 engine
     Driver fallback, retries, browser profile resolution.
 telemetry

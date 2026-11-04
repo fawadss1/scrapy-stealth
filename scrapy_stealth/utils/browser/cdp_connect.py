@@ -155,7 +155,7 @@ def raise_cdp_unreachable(cdp_url: str, detail: str | None = None) -> NoReturn:
 
 
 def is_nodriver_connect_failure(exc: BaseException) -> bool:
-    """True for nodriver's generic attach failure (often misleads on Windows)."""
+    """True for the CDP client's generic attach failure (often misleads on Windows)."""
     return "Failed to connect to browser" in str(exc)
 
 
@@ -208,7 +208,7 @@ async def _finish_browser_attach(browser: Any) -> Any:
 async def connect_cdp_browser(
     cdp_url: str, connect_kwargs: dict[str, Any] | None = None
 ) -> tuple[Any, bool]:
-    """Connect to an external Chrome/Fortress CDP endpoint via nodriver.
+    """Connect to an external Chrome/Fortress CDP endpoint.
 
     Supported ``STEALTH_CDP_URL`` shapes:
 

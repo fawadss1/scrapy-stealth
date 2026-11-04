@@ -25,7 +25,7 @@ logger = get_logger()
 
 
 def _cleanup_browser_temp_data() -> None:
-    """Delete stale nodriver ``uc_*`` data in the background.
+    """Delete stale browser-launch ``uc_*`` temp data in the background.
 
     Removing the whole directory also removes its cache, cookies, GPU/shader
     data, logs, and profile files.

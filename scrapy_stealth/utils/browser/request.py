@@ -169,7 +169,7 @@ def _deep_serialized_to_python(node: Any) -> Any:
 
 
 def _coerce_fetch_result(result: Any) -> dict[str, Any]:
-    """Normalize nodriver evaluate() output into {status, bodyB64, headers}."""
+    """Normalize CDP evaluate() output into {status, bodyB64, headers}."""
     if isinstance(result, dict) and "status" in result:
         return result
 
@@ -202,7 +202,7 @@ def _fetch_response_headers(raw: dict[str, str]) -> dict[str, str]:
 
 
 def _evaluate_error_message(result: Any) -> str | None:
-    """Return a JS exception message when nodriver evaluate() failed."""
+    """Return a JS exception message when CDP evaluate() failed."""
     text = getattr(result, "text", None)
     if isinstance(text, str) and text.strip():
         return text.strip()

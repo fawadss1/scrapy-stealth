@@ -20,7 +20,7 @@ def _normalize_expires(expires: Any) -> float | None:
 
 
 def cdp_cookie_to_dict(cookie: Any) -> dict[str, Any]:
-    """Normalize a nodriver CDP ``Cookie`` to plain JSON-friendly fields."""
+    """Normalize a CDP ``Cookie`` to plain JSON-friendly fields."""
     expires = _normalize_expires(getattr(cookie, "expires", None))
     return {
         "name": str(getattr(cookie, "name", "") or ""),

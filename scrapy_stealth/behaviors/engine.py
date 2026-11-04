@@ -60,7 +60,7 @@ async def _apply_viewport(page: Any, spec: ViewportSpec) -> None:
     try:
         import nodriver.cdp.emulation as emulation
     except ImportError:
-        logger.debug("nodriver CDP emulation unavailable — skipping viewport override")
+        logger.debug("CDP emulation unavailable — skipping viewport override")
         return
 
     await page.send(
