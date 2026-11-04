@@ -85,11 +85,11 @@ class TestBrowserMap:
         assert len(_BROWSER_MAP) > 0
 
     def test_latest_browsers_present(self):
-        assert "chrome_147" in _BROWSER_MAP
-        assert "firefox_149" in _BROWSER_MAP
-        assert "safari_26_2" in _BROWSER_MAP
-        assert "edge_147" in _BROWSER_MAP
-        assert "opera_130" in _BROWSER_MAP
+        assert "chrome_154" in _BROWSER_MAP
+        assert "firefox_152" in _BROWSER_MAP
+        assert "safari_26_4" in _BROWSER_MAP
+        assert "edge_148" in _BROWSER_MAP
+        assert "opera_131" in _BROWSER_MAP
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +141,32 @@ class TestBasicEngine:
         assert isinstance(response, HtmlResponse)
         assert response.status == 200
         assert b"hello" in response.body
+
+    def test_execute_accepts_memoryview_body(self):
+        payload = b"<html>memoryview body</html>"
+        mock_client = _make_mock_client(200, memoryview(payload))
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            response = BasicEngine()._execute(Request("https://example.com"))
+        assert isinstance(response, HtmlResponse)
+        assert response.body == payload
+
+    def test_execute_accepts_memoryview_headers(self):
+        mock_client = _make_mock_client(403, memoryview(b"<html>datadome</html>"))
+        mock_resp = mock_client.get.return_value
+        mock_resp.headers.items.return_value = [
+            (memoryview(b"content-type"), memoryview(b"text/html; charset=utf-8")),
+        ]
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            response = BasicEngine()._execute(
+                Request("https://www.example.com/product/1")
+            )
+        assert response is not None
+        assert response.status == 403
+        content_type = response.headers.get("Content-Type")
+        assert content_type in (
+            b"text/html; charset=utf-8",
+            [b"text/html; charset=utf-8"],
+        )
 
     def test_execute_passes_proxy(self):
         from wreq.proxy import Proxy
@@ -207,7 +233,7 @@ class TestBasicEngine:
             )
             engine._execute(request)
 
-        # wreq only applies DnsOptions on Client(...), not per-request get().
+        # Basic driver applies DnsOptions on Client(...), not per-request get().
         assert "dns_options" in mock_cls.call_args.kwargs
         assert mock_cls.call_args.kwargs["dns_options"] is not None
         assert "dns_options" not in mock_client.get.call_args.kwargs
@@ -442,6 +468,14 @@ class TestTurboEngine:
         assert response.status == 200
         assert b"turbo" in response.body
 
+    def test_execute_accepts_memoryview_content(self, session_patch):
+        mock_cls, mock_session = session_patch
+        payload = b"<html>curl memoryview</html>"
+        mock_resp = _make_turbo_response(content=memoryview(payload))
+        mock_session.get.return_value = mock_resp
+        response = TurboEngine()._execute(Request("https://example.com"))
+        assert response.body == payload
+
     def test_execute_uses_http2_version(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
@@ -529,14 +563,14 @@ class TestTurboEngine:
         call_kwargs = mock_session.get.call_args.kwargs
         assert call_kwargs["http_version"] == CurlHttpVersion.V3
 
-    def test_execute_resolves_chrome150_profile(self, session_patch):
+    def test_execute_resolves_chrome152_profile(self, session_patch):
         mock_cls, mock_session = session_patch
         engine = TurboEngine()
         engine._execute(
             Request("https://example.com", meta={"stealth": {"profile": "chrome_147"}})
         )
         impersonate_arg = mock_cls.call_args.kwargs.get("impersonate")
-        assert impersonate_arg == "chrome150"
+        assert impersonate_arg == "chrome152"
 
     def test_execute_no_data_on_get_without_body(self, session_patch):
         mock_cls, mock_session = session_patch
@@ -554,7 +588,7 @@ class TestTurboEngine:
         impersonate_arg = (
             mock_cls.call_args.kwargs.get("impersonate") or mock_cls.call_args.args[0]
         )
-        assert impersonate_arg == "firefox135"
+        assert impersonate_arg == "firefox155"
 
     def test_execute_returns_none_on_exception(self):
         mock_session = MagicMock()

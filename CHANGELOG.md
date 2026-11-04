@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **Dependencies** — updated HTTP and CDP stacks (Chrome 151–154 / Firefox 152 profiles,
+  Python 3.15 wheels, security fixes).
+* **Turbo impersonate defaults** — Chromium-family presets map to `chrome152`; Firefox to
+  `firefox155`; Safari to `safari270` / `safari270_ios`. HTTP/3 fallback presets extended.
+* **Fingerprint rotation pool** — newer Chrome, Firefox, Edge, and Safari profiles weighted
+  into the random pool.
+
+### Fixed
+
+* **Basic / turbo engines** — normalize `memoryview` response bodies to `bytes` before decode
+  and Scrapy response construction.
+* **StealthResponse headers** — coerce header names/values from `memoryview` to `str` so
+  Scrapy header normalization does not fail.
+
 ---
 
 ## [1.0.1] - 2026-09-25

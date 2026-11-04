@@ -138,7 +138,7 @@ class TestRaiseStealth:
 
         try:
             try:
-                raise RuntimeError("curl_cffi backend noise")
+                raise RuntimeError("native HTTP backend noise")
             except RuntimeError:
                 raise_stealth(
                     StealthTimeoutError,
