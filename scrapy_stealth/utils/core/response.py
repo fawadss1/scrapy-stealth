@@ -5,6 +5,26 @@ from scrapy.http import HtmlResponse, Request
 from ...config import config
 
 
+def coerce_response_body(body: bytes | memoryview | bytearray) -> bytes:
+    """Normalize HTTP body buffers (basic driver may return read-only ``memoryview``)."""
+    if isinstance(body, bytes):
+        return body
+    return bytes(body)
+
+
+def coerce_http_header(value: bytes | memoryview | str | None) -> str:
+    """Normalize header names/values (may be ``memoryview``)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, memoryview):
+        value = bytes(value)
+    if isinstance(value, bytes):
+        return value.decode("latin-1", errors="replace")
+    return str(value)
+
+
 class StealthResponse(HtmlResponse):
     """
     Class for handling HTTP responses with extended functionality and customization.
@@ -43,6 +63,8 @@ class StealthResponse(HtmlResponse):
         )
 
     @staticmethod
-    def _to_dict(headers) -> dict:
+    def _to_dict(headers) -> dict[str, str]:
         pairs = headers.items() if hasattr(headers, "items") else headers
-        return {k.decode() if isinstance(k, bytes) else k: v for k, v in pairs}
+        return {
+            coerce_http_header(k): coerce_http_header(v) for k, v in pairs
+        }

@@ -21,8 +21,20 @@ except ImportError as _wreq_err:
 
 from ...strategies.fingerprint import ProfileRotator
 
-_H3_PRESETS = frozenset({"chrome145", "chrome146", "chrome150", "firefox147"})
-_DEFAULT_TURBO = "chrome150"
+_H3_PRESETS = frozenset(
+    {
+        "chrome145",
+        "chrome146",
+        "chrome150",
+        "chrome151",
+        "chrome152",
+        "firefox147",
+        "firefox153",
+        "firefox154",
+        "firefox155",
+    }
+)
+_DEFAULT_TURBO = "chrome152"
 
 # Order matters: longer/more-specific prefixes must come before shorter ones.
 _PREFIXES: list[tuple[str, str]] = [
@@ -45,22 +57,22 @@ _ALIASES: dict[str, str] = {
 
 # Turbo driver browser targets, ordered most-specific first.
 _TURBO_PREFIXES: list[tuple[str, str]] = [
-    ("safari_ios", "safari18_0_ios"),
-    ("safari_ipad", "safari18_0_ios"),
-    ("firefox", "firefox135"),
-    ("safari", "safari18_0"),
-    ("chrome", "chrome150"),
-    ("edge", "chrome150"),
-    ("opera", "chrome150"),
-    ("okhttp", "chrome150"),
+    ("safari_ios", "safari270_ios"),
+    ("safari_ipad", "safari270_ios"),
+    ("firefox", "firefox155"),
+    ("safari", "safari270"),
+    ("chrome", "chrome152"),
+    ("edge", "chrome152"),
+    ("opera", "chrome152"),
+    ("okhttp", "chrome152"),
 ]
 
 
 def _require_wreq() -> None:
-    """Raise StealthDependencyError if wreq failed to load."""
+    """Raise StealthDependencyError if the basic driver HTTP client failed to load."""
     if not _WREQ_AVAILABLE:
-        err = _wreq_import_error or ImportError("wreq library is missing")
-        StealthDependencyError.check("wreq", err)
+        err = _wreq_import_error or ImportError("basic driver HTTP client is missing")
+        StealthDependencyError.check("basic driver", err)
 
 
 def _build_browser_map() -> dict[str, Profile]:
@@ -103,9 +115,9 @@ def _h3_target(target: str) -> str:
     if target in _H3_PRESETS:
         return target
     if target.startswith("chrome"):
-        return "chrome150"
+        return "chrome152"
     if target.startswith("firefox"):
-        return "firefox147"
+        return "firefox155"
     return target
 
 
@@ -113,7 +125,12 @@ def _resolve_basic(profile: str | Profile) -> Profile:
     _require_wreq()
     if not isinstance(profile, str):
         return profile
-    return _BROWSER_MAP.get(profile) or _BROWSER_MAP[ProfileRotator.get()]
+    if profile in _BROWSER_MAP:
+        return _BROWSER_MAP[profile]
+    for name in (ProfileRotator.get(), "chrome_154", "chrome_152", "chrome_150"):
+        if name in _BROWSER_MAP:
+            return _BROWSER_MAP[name]
+    return next(iter(_BROWSER_MAP.values()))
 
 
 def _resolve_turbo(profile: str | Profile, *, http3: bool = False) -> str:

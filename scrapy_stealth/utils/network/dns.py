@@ -147,7 +147,7 @@ def _wreq_dns_options_cls() -> Any:
         cls = getattr(owner, "DnsOptions", None)
         if cls is not None:
             return cls
-    raise AttributeError("wreq.DnsOptions is unavailable; upgrade wreq to >= 0.12.1")
+    raise AttributeError("wreq.DnsOptions is unavailable; upgrade wreq to >= 0.13.0")
 
 
 def build_wreq_dns_options(overrides: DnsOverrides) -> Any | None:

@@ -11,7 +11,7 @@ try:
     from wreq.blocking import Client
     from wreq.proxy import Proxy
 except ImportError as exc:
-    StealthDependencyError.check("wreq", exc)
+    StealthDependencyError.check("basic driver", exc)
 
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
@@ -24,7 +24,7 @@ from ..exceptions import (
 from ..utils.browser.session import BanStreakTracker, SessionCache
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
-from ..utils.core.response import StealthResponse
+from ..utils.core.response import StealthResponse, coerce_response_body
 from ..utils.engine.profiles import resolve_browser
 from ..utils.network.dns import (
     build_wreq_dns_options,
@@ -133,7 +133,7 @@ class BasicEngine(BaseEngine):
             )
             resp = method_fn(prepared.url, **kwargs)
 
-            body = resp.bytes()
+            body = coerce_response_body(resp.bytes())
             if AntiBotDetector.is_js_challenge_body(body.decode(errors="replace")):
                 console.warning(
                     f"JS challenge detected at {request.url!r} — "

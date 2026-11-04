@@ -10,7 +10,7 @@ try:
     from curl_cffi import CurlHttpVersion, CurlOpt
     from curl_cffi.requests import Session
 except ImportError as exc:
-    StealthDependencyError.check("curl_cffi", exc)
+    StealthDependencyError.check("turbo driver", exc)
 
 from ..config import config
 from ..detectors.antibot import AntiBotDetector
@@ -23,7 +23,7 @@ from ..exceptions import (
 from ..utils.browser.session import BanStreakTracker, SessionCache
 from ..utils.core.console import console
 from ..utils.core.logger import get_logger
-from ..utils.core.response import StealthResponse
+from ..utils.core.response import StealthResponse, coerce_response_body
 from ..utils.engine.profiles import resolve_browser
 from ..utils.network.dns import build_curl_resolve, resolve_dns_overrides
 from ..utils.network.request import build_stealth_request
@@ -124,8 +124,9 @@ class TurboEngine(BaseEngine):
             resp_headers = {
                 k: v for k, v in resp.headers.items() if k.lower() != "content-encoding"
             }
+            content = coerce_response_body(resp.content)
             if AntiBotDetector.is_js_challenge_body(
-                resp.content.decode(errors="replace")
+                content.decode(errors="replace")
             ):
                 console.warning(
                     f"JS challenge detected at {request.url!r} — "
@@ -136,7 +137,7 @@ class TurboEngine(BaseEngine):
                 request=request,
                 status=resp.status_code,
                 headers=resp_headers,
-                body=resp.content,
+                body=content,
                 encoding=resp.encoding,
                 _flags=["turbo"],
             )
