@@ -29,7 +29,7 @@ yield scrapy.Request(
 |-----------------------|-----------------|--------------------------------------------------------------------|
 | `driver`              | `str`           | `basic`, `turbo`, `browser`, or `auto`                             |
 | `fallback`            | `bool`          | `False` disables browser retry when `driver="auto"`                |
-| `profile`             | `str`           | Pin fingerprint (e.g. `chrome150`). Omit for random pool           |
+| `profile`             | `str`           | Pin fingerprint (e.g. `chrome152`). Omit for random pool           |
 | `proxy`               | `str`           | Explicit proxy URL. `None` = direct, no proxy                      |
 | `dns`                 | `str` or `dict` | Per-request DNS override (IP or host map)                          |
 | `stealth_timeout`     | `int`           | Timeout in seconds (default 30)                                    |

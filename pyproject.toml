@@ -15,9 +15,9 @@ requires-python = ">=3.11"
 
 dependencies = [
     "scrapy>=2.12.0,<3.0",
-    "wreq>=0.12.1",
-    "curl_cffi>=0.16.1",
-    "nodriver>=0.50.3",
+    "wreq>=0.13.0",
+    "curl_cffi>=0.17.0",
+    "nodriver>=0.50.99",
     "colorama>=0.4.6",
 ]
 

@@ -7,7 +7,7 @@ Helper classes for fingerprint rotation and intelligent retries. The middleware 
 Profiles are chosen **randomly from the pool by default**. Pin one only when debugging or when a site requires a specific fingerprint:
 
 ```python
-yield scrapy.Request(url, meta={"stealth": {"profile": "chrome150"}})
+yield scrapy.Request(url, meta={"stealth": {"profile": "chrome152"}})
 ```
 
 Manual rotation outside session recycle:
