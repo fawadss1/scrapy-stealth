@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Fingerprint rotation pool** — newer Chrome, Firefox, Edge, and Safari profiles weighted
   into the random pool.
 
+### Added
+
+* **CDP driver hint** — warn when `STEALTH_CDP_URL` (or per-request `cdp_url`) is set but the
+  active driver is not `browser` or `auto`.
+
 ### Fixed
 
 * **Basic / turbo engines** — normalize `memoryview` response bodies to `bytes` before decode

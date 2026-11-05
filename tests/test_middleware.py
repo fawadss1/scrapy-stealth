@@ -489,3 +489,55 @@ class TestStealthDownloaderMiddleware:
         )
         with pytest.raises(ValueError, match="not a valid IPv4/IPv6"):
             middleware.spider_opened(spider)
+
+    def test_warns_when_cdp_url_set_with_turbo_driver(self, middleware, spider):
+        request = Request(
+            "https://example.com",
+            meta={"stealth": {"driver": "turbo"}},
+        )
+        original_cdp = config.STEALTH_CDP_URL
+        config.STEALTH_CDP_URL = "http://127.0.0.1:9222"
+        try:
+            with patch.object(middleware.manager, "get") as mock_get:
+                mock_engine = MagicMock()
+                mock_engine.driver_name = "turbo"
+                mock_engine.fetch = AsyncMock(return_value=None)
+                mock_get.return_value = mock_engine
+                with patch(
+                    "scrapy_stealth.middlewares.stealth.console.warning"
+                ) as mock_warn:
+                    asyncio.run(middleware.process_request(request))
+            mock_warn.assert_any_call(
+                "STEALTH_CDP_URL is set but driver='turbo' — use "
+                "driver='browser' (or driver='auto' for HTTP-first with browser "
+                "fallback) to attach to external CDP."
+            )
+        finally:
+            config.STEALTH_CDP_URL = original_cdp
+
+    def test_no_cdp_warning_for_browser_or_auto(self, middleware, spider):
+        original_cdp = config.STEALTH_CDP_URL
+        config.STEALTH_CDP_URL = "http://127.0.0.1:9222"
+        try:
+            with patch.object(middleware.manager, "get") as mock_get:
+                mock_engine = MagicMock()
+                mock_engine.fetch = AsyncMock(return_value=None)
+                mock_get.return_value = mock_engine
+                with patch(
+                    "scrapy_stealth.middlewares.stealth.console.warning"
+                ) as mock_warn:
+                    for driver in ("browser", "auto"):
+                        mock_engine.driver_name = driver
+                        request = Request(
+                            "https://example.com",
+                            meta={"stealth": {"driver": driver}},
+                        )
+                        asyncio.run(middleware.process_request(request))
+            cdp_calls = [
+                c
+                for c in mock_warn.call_args_list
+                if c.args and "STEALTH_CDP_URL" in str(c.args[0])
+            ]
+            assert cdp_calls == []
+        finally:
+            config.STEALTH_CDP_URL = original_cdp
