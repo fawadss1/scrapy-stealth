@@ -19,6 +19,7 @@ from ..utils.core.meta import (
     _get_meta_data,
     _resolve_engine,
     apply_browser_driver_defaults,
+    cdp_driver_mismatch,
 )
 from ..utils.engine.fallback import (
     FALLBACK_DRIVER,
@@ -121,6 +122,13 @@ class StealthDownloaderMiddleware:
     async def process_request(self, request: Request) -> Response | None:
         _apply_stealth_enabled_defaults(request, self._stealth_enabled)
         apply_browser_driver_defaults(request)
+
+        if mismatch_driver := cdp_driver_mismatch(request):
+            console.warning(
+                f"STEALTH_CDP_URL is set but driver={mismatch_driver!r} — use "
+                f"driver='browser' (or driver='auto' for HTTP-first with browser "
+                f"fallback) to attach to external CDP."
+            )
 
         engine_name = _resolve_engine(request, config.get("DEFAULT_ENGINE"))
         driver = _get_meta_data(request, "driver")

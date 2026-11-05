@@ -58,6 +58,20 @@ def apply_browser_driver_defaults(request: Request) -> None:
     stealth.setdefault("headless", False)
 
 
+def cdp_driver_mismatch(request: Request) -> str | None:
+    """Return the active driver when CDP is configured but that driver will not use it."""
+    if not resolve_cdp_url(request):
+        return None
+    if not isinstance(request.meta.get(STEALTH_KEY), dict):
+        return None
+    driver = _get_meta_data(request, "driver")
+    if driver is None:
+        driver = config.get("STEALTH_DRIVER") or "turbo"
+    if driver in ("auto", "browser"):
+        return None
+    return str(driver)
+
+
 def _apply_stealth_enabled_defaults(request: Request, stealth_enabled: bool) -> None:
     """When global stealth is on, use smart driver selection (HTTP first, browser on ban)."""
     if not stealth_enabled:
