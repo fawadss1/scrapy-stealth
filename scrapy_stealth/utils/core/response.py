@@ -1,8 +1,24 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from scrapy.http import HtmlResponse, Request
 
 from ...config import config
+
+
+def effective_response_url(request: Request, url: str | None) -> str:
+    """Return *url* when it is a valid http(s) URL; otherwise keep ``request.url``."""
+    requested = request.url
+    if not url:
+        return requested
+    candidate = url.strip()
+    if not candidate or candidate == requested:
+        return requested
+    parsed = urlparse(candidate)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return candidate
+    return requested
 
 
 class StealthResponse(HtmlResponse):
@@ -24,6 +40,7 @@ class StealthResponse(HtmlResponse):
         encoding: str | None = None,
         _meta: dict | None = None,
         _flags: list[str] | None = None,
+        url: str | None = None,
     ) -> None:
 
         if _meta:
@@ -31,9 +48,13 @@ class StealthResponse(HtmlResponse):
             updated_meta.update(_meta)
             request = request.replace(meta=updated_meta)
 
+        effective_url = effective_response_url(request, url)
+        if effective_url != request.url:
+            request = request.replace(url=effective_url)
+
         headers_dict = self._to_dict(headers)
         super().__init__(
-            url=request.url,
+            url=effective_url,
             status=status,
             headers=headers_dict,
             body=body,

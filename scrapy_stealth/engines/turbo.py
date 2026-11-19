@@ -138,6 +138,7 @@ class TurboEngine(BaseEngine):
                 headers=resp_headers,
                 body=resp.content,
                 encoding=resp.encoding,
+                url=str(resp.url),
                 _flags=["turbo"],
             )
             self._maybe_recycle_sessions(request, response, current_proxy=ctx.proxy)

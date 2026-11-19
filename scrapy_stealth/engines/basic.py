@@ -145,6 +145,7 @@ class BasicEngine(BaseEngine):
                 status=resp.status.as_int(),
                 headers=resp.headers,
                 body=body,
+                url=str(resp.url),
                 _flags=["basic"],
             )
             self._maybe_recycle_sessions(request, response, current_proxy=ctx.proxy)

@@ -621,13 +621,14 @@ class BrowserEngine(BaseEngine):
         profile: str,
         snapshot: bool = False,
         block_assets: bool = False,
-    ) -> tuple[bytes, int, bytes | None, dict[str, str], list[dict[str, Any]]]:
+    ) -> tuple[bytes, int, bytes | None, dict[str, str], list[dict[str, Any]], str]:
         """Open a CDP target, perform the request, then close the tab."""
         html: Any = ""
         status: Any = 200
         shot: bytes | None = None
         resp_headers: dict[str, str] = {"content-type": "text/html; charset=utf-8"}
         browser_cookies: list[dict[str, Any]] = []
+        effective_url = url
 
         if self._browser is None:
             raise StealthConnectionError("Browser is not running")
@@ -659,8 +660,8 @@ class BrowserEngine(BaseEngine):
                             raise StealthConnectionError(
                                 f"Browser POST setup failed loading {url!r}"
                             )
-                        body_bytes, status, resp_headers = await browser_http_fetch(
-                            page, url, prepared
+                        body_bytes, status, resp_headers, effective_url = (
+                            await browser_http_fetch(page, url, prepared)
                         )
                         html = body_bytes.decode(errors="replace")
                     else:
@@ -721,6 +722,11 @@ class BrowserEngine(BaseEngine):
                         shot = await _cdp_snapshot(page)
 
                     browser_cookies = await collect_browser_cookies(page, url)
+                    if method in {"GET", "HEAD"}:
+                        with contextlib.suppress(Exception):
+                            href = await page.evaluate("window.location.href")
+                            if href:
+                                effective_url = str(href)
             finally:
                 with contextlib.suppress(Exception):
                     await page.close()
@@ -734,7 +740,7 @@ class BrowserEngine(BaseEngine):
         else:
             body_out = str(html).encode(errors="replace")
 
-        return body_out, int(status), shot, resp_headers, browser_cookies
+        return body_out, int(status), shot, resp_headers, browser_cookies, effective_url
 
     def _maybe_restart(
         self,
@@ -811,6 +817,7 @@ class BrowserEngine(BaseEngine):
             shot: bytes | None = None
             resp_headers: dict[str, str] = {"content-type": "text/html; charset=utf-8"}
             browser_cookies: list[dict[str, Any]] = []
+            effective_url = request.url
             self._dns_overrides = dict(resolve_dns_overrides(request))
             self._record_dns(len(self._dns_overrides))
 
@@ -819,7 +826,12 @@ class BrowserEngine(BaseEngine):
                 loop: asyncio.AbstractEventLoop | None = None
 
                 async def _run_fetch() -> tuple[
-                    bytes, int, bytes | None, dict[str, str], list[dict[str, Any]]
+                    bytes,
+                    int,
+                    bytes | None,
+                    dict[str, str],
+                    list[dict[str, Any]],
+                    str,
                 ]:
                     nonlocal task
                     current = asyncio.current_task()
@@ -849,7 +861,14 @@ class BrowserEngine(BaseEngine):
                     future = asyncio.run_coroutine_threadsafe(_run_fetch(), loop)
 
                 try:
-                    body, status, shot, resp_headers, browser_cookies = future.result(
+                    (
+                        body,
+                        status,
+                        shot,
+                        resp_headers,
+                        browser_cookies,
+                        effective_url,
+                    ) = future.result(
                         timeout=_browser_fetch_timeout(ctx.timeout, settle)
                     )
                     break
@@ -905,6 +924,7 @@ class BrowserEngine(BaseEngine):
                 status=status,
                 headers=resp_headers,
                 body=body,
+                url=effective_url,
                 _meta=response_meta,
                 _flags=["browser"],
             )

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **Effective URL on stealth responses** — `response.url` and `response.request.url` reflect the
+  final URL after redirects when using `basic`, `turbo`, or `browser` drivers.
+
 ---
 
 ## [1.0.1] - 2026-09-25

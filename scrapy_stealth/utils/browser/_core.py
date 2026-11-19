@@ -564,7 +564,7 @@ async def resolve_browser_get_body(
 
     if _url_looks_binary(url):
         try:
-            fetch_body, fetch_status, fetch_headers = await browser_binary_fetch(
+            fetch_body, fetch_status, fetch_headers, _fetch_url = await browser_binary_fetch(
                 page, url
             )
             if fetch_body and (_is_binary_body(fetch_body) or fetch_status == 200):

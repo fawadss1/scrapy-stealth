@@ -130,7 +130,7 @@ def _build_fetch_expression(payload: StealthRequestPayload, url: str) -> str:
         "const bodyB64 = btoa(binary);"
         "const respHeaders = {};"
         "resp.headers.forEach((v, k) => { respHeaders[k] = v; });"
-        "return { status: resp.status, bodyB64, headers: respHeaders };"
+        "return { status: resp.status, bodyB64, headers: respHeaders, responseUrl: resp.url };"
         "})()"
     )
 
@@ -214,7 +214,7 @@ def _evaluate_error_message(result: Any) -> str | None:
 
 async def browser_http_fetch(
     page: Any, url: str, payload: StealthRequestPayload
-) -> tuple[bytes, int, dict[str, str]]:
+) -> tuple[bytes, int, dict[str, str], str]:
     expression = _build_fetch_expression(payload, url)
     result = await page.evaluate(expression, await_promise=True, return_by_value=True)
 
@@ -233,12 +233,13 @@ async def browser_http_fetch(
     resp_headers = _fetch_response_headers(
         {str(k): str(v) for k, v in (payload_result.get("headers") or {}).items()}
     )
-    return base64.b64decode(body_b64), status, resp_headers
+    response_url = str(payload_result.get("responseUrl") or url)
+    return base64.b64decode(body_b64), status, resp_headers, response_url
 
 
 async def browser_binary_fetch(
     page: Any, url: str
-) -> tuple[bytes, int, dict[str, str]]:
+) -> tuple[bytes, int, dict[str, str], str]:
     """GET raw bytes for an asset URL via in-page ``fetch()`` (same-origin cookies)."""
     from ..network.request import StealthRequestPayload
 

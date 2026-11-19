@@ -55,6 +55,7 @@ class TestResolveBrowserGetBody:
                     b"\xff\xd8\xff\xe0fakejpeg",
                     200,
                     {"content-type": "image/jpeg"},
+                    "https://cdn.example.com/media/800x287/item-8145.jpg",
                 )
             ),
         ) as mock_fetch:

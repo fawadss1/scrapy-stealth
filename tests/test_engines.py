@@ -97,12 +97,18 @@ class TestBrowserMap:
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_client(status=200, content=b"<html><body>ok</body></html>"):
+def _make_mock_client(
+    status=200,
+    content=b"<html><body>ok</body></html>",
+    *,
+    url="https://example.com",
+):
     mock_status = MagicMock()
     mock_status.as_int.return_value = status
 
     mock_resp = MagicMock()
     mock_resp.status = mock_status
+    mock_resp.url = url
     mock_resp.bytes.return_value = content
     mock_resp.headers.__getitem__.return_value = b"text/html; charset=utf-8"
 
@@ -141,6 +147,17 @@ class TestBasicEngine:
         assert isinstance(response, HtmlResponse)
         assert response.status == 200
         assert b"hello" in response.body
+
+    def test_execute_sets_effective_url_after_redirect(self):
+        start = "https://example.com/start"
+        final = "https://www.example.com/landing"
+        mock_client = _make_mock_client(url=final)
+        with patch("scrapy_stealth.engines.basic.Client", return_value=mock_client):
+            engine = BasicEngine()
+            response = engine._execute(Request(start))
+
+        assert response.url == final
+        assert response.request.url == final
 
     def test_execute_passes_proxy(self):
         from wreq.proxy import Proxy
@@ -395,11 +412,16 @@ class TestBasicEngine:
 
 
 def _make_turbo_response(
-    status=200, content=b"<html><body>turbo</body></html>", headers=None
+    status=200,
+    content=b"<html><body>turbo</body></html>",
+    headers=None,
+    *,
+    url="https://example.com",
 ):
     mock_resp = MagicMock()
     mock_resp.status_code = status
     mock_resp.content = content
+    mock_resp.url = url
     mock_resp.headers.items.return_value = list((headers or {}).items())
     return mock_resp
 
@@ -441,6 +463,17 @@ class TestTurboEngine:
         assert isinstance(response, StealthResponse)
         assert response.status == 200
         assert b"turbo" in response.body
+
+    def test_execute_sets_effective_url_after_redirect(self):
+        start = "https://example.com/start"
+        final = "https://www.example.com/final"
+        mock_resp = _make_turbo_response(url=final)
+        mock_cls, _session = _turbo_session_ctx(mock_resp)
+        with patch("scrapy_stealth.engines.turbo.Session", mock_cls):
+            response = TurboEngine()._execute(Request(start))
+
+        assert response.url == final
+        assert response.request.url == final
 
     def test_execute_uses_http2_version(self, session_patch):
         mock_cls, mock_session = session_patch
@@ -970,6 +1003,7 @@ class TestBrowserEngine:
                 None,
                 {"content-type": "text/html; charset=utf-8"},
                 [],
+                url,
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -1019,6 +1053,7 @@ class TestBrowserEngine:
                 None,
                 {"content-type": "text/html; charset=utf-8"},
                 cookies,
+                url,
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -1111,6 +1146,7 @@ class TestBrowserEngine:
                 None,
                 {"content-type": "text/html; charset=utf-8"},
                 [],
+                "https://example.com",
             ),
         ) as mock_fetch:
             engine._execute(
@@ -1141,6 +1177,7 @@ class TestBrowserEngine:
                 None,
                 {"content-type": "text/html; charset=utf-8"},
                 [],
+                url,
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -1167,6 +1204,7 @@ class TestBrowserEngine:
                 None,
                 {"content-type": "text/html; charset=utf-8"},
                 [],
+                url,
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fake_fetch):
@@ -1310,7 +1348,7 @@ class TestBrowserEngine:
     def test_execute_retries_when_fetch_cancelled_during_restart(self, engine):
         calls = {"count": 0}
 
-        async def fetch_once_then_cancel(*_args, **_kwargs):
+        async def fetch_once_then_cancel(url, *_args, **_kwargs):
             calls["count"] += 1
             if calls["count"] == 1:
                 raise asyncio.CancelledError()
@@ -1320,6 +1358,7 @@ class TestBrowserEngine:
                 None,
                 {"content-type": "text/html; charset=utf-8"},
                 [],
+                url,
             )
 
         with patch.object(engine, "_do_fetch", side_effect=fetch_once_then_cancel):
