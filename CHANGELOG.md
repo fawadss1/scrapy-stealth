@@ -9,10 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.0.2] - 2026-11-20
+
 ### Changed
 
-* **Effective URL on stealth responses** — `response.url` and `response.request.url` reflect the
-  final URL after redirects when using `basic`, `turbo`, or `browser` drivers.
+* **Effective URL on stealth responses** (2026-11-19 — `7018c1a`, *Set effective URL on stealth
+  responses*) — `response.url` and `response.request.url` reflect the final URL after redirects when
+  using `basic`, `turbo`, or `browser` drivers.
+* **SP** — README and `AGENTS.md`: CyberYozh App (copy and UTM links from partner doc);
+  NodeMaven promo `SCRAPYSTEALTH2X` (2X traffic for Black Friday). Documentation home page:
+  sponsors section with NodeMaven and CyberYozh (`docs/index.md`, sponsor assets under
+  `docs/static/sponsors/`).
 
 ---
 
