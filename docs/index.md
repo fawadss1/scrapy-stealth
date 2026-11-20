@@ -26,6 +26,48 @@ hide:
   </div>
 </div>
 
+## Sponsors
+
+<div class="sponsor-stack" markdown="0">
+  <section class="sponsor-panel">
+    <a class="sponsor-panel__banner" href="https://go.nodemaven.com/scrapystealthreadmeoctober">
+      <img src="static/sponsors/nodemaven-banner.png" alt="NodeMaven — proxy provider for web scrapping and automation" width="720" height="90" loading="lazy" decoding="async"/>
+    </a>
+    <p class="sponsor-panel__lead">
+      <strong><a href="https://go.nodemaven.com/scrapystealthreadmeoctober">NodeMaven</a></strong> — the most efficient proxy provider for web scrapping and automation with the highest-quality IP on the market.
+    </p>
+    <p class="sponsor-panel__subtitle"><strong>Why <a href="https://go.nodemaven.com/scrapystealthreadmeoctober">NodeMaven</a>?</strong></p>
+    <ul class="sponsor-panel__list">
+      <li>99.9% uptime</li>
+      <li>ZIP Targeting</li>
+      <li>IP filtering: all proxies have fraud score &lt;97%</li>
+      <li>No KYC required</li>
+      <li>Unique free tools: <a href="https://go.nodemaven.com/scrapystealthtoolsoctober">Proxy Bandwidth Checker</a>, Meta Tag Checker, IP Lookup, and others</li>
+    </ul>
+    <p class="sponsor-panel__codes">
+      Special codes: <code>SCRAPYSTEALTH35</code> (35% off Mobile and Residential);
+      <code>SCRAPYSTEALTH40</code> (40% off ISP Static);
+      <code>SCRAPYSTEALTH2X</code> (2X traffic for Black Friday).
+    </p>
+  </section>
+  <section class="sponsor-panel">
+    <a class="sponsor-panel__banner" href="https://app.cyberyozh.com/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">
+      <img src="static/sponsors/cyberyozh-banner.png" alt="CyberYozh App — Operational proxy infrastructure for web scraping and automation" width="720" height="90" loading="lazy" decoding="async"/>
+    </a>
+    <p class="sponsor-panel__lead">
+      <strong><a href="https://app.cyberyozh.com/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">CyberYozh App</a></strong> — Operational proxy infrastructure for web scraping, browser automation, SEO, and multi-account workflows.
+    </p>
+    <p class="sponsor-panel__subtitle"><strong>Why <a href="https://app.cyberyozh.com/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">CyberYozh App</a>?</strong></p>
+    <ul class="sponsor-panel__list">
+      <li>Mobile LTE/5G (unlimited traffic), <a href="https://app.cyberyozh.com/proxy/residential-rotating/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">Residential</a>, Static ISP, and Datacenter proxies</li>
+      <li>100M+ IPs across 195+ countries with free geo-targeting</li>
+      <li>24-hour sticky sessions, per-request rotation, and traffic rollover</li>
+      <li>99.9% proxy uptime with HTTP(S), SOCKS5, UDP, VLESS, and OpenVPN support</li>
+      <li>Built-in tools: <a href="https://app.cyberyozh.com/checkers/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">Fraud Score checks</a> (IP, phone, card), SMS activation, virtual cards, and Android Cloud Phones</li>
+    </ul>
+  </section>
+</div>
+
 ## Why scrapy-stealth?
 
 Modern sites use TLS fingerprinting, behavioral detection, rate limits, and IP blocks. scrapy-stealth adds:

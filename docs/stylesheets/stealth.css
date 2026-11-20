@@ -448,6 +448,60 @@ body ::selection { background: rgba(34, 211, 238, 0.25); color: #fff; }
   .feature-grid { grid-template-columns: 1fr; }
 }
 
+.sponsor-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin: 0.75rem 0 1.5rem;
+}
+
+.sponsor-panel {
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(8, 12, 22, 0.55);
+}
+
+.sponsor-panel__banner {
+  display: block;
+  margin: 0 0 0.875rem;
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+
+.sponsor-panel__banner img {
+  display: block;
+  width: 100%;
+  max-width: 45rem;
+  height: auto;
+  margin: 0 auto;
+}
+
+.sponsor-panel__lead,
+.sponsor-panel__subtitle,
+.sponsor-panel__codes {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.sponsor-panel__list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--dim);
+}
+
+.sponsor-panel__list li { margin: 0.25rem 0; }
+
+.sponsor-panel__list a,
+.sponsor-panel__lead a,
+.sponsor-panel__subtitle a {
+  color: var(--cyan);
+}
+
 /* Typography */
 .md-typeset {
   font-family: var(--font-body);

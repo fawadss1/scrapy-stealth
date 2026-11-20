@@ -49,3 +49,16 @@ Special codes for scrapy-stealth users:
 - `SCRAPYSTEALTH35` — 35% off Mobile and Residential Proxies
 - `SCRAPYSTEALTH40` — 40% off ISP (Static) Proxies
 - `SCRAPYSTEALTH2X` — 2X traffic for Black Friday
+
+### CyberYozh App
+
+**[CyberYozh App](https://app.cyberyozh.com/?utm_source=github&utm_medium=sponsorship&utm_campaign=scrapy_stealth)** —
+Operational proxy infrastructure for web scraping, browser automation, SEO, and multi-account workflows.
+
+**Why [CyberYozh App](https://app.cyberyozh.com/?utm_source=github&utm_medium=sponsorship&utm_campaign=scrapy_stealth)?**
+
+- Mobile LTE/5G (unlimited traffic), [Residential](https://app.cyberyozh.com/proxy/residential-rotating/?utm_source=github&utm_medium=sponsorship&utm_campaign=scrapy_stealth), Static ISP, and Datacenter proxies
+- 100M+ IPs across 195+ countries with free geo-targeting
+- 24-hour sticky sessions, per-request rotation, and traffic rollover
+- 99.9% proxy uptime with HTTP(S), SOCKS5, UDP, VLESS, and OpenVPN support
+- Built-in tools: [Fraud Score checks](https://app.cyberyozh.com/checkers/?utm_source=github&utm_medium=sponsorship&utm_campaign=scrapy_stealth) (IP, phone, card), SMS activation, virtual cards, and Android Cloud Phones

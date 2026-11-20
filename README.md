@@ -56,6 +56,27 @@ with per-request driver selection and automatic HTTP → browser fallback.
       <code>SCRAPYSTEALTH2X</code> — 2X traffic for Black Friday.
     </td>
   </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <a href="https://app.cyberyozh.com/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">
+        <img src="https://raw.githubusercontent.com/fawadss1/scrapy-stealth/master/docs/static/sponsors/cyberyozh-banner.png" alt="CyberYozh App — Operational proxy infrastructure for web scraping and automation" width="720"/>
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <strong><a href="https://app.cyberyozh.com/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">CyberYozh App</a></strong> — Operational proxy infrastructure for web scraping, browser automation, SEO, and multi-account workflows.
+      <br/><br/>
+      <strong>Why <a href="https://app.cyberyozh.com/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">CyberYozh App</a>?</strong>
+      <ul>
+        <li>Mobile LTE/5G (unlimited traffic), <a href="https://app.cyberyozh.com/proxy/residential-rotating/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">Residential</a>, Static ISP, and Datacenter proxies</li>
+        <li>100M+ IPs across 195+ countries with free geo-targeting</li>
+        <li>24-hour sticky sessions, per-request rotation, and traffic rollover</li>
+        <li>99.9% proxy uptime with HTTP(S), SOCKS5, UDP, VLESS, and OpenVPN support</li>
+        <li>Built-in tools: <a href="https://app.cyberyozh.com/checkers/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=scrapy_stealth">Fraud Score checks</a> (IP, phone, card), SMS activation, virtual cards, and Android Cloud Phones</li>
+      </ul>
+    </td>
+  </tr>
 </table>
 
 </details>
